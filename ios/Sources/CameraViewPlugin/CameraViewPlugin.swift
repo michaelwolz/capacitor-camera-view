@@ -27,7 +27,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let implementation = CameraView()
 
-    @objc func start(_ call: CAPPluginCall) {
+    @objc func start(_ call: CAPPluginCall) async {
         guard let cameraPosition = call.getString("cameraPosition") else {
             call.reject("Camera position must be provided")
             return
@@ -37,19 +37,19 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
-    @objc func stop(_ call: CAPPluginCall) {
+    @objc func stop(_ call: CAPPluginCall) async {
         // TODO: Implement camera stop
         call.resolve()
     }
 
-    @objc func isRunning(_ call: CAPPluginCall) {
+    @objc func isRunning(_ call: CAPPluginCall) async {
         // TODO: Check if camera is running
         call.resolve([
             "value": false
         ])
     }
 
-    @objc func capture(_ call: CAPPluginCall) {
+    @objc func capture(_ call: CAPPluginCall) async throws {
         guard let quality = call.getInt("quality") else {
             call.reject("Quality must be provided")
             return
