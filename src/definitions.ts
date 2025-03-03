@@ -1,8 +1,14 @@
+import type { PermissionState } from '@capacitor/core';
+
 export class CameraNotStartedError extends Error {
   constructor() {
     super('Camera view is not started.');
     this.name = 'CameraNotStartedError';
   }
+}
+
+export interface PermissionStatus {
+  camera: PermissionState;
 }
 
 export enum CameraPosition {
@@ -114,4 +120,14 @@ export interface CameraViewPlugin {
    * @throws {CameraNotStartedError} If camera view is not started.
    */
   setFlashMode(options: { mode: FlashMode }): Promise<void>;
+
+  /**
+   * Check camera permission.
+   */
+  checkPermissions(): Promise<PermissionStatus>;
+
+  /**
+   * Request camera permission.
+   */
+  requestPermissions(): Promise<PermissionStatus>;
 }

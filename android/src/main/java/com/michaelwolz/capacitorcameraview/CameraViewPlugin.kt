@@ -1,13 +1,25 @@
 package com.michaelwolz.capacitorcameraview
 
-import com.getcapacitor.JSObject
+import android.Manifest
+import android.content.pm.PackageManager
 import com.getcapacitor.JSArray
+import com.getcapacitor.JSObject
+import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
 
-@CapacitorPlugin(name = "CameraView")
+@CapacitorPlugin(
+    name = "CameraView",
+    permissions = [
+        Permission(
+            strings = [Manifest.permission.CAMERA],
+            alias = "camera"
+        )
+    ]
+)
 class CameraViewPlugin : Plugin() {
     private val implementation = CameraView()
 
@@ -120,5 +132,31 @@ class CameraViewPlugin : Plugin() {
 
         // TODO: Set flash mode
         call.resolve()
+    }
+
+    @PluginMethod
+    override public fun checkPermissions(call: PluginCall) {
+        val permissionStatus = getPermissionStatus("camera")
+        val ret = JSObject()
+        ret.put("camera", permissionStatus.toString().lowercase())
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    override public fun requestPermissions(call: PluginCall) {
+        // Save the call for later resolution
+        bridge.saveCall(call)
+
+        // Request permissions
+        requestPermissionForAlias("camera", call, "cameraPermsCallback")
+    }
+
+    @PermissionCallback
+    private fun cameraPermsCallback(call: PluginCall) {
+        val permissionStatus = getPermissionStatus("camera")
+
+        val ret = JSObject()
+        ret.put("camera", permissionStatus.toString().lowercase())
+        call.resolve(ret)
     }
 }

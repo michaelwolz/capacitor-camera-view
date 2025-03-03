@@ -1,6 +1,6 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { CameraViewPlugin, FlashMode } from './definitions';
+import type { CameraViewPlugin, FlashMode, PermissionStatus } from './definitions';
 
 export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /** @inheritdoc */
@@ -50,6 +50,16 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
   /** @inheritdoc */
   setFlashMode(options: { mode: FlashMode }): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+
+  /** @inheritdoc */
+  checkPermissions(): Promise<PermissionStatus> {
+    throw new Error('Method not implemented.');
+  }
+
+  /** @inheritdoc */
+  requestPermissions(): Promise<PermissionStatus> {
     throw new Error('Method not implemented.');
   }
 }

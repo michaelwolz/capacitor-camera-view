@@ -21,6 +21,8 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getFlashMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise)
     ]
 
     private let implementation = CameraView()
@@ -105,5 +107,28 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
         // TODO: Set flash mode
         call.resolve()
+    }
+
+    @objc override public func checkPermissions(_ call: CAPPluginCall) {
+        let cameraState: String
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .notDetermined:
+            cameraState = "prompt"
+        case .restricted, .denied:
+            cameraState = "denied"
+        case .authorized:
+            cameraState = "granted"
+        @unknown default:
+            cameraState = "prompt"
+        }
+
+        call.resolve(["camera": cameraState])
+    }
+
+    @objc override public func requestPermissions(_ call: CAPPluginCall) {
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
+            self?.checkPermissions(call)
+        }
     }
 }
