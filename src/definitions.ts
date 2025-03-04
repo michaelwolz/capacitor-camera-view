@@ -13,14 +13,13 @@ export interface PermissionStatus {
 
 export enum CameraPosition {
   FRONT = 'front',
-  REAR = 'rear',
+  BACK = 'back',
 }
 
 export enum FlashMode {
   OFF = 'off',
   ON = 'on',
   AUTO = 'auto',
-  TORCH = 'torch',
 }
 
 type Range<N extends number, Result extends number[] = []> = Result['length'] extends N
@@ -57,7 +56,7 @@ export interface CameraViewPlugin {
   capture(options: { quality: Range<100> }): Promise<string>;
 
   /**
-   * Switches between front and rear camera.
+   * Switches between front and back camera.
    *
    * @note
    * Camera view must be started before calling this method.

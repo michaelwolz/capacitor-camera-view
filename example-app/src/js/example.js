@@ -1,6 +1,18 @@
 import { CameraView } from 'capacitor-camera-view';
 
-window.testEcho = () => {
-    const inputValue = document.getElementById("echoInput").value;
-    CameraView.echo({ value: inputValue })
+window.startCamera = async () => {
+    await CameraView.start({ cameraPosition: 'back' });
+}
+
+window.stopCamera = async () => {
+    await CameraView.stop();
+}
+
+window.capture = async () => {
+    const result = await CameraView.capture();
+    console.log(result);
+}
+
+window.switchCamera = async () => {
+    await CameraView.switchCamera();
 }

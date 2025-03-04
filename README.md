@@ -23,6 +23,9 @@ npx cap sync
 * [`getFlashMode()`](#getflashmode)
 * [`getSupportedFlashModes()`](#getsupportedflashmodes)
 * [`setFlashMode(...)`](#setflashmode)
+* [`checkPermissions()`](#checkpermissions)
+* [`requestPermissions()`](#requestpermissions)
+* [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 * [Enums](#enums)
 
@@ -167,12 +170,53 @@ Set flash mode.
 --------------------
 
 
+### checkPermissions()
+
+```typescript
+checkPermissions() => Promise<PermissionStatus>
+```
+
+Check camera permission.
+
+**Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
+
+--------------------
+
+
+### requestPermissions()
+
+```typescript
+requestPermissions() => Promise<PermissionStatus>
+```
+
+Request camera permission.
+
+**Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
+
+--------------------
+
+
+### Interfaces
+
+
+#### PermissionStatus
+
+| Prop         | Type                                                        |
+| ------------ | ----------------------------------------------------------- |
+| **`camera`** | <code><a href="#permissionstate">PermissionState</a></code> |
+
+
 ### Type Aliases
 
 
 #### Range
 
 <code>Result['length'] extends N ? Result[number] | N : <a href="#range">Range</a>&lt;N, [...Result, Result['length']]&gt;</code>
+
+
+#### PermissionState
+
+<code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
 
 
 ### Enums
@@ -188,11 +232,10 @@ Set flash mode.
 
 #### FlashMode
 
-| Members     | Value                |
-| ----------- | -------------------- |
-| **`OFF`**   | <code>'off'</code>   |
-| **`ON`**    | <code>'on'</code>    |
-| **`AUTO`**  | <code>'auto'</code>  |
-| **`TORCH`** | <code>'torch'</code> |
+| Members    | Value               |
+| ---------- | ------------------- |
+| **`OFF`**  | <code>'off'</code>  |
+| **`ON`**   | <code>'on'</code>   |
+| **`AUTO`** | <code>'auto'</code> |
 
 </docgen-api>
