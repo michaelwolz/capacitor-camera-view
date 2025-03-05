@@ -19,10 +19,10 @@ enum CameraError: Error, LocalizedError {
             return "Failed to configure the camera. \(error.localizedDescription)"
         case .inputAdditionFailed:
             return "Failed to add input to the capture session."
-        case .sessionNotRunning:
-            return "The capture session is not currently running."
         case .outputAdditionFailed:
             return "Failed to add output to the capture session."
+        case .sessionNotRunning:
+            return "The capture session is not currently running."
         case .photoOutputNotConfigured:
             return "The photo output has not been configured."
         case .photoOutputError:
@@ -32,6 +32,5 @@ enum CameraError: Error, LocalizedError {
         case .zoomFactorOutOfRange:
             return "The requested zoom factor is out of range."
         }
-        
     }
 }

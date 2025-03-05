@@ -35,7 +35,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        ensureCameraAccess { [weak self] granted in
+        maybeRequestCameraAcceess { [weak self] granted in
             guard granted else {
                 call.reject("Camera access denied")
                 return
@@ -185,7 +185,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
-    private func ensureCameraAccess(completion: @escaping (Bool) -> Void) {
+    private func maybeRequestCameraAcceess(completion: @escaping (Bool) -> Void) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .authorized {
             completion(true)
