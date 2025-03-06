@@ -6,6 +6,7 @@ import Foundation
     private let captureSession = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     private let videoPreviewLayer = AVCaptureVideoPreviewLayer()
+    private var isPrewarmed = false
 
     /// The currently active camera device.
     private var currentCameraDevice: AVCaptureDevice?
@@ -57,33 +58,32 @@ import Foundation
         webView: UIView,
         completion: @escaping (Error?) -> Void
     ) {
-        guard let camera = getCameraDevice(for: position) else {
+        guard let camera = getBestCameraDevice(for: position) else {
             completion(CameraError.cameraUnavailable)
             return
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-
             do {
-                try self.setInput(device: camera)
-                try self.setupOutput()
-
-                if self.captureSession.canSetSessionPreset(.photo) {
-                    self.captureSession.sessionPreset = .photo
-                }
+                try self.configureSession(with: camera)
             } catch {
-                completion(error)
+                DispatchQueue.main.async {
+                    completion(error)
+                }
                 return
             }
 
             self.captureSession.startRunning()
 
-            do {
-                try self.displayPreview(on: webView)
-                completion(nil)
-            } catch {
-                completion(error)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                do {
+                    try self.displayPreview(on: webView)
+                    completion(nil)
+                } catch {
+                    completion(error)
+                }
             }
         }
     }
@@ -129,17 +129,11 @@ import Foundation
     }
 
     /// Switches the camera to the opposite position (front to back or back to front).
-    ///
-    /// - Throws: `CameraError.cameraUnavailable` if no camera is available.
     public func switchCamera() throws {
         let currentPosition: AVCaptureDevice.Position = currentCameraDevice?.position ?? .back
         let newPosition: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
-
-        guard let newCamera = getCameraDevice(for: newPosition) else {
-            return
-        }
-
-        try setInput(device: newCamera)
+        guard let newCamera = getBestCameraDevice(for: newPosition) else { return }
+        try configureSession(with: newCamera)
     }
 
     /// Sets the flash mode for the currently active camera device.
@@ -147,6 +141,8 @@ import Foundation
     /// - Parameter mode: The desired flash mode ("on", "off", or "auto").
     /// - Throws: An error if the flash mode cannot be set or is not supported.
     public func setFlashMode(_ mode: String) throws {
+        guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard camera.hasFlash else { throw CameraError.unsupportedFlashMode }
         guard let newMode = flashModeMap[mode], photoOutput.supportedFlashModes.contains(newMode)
         else {
             throw CameraError.unsupportedFlashMode
@@ -225,7 +221,7 @@ import Foundation
             try currentDevice.lockForConfiguration()
             defer { currentDevice.unlockForConfiguration() }
 
-            currentDevice.videoZoomFactor = factor
+            currentDevice.ramp(toVideoZoomFactor: factor, withRate: 5.0)
         } catch {
             throw CameraError.configurationFailed(error)
         }
@@ -233,30 +229,57 @@ import Foundation
 
     /// MARK: - Camera Session Management
 
+    /// Prewarms camera session to reduce startup time
+    public func prewarmSession(for position: AVCaptureDevice.Position = .back) {
+        guard !isPrewarmed && !captureSession.isRunning else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            if let camera = self.getBestCameraDevice(for: position) {
+                try? self.configureSession(with: camera)
+                self.isPrewarmed = true
+            }
+        }
+    }
+
+    /// Configures the capture session with the specified camera device.
+    ///
+    /// - Parameters:
+    ///   - device: The camera device to use for the capture session.
+    private func configureSession(with device: AVCaptureDevice) throws {
+        captureSession.beginConfiguration()
+        defer { captureSession.commitConfiguration() }
+
+        try self.setInput(device: device)
+        try self.setupOutput()
+
+        if captureSession.canSetSessionPreset(.photo) {
+            captureSession.sessionPreset = .photo
+        }
+    }
+
     /// Sets the input for the capture session.
+    /// Make sure to call `captureSession.beginConfiguration` before calling this
     ///
     /// - Parameter device: The camera device to use as input.
     /// - Throws: An error if the input cannot be set.
     private func setInput(device: AVCaptureDevice) throws {
-        if let curr = currentCameraDevice, curr == device {
-            // Nothing todo
+        if let curr = captureSession.inputs.first, curr == device {
+            // Nothing todo, input is already configured for the desired device
             return
         }
 
-        captureSession.beginConfiguration()
-        defer { captureSession.commitConfiguration() }
-
         do {
-            // Remove existing inputs
+            // Remove any existing inputs
             captureSession.inputs.forEach { captureSession.removeInput($0) }
 
             let input = try AVCaptureDeviceInput(device: device)
-            if captureSession.canAddInput(input) {
-                captureSession.addInput(input)
-                currentCameraDevice = device
-            } else {
+            if !captureSession.canAddInput(input) {
                 throw CameraError.inputAdditionFailed
             }
+
+            captureSession.addInput(input)
+            currentCameraDevice = device
         } catch {
             if let avError = error as? AVError {
                 throw CameraError.configurationFailed(avError)
@@ -267,20 +290,22 @@ import Foundation
     }
 
     /// Set up output for the capture session in case it's not configured yet
+    /// Make sure to call `captureSession.beginConfiguration` before calling this
     private func setupOutput() throws {
-        if self.captureSession.outputs.first != nil {
-            // Nothing todo
+        if captureSession.outputs.first != nil {
+            // Nothing todo, we already have an output and since we only
+            // use outputs for taking photos here we don't need a new one
             return
         }
 
-        captureSession.beginConfiguration()
-        defer { captureSession.commitConfiguration() }
+        // Balanced should be a good choice for most use case
+        photoOutput.maxPhotoQualityPrioritization = .balanced
 
-        if captureSession.canAddOutput(photoOutput) {
-            captureSession.addOutput(photoOutput)
-        } else {
+        if !captureSession.canAddOutput(photoOutput) {
             throw CameraError.outputAdditionFailed
         }
+
+        captureSession.addOutput(photoOutput)
     }
 
     /// Delegate method called when a photo has been captured.
@@ -307,11 +332,12 @@ import Foundation
         photoCaptureHandler?(image, nil)
     }
 
-    /// Gets the camera device for the specified position.
+    /// Gets the best camera device for the specified position.
+    /// This method prefers virtual devices over phsyical devices for improving UX, paying with a little bit of performance while initializing.
     ///
     /// - Parameter position: The position of the camera device to get.
     /// - Returns: The camera device for the specified position, or `nil` if no device is found.
-    private func getCameraDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+    private func getBestCameraDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         // Get available camera devices prioritized by best fit
         let devices = AVCaptureDevice.DiscoverySession(
             deviceTypes: [
@@ -348,17 +374,15 @@ import Foundation
         videoPreviewLayer.session = captureSession
         videoPreviewLayer.videoGravity = .resizeAspectFill
 
-        DispatchQueue.main.sync {
-            // Make the webview transparent
-            view.isOpaque = false
-            view.backgroundColor = UIColor.clear
-            view.scrollView.backgroundColor = UIColor.clear
+        // Make the webview transparent
+        view.isOpaque = false
+        view.backgroundColor = UIColor.clear
+        view.scrollView.backgroundColor = UIColor.clear
 
-            self.videoPreviewLayer.frame = view.bounds
-            view.layer.insertSublayer(self.videoPreviewLayer, at: 0)
+        self.videoPreviewLayer.frame = view.bounds
+        view.layer.insertSublayer(self.videoPreviewLayer, at: 0)
 
-            self.updatePreviewOrientation()
-        }
+        self.updatePreviewOrientation()
     }
 
     /// MARK: - Orientation Observers
@@ -377,7 +401,7 @@ import Foundation
     /// Updates the preview layer orientation based on the current device orientation.
     private func updatePreviewOrientation() {
         guard let connection = self.videoPreviewLayer.connection,
-              connection.isVideoOrientationSupported
+            connection.isVideoOrientationSupported
         else {
             return
         }
