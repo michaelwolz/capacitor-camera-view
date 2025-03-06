@@ -76,14 +76,14 @@ Check if the camera view is running.
 ### capture(...)
 
 ```typescript
-capture(options: { quality: Range<100>; }) => Promise<string>
+capture(options: { quality: number; }) => Promise<string>
 ```
 
 Capture a photo.
 
-| Param         | Type                           |
-| ------------- | ------------------------------ |
-| **`options`** | <code>{ quality: any; }</code> |
+| Param         | Type                              |
+| ------------- | --------------------------------- |
+| **`options`** | <code>{ quality: number; }</code> |
 
 **Returns:** <code>Promise&lt;string&gt;</code>
 
@@ -96,7 +96,7 @@ Capture a photo.
 switchCamera() => Promise<void>
 ```
 
-Switches between front and rear camera.
+Switches between front and back camera.
 
 --------------------
 
@@ -209,11 +209,6 @@ Request camera permission.
 ### Type Aliases
 
 
-#### Range
-
-<code>Result['length'] extends N ? Result[number] | N : <a href="#range">Range</a>&lt;N, [...Result, Result['length']]&gt;</code>
-
-
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
@@ -227,7 +222,7 @@ Request camera permission.
 | Members     | Value                |
 | ----------- | -------------------- |
 | **`FRONT`** | <code>'front'</code> |
-| **`REAR`**  | <code>'rear'</code>  |
+| **`BACK`**  | <code>'back'</code>  |
 
 
 #### FlashMode

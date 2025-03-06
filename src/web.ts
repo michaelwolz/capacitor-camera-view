@@ -35,6 +35,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
   /** @inheritdoc */
   setZoom(options: { level: number }): Promise<void> {
+    console.log(options);
     throw new Error('Method not implemented.');
   }
 
@@ -50,6 +51,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
   /** @inheritdoc */
   setFlashMode(options: { mode: FlashMode }): Promise<void> {
+    console.log(options);
     throw new Error('Method not implemented.');
   }
 

@@ -22,10 +22,6 @@ export enum FlashMode {
   AUTO = 'auto',
 }
 
-type Range<N extends number, Result extends number[] = []> = Result['length'] extends N
-  ? Result[number] | N
-  : Range<N, [...Result, Result['length']]>;
-
 export interface CameraViewPlugin {
   /**
    * Start the camera view
@@ -53,7 +49,7 @@ export interface CameraViewPlugin {
    * @returns A base64 encoded string of the captured photo.
    * @throws {CameraNotStartedError} If camera view is not started.
    */
-  capture(options: { quality: Range<100> }): Promise<string>;
+  capture(options: { quality: number}): Promise<string>;
 
   /**
    * Switches between front and back camera.

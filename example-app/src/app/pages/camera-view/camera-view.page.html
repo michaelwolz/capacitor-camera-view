@@ -1,0 +1,26 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title> Capacitor Camera View </ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title>Capacitor Camera View</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <div id="cameraControls" class="text-center">
+    @if (isWeb) {
+      <div id="web-camera"></div>
+    }
+
+    @if (cameraRunning()) {
+      <ion-button (click)="capturePhoto()">Take Picture</ion-button>
+      <ion-button (click)="stopCamera()">Stop Camera</ion-button>
+    } @else {
+      <button (click)="startCamera()" class="text-6xl">📸</button>
+    }
+  </div>
+</ion-content>

@@ -65,7 +65,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func capture(_ call: CAPPluginCall) {
-        let quality = call.getDouble("quality", 80.0)
+        let quality = call.getDouble("quality", 90.0)
 
         guard quality >= 0.0 && quality <= 100.0 else {
             call.reject("Quality must be between 0 and 100")

@@ -10,7 +10,7 @@ enum CameraError: Error, LocalizedError {
     case photoOutputError
     case unsupportedFlashMode
     case zoomFactorOutOfRange
-    
+
     var errorDescription: String? {
         switch self {
         case .cameraUnavailable:
