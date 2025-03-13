@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 /// A camera implementation that handles camera session management and photo capture.
-@objc public class CameraViewManager: NSObject, AVCapturePhotoCaptureDelegate {
+@objc public class CameraViewManager: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate {
     private let captureSession = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     private let videoPreviewLayer = AVCaptureVideoPreviewLayer()
@@ -261,6 +261,11 @@ import Foundation
         // Set up the photo output
         try setupPhotoOutput()
 
+        // Setup metadata output for QR code scanning if enabled
+        if configuration.enableQrCodeScanning {
+            try setupMetadataOutput()
+        }
+
         // Set the initial zoom factor if specified
         if let zoomFactor = configuration.zoomFactor {
             try setZoomFactor(zoomFactor, ramp: false)
@@ -318,6 +323,29 @@ import Foundation
 
         captureSession.addOutput(photoOutput)
     }
+
+    /// Set up metadata output for the capture session in case it's not configured yet
+    /// Make sure to call `captureSession.beginConfiguration` before calling this
+    ///
+    /// - Throws: An error if the output cannot be set.
+    private func setupMetadataOutput() throws {
+        let metadataOutput = AVCaptureMetadataOutput()
+
+        if (captureSession.outputs.contains { $0 is AVCaptureMetadataOutput }) {
+            // Nothing todo, we already have an output
+            return
+        }
+
+        if !captureSession.canAddOutput(metadataOutput) {
+            throw CameraError.outputAdditionFailed
+        }
+
+        captureSession.addOutput(metadataOutput)
+
+        metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+        metadataOutput.metadataObjectTypes = [.qr]
+    }
+
 
     /// Retrieve a list of a available camera devices
     ///
@@ -394,6 +422,24 @@ import Foundation
 
         photoCaptureHandler?(image, nil)
     }
+
+    public func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
+            return
+        }
+
+        guard let qrCode = metadataObject.stringValue else {
+            return
+        }
+
+        print(metadataObject.corners)
+        print("QR Code: \(qrCode)")
+    }
+
 
     /// MARK: - UI Preview Layer
 
