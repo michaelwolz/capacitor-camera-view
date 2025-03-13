@@ -9,12 +9,27 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CameraViewPlugin"
     public let jsName = "CameraView"
 
+    /// Maps string flash mode values to AVCaptureDevice.FlashMode enum values.
+    private let strToFlashModeMap: [String: AVCaptureDevice.FlashMode] = [
+        "off": .off,
+        "on": .on,
+        "auto": .auto,
+    ]
+
+    /// Maps AVCaptureDevice.FlashMode enum values to string values.
+    private let flashModeToStrMap: [AVCaptureDevice.FlashMode: String] = [
+        .off: "off",
+        .on: "on",
+        .auto: "auto",
+    ]
+
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isRunning", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "switchCamera", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getAvailableDevices", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "flipCamera", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getZoom", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setZoom", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getFlashMode", returnType: CAPPluginReturnPromise),
@@ -27,22 +42,19 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     private let implementation = CameraViewManager()
 
     @objc func start(_ call: CAPPluginCall) {
-        let position: AVCaptureDevice.Position =
-        call.getString("cameraPosition") == "front" ? .front : .back
-
         guard let webView = self.webView else {
             call.reject("Cannot find web view")
             return
         }
 
-        maybeRequestCameraAcceess { [weak self] granted in
+        maybeRequestCameraAccess { [weak self] granted in
             guard granted else {
                 call.reject("Camera access denied")
                 return
             }
 
             self?.implementation.startSession(
-                for: position,
+                configuration: sessionConfigFromPluginCall(call),
                 webView: webView,
                 completion: { (error) in
                     if let error = error {
@@ -56,6 +68,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func stop(_ call: CAPPluginCall) {
         implementation.stopSession()
+        call.resolve()
     }
 
     @objc func isRunning(_ call: CAPPluginCall) {
@@ -94,9 +107,23 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         })
     }
 
-    @objc func switchCamera(_ call: CAPPluginCall) {
+    @objc func getAvailableDevices(_ call: CAPPluginCall) {
+        let devices = implementation.getAvailableDevices()
+
+        call.resolve([
+            "value": devices.map { device in
+                return [
+                    "id": device.uniqueID,
+                    "name": device.localizedName,
+                    "position": device.position == .front ? "front" : "back",
+                ]
+            }
+        ])
+    }
+
+    @objc func flipCamera(_ call: CAPPluginCall) {
         do {
-            try implementation.switchCamera()
+            try implementation.flipCamera()
             call.resolve()
         } catch {
             call.reject("Failed to switch camera", nil, error)
@@ -120,8 +147,10 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        let ramp = call.getBool("ramp") ?? true
+
         do {
-            try implementation.setZoomFactor(level)
+            try implementation.setZoomFactor(level, ramp: ramp)
             call.resolve()
         } catch {
             call.reject("Failed to set zoom level", nil, error)
@@ -138,14 +167,12 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getSupportedFlashModes(_ call: CAPPluginCall) {
-        do {
-            let supportedFlashModes = try implementation.getSupportedFlashModes()
-            call.resolve([
-                "value": supportedFlashModes
-            ])
-        } catch {
-            call.reject("Failed to get supported flash modes", nil, error)
-        }
+        let supportedFlashModes = implementation.getSupportedFlashModes()
+        let supportedFlashModeStrArr = supportedFlashModes.map { flashModeToStrMap[$0] }
+
+        call.resolve([
+            "value": supportedFlashModeStrArr
+        ])
     }
 
     @objc func setFlashMode(_ call: CAPPluginCall) {
@@ -154,17 +181,17 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        guard let flashMode = strToFlashModeMap[mode] else {
+            call.reject("Invalid flash mode")
+            return
+        }
+
         do {
-            try implementation.setFlashMode(mode)
+            try implementation.setFlashMode(flashMode)
             call.resolve()
         } catch {
             call.reject("Failed to set flash mode", nil, error)
         }
-    }
-
-    @objc override public func load() {
-        // Prewarm camera on app start for faster camera access
-        implementation.prewarmSession()
     }
 
     @objc override public func checkPermissions(_ call: CAPPluginCall) {
@@ -190,7 +217,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func maybeRequestCameraAcceess(completion: @escaping (Bool) -> Void) {
+    private func maybeRequestCameraAccess(completion: @escaping (Bool) -> Void) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .authorized {
             completion(true)

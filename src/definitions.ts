@@ -1,32 +1,62 @@
 import type { PermissionState } from '@capacitor/core';
 
-export class CameraNotStartedError extends Error {
-  constructor() {
-    super('Camera view is not started.');
-    this.name = 'CameraNotStartedError';
-  }
-}
-
+/**
+ * Permission status for the camera.
+ */
 export interface PermissionStatus {
   camera: PermissionState;
 }
 
+/**
+ * Position options for the camera session.
+ */
 export enum CameraPosition {
   FRONT = 'front',
   BACK = 'back',
 }
 
+/**
+ * Flash mode options for the camera session.
+ */
 export enum FlashMode {
   OFF = 'off',
   ON = 'on',
   AUTO = 'auto',
 }
 
+export interface CameraDevice {
+  id: string;
+  name: string;
+  position: CameraPosition;
+}
+
+export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
+
+/**
+ * Configuration for the camera session.
+ */
+export interface CameraSessionConfiguration {
+  /** Position of the camera (front or back) */
+  cameraPosition?: CameraPosition;
+
+  /** The device ID of the camera to use */
+  deviceId?: string;
+
+  /** The preset to use for the camera session */
+  preset?: CameraPreset;
+
+  /** Whether to use the triple camera if available (iOS only) */
+  useTripleCameraIfAvailable?: boolean;
+
+  /** The initial zoom factor to use for the camera session */
+  zoomFactor?: number;
+}
+
 export interface CameraViewPlugin {
   /**
    * Start the camera view
    */
-  start(options: { cameraPosition: CameraPosition }): Promise<void>;
+  start(options?: CameraSessionConfiguration): Promise<void>;
 
   /**
    * Stop the camera view
@@ -47,19 +77,23 @@ export interface CameraViewPlugin {
    * @param options.quality - The JPEG quality of the captured photo on a scale of 0-100.
    *
    * @returns A base64 encoded string of the captured photo.
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
-  capture(options: { quality: number}): Promise<string>;
+  capture(options: { quality: number }): Promise<string>;
 
   /**
    * Switches between front and back camera.
    *
    * @note
    * Camera view must be started before calling this method.
-   *
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
-  switchCamera(): Promise<void>;
+  flipCamera(): Promise<void>;
+
+  /**
+   * Get available devices for taking photos.
+   *
+   * @returns An array of available capture devices
+   */
+  getAvailableDevices(): Promise<Array<CameraDevice>>;
 
   /**
    * Get zoom levels options and current zoom level.
@@ -68,7 +102,6 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @returns An object containing min, max and current zoom levels.
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
   getZoom(): Promise<{ min: number; max: number; current: number }>;
 
@@ -79,9 +112,9 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @param options.level - The zoom level to set.
-   * @throws {CameraNotStartedError} If camera view is not started.
+   * @param options.ramp - Whether to animate the zoom level change, defaults to true (iOS / Android only)
    */
-  setZoom(options: { level: number }): Promise<void>;
+  setZoom(options: { level: number; ramp?: boolean }): Promise<void>;
 
   /**
    * Get flash mode.
@@ -90,7 +123,6 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @returns The current flash mode.
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
   getFlashMode(): Promise<FlashMode>;
 
@@ -101,9 +133,8 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @returns An array of supported flash modes.
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
-  getSupportedFlashModes(): Promise<FlashMode[]>;
+  getSupportedFlashModes(): Promise<Array<FlashMode>>;
 
   /**
    * Set flash mode.
@@ -112,7 +143,6 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @param options.mode - The flash mode to set.
-   * @throws {CameraNotStartedError} If camera view is not started.
    */
   setFlashMode(options: { mode: FlashMode }): Promise<void>;
 

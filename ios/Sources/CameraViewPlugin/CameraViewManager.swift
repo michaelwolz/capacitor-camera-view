@@ -12,27 +12,16 @@ import Foundation
     private var currentCameraDevice: AVCaptureDevice?
 
     /// Currently selected flash mode.
-    private var flashMode: AVCaptureDevice.FlashMode = .off
+    private var flashMode: AVCaptureDevice.FlashMode = .auto
 
     /// Callback for when photo capture completes.
     private var photoCaptureHandler: ((UIImage?, Error?) -> Void)?
 
+    /// Reference to the blur overlay view that is shown when switching to the triple camera in order to have a smooth transition
+    private var blurOverlayView: UIVisualEffectView?
+
     /// Reference to the webView that is used by the Capacitor plugin for the preview layer is shown on
     private var webView: UIView?
-
-    /// Maps string flash mode values to AVCaptureDevice.FlashMode enum values.
-    private let flashModeMap: [String: AVCaptureDevice.FlashMode] = [
-        "off": .off,
-        "on": .on,
-        "auto": .auto,
-    ]
-
-    /// Maps AVCaptureDevice.FlashMode enum values to string values.
-    private let flashModeReverseMap: [AVCaptureDevice.FlashMode: String] = [
-        .off: "off",
-        .on: "on",
-        .auto: "auto",
-    ]
 
     public override init() {
         super.init()
@@ -54,19 +43,15 @@ import Foundation
     ///   - position: The position of the camera to start the session for.
     ///   - completion: A closure called when the session setup completes with an optional error.
     public func startSession(
-        for position: AVCaptureDevice.Position,
+        configuration: CameraSessionConfiguration,
         webView: UIView,
         completion: @escaping (Error?) -> Void
     ) {
-        guard let camera = getBestCameraDevice(for: position) else {
-            completion(CameraError.cameraUnavailable)
-            return
-        }
-
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+
             do {
-                try self.configureSession(with: camera)
+                try self.configureSession(configuration: configuration)
             } catch {
                 DispatchQueue.main.async {
                     completion(error)
@@ -74,17 +59,25 @@ import Foundation
                 return
             }
 
+            // Start the capture session
             self.captureSession.startRunning()
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                do {
-                    try self.displayPreview(on: webView)
+            // Display the camera preview on the provided webview
+            self.displayPreview(
+                on: webView,
+                completion: { error in
+                    if error != nil { completion(error) }
+
+                    // Complete already because the camera is ready to be used
+                    // We might asynchronously upgrade to a triple camera in the background if available and configured
                     completion(nil)
-                } catch {
-                    completion(error)
-                }
-            }
+
+                    if configuration.useTripleCameraIfAvailable {
+                        Task {
+                            await self.upgradeToTripleCameraIfAvailable()
+                        }
+                    }
+                })
         }
     }
 
@@ -92,19 +85,21 @@ import Foundation
     public func stopSession() {
         guard captureSession.isRunning else { return }
 
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.captureSession.stopRunning()
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-
             self.videoPreviewLayer.removeFromSuperlayer()
-
-            // Reset the webview
             self.webView?.isOpaque = true
             self.webView?.backgroundColor = nil
             self.webView = nil
-        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.stopRunning()
+            if let blurOverlayView = self.blurOverlayView {
+                blurOverlayView.removeFromSuperview()
+                self.blurOverlayView = nil
+            }
         }
     }
 
@@ -114,70 +109,76 @@ import Foundation
     }
 
     /// Captures a photo with the current camera settings.
-    /// Returns the picture as UIImage via completion handler
+    /// - Returns: The picture as UIImage via `AVCapturePhotoCaptureDelegate`
     public func capturePhoto(completion: @escaping (UIImage?, Error?) -> Void) {
+        guard let cameraDevice = currentCameraDevice else {
+            completion(nil, CameraError.cameraUnavailable)
+            return
+        }
+
         guard captureSession.isRunning else {
             completion(nil, CameraError.sessionNotRunning)
             return
         }
 
         let photoSettings = AVCapturePhotoSettings()
-        photoSettings.flashMode = flashMode
+        if cameraDevice.hasFlash {
+            photoSettings.flashMode = flashMode
+        } else {
+            photoSettings.flashMode = .off
+        }
 
         photoOutput.capturePhoto(with: photoSettings, delegate: self)
         photoCaptureHandler = completion
     }
 
-    /// Switches the camera to the opposite position (front to back or back to front).
-    public func switchCamera() throws {
+    public func setCameraById(_ cameraId: String) throws {
+        let devices = getAvailableDevices()
+        guard let device = devices.first(where: { $0.uniqueID == cameraId }) else {
+            throw CameraError.cameraUnavailable
+        }
+
+      //  try configureSession(with: device)
+    }
+
+    /// Flips the camera to the opposite position (front to back or back to front).
+    public func flipCamera() throws {
         let currentPosition: AVCaptureDevice.Position = currentCameraDevice?.position ?? .back
         let newPosition: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
-        guard let newCamera = getBestCameraDevice(for: newPosition) else { return }
-        try configureSession(with: newCamera)
+
+        let newCamera = try getCameraDevice(for: newPosition)
+      //  try configureSession(with: newCamera)
     }
 
     /// Sets the flash mode for the currently active camera device.
     ///
-    /// - Parameter mode: The desired flash mode ("on", "off", or "auto").
+    /// - Parameter mode: The desired flash mode (.on, .of, or .auto).
     /// - Throws: An error if the flash mode cannot be set or is not supported.
-    public func setFlashMode(_ mode: String) throws {
+    public func setFlashMode(_ mode: AVCaptureDevice.FlashMode) throws {
         guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
         guard camera.hasFlash else { throw CameraError.unsupportedFlashMode }
-        guard let newMode = flashModeMap[mode], photoOutput.supportedFlashModes.contains(newMode)
+        guard photoOutput.supportedFlashModes.contains(mode)
         else {
             throw CameraError.unsupportedFlashMode
         }
 
-        flashMode = newMode
+        flashMode = mode
     }
 
     /// Gets the current flash mode for the current camera device.
-    public func getFlashMode() -> String {
-        return flashModeReverseMap[flashMode] ?? "off"
+    public func getFlashMode() -> AVCaptureDevice.FlashMode {
+        return flashMode
     }
 
     /// Gets the supported flash modes for the current camera device.
     ///
-    /// - Returns: A string array of supported flash modes.
-    /// - Throws: An error if the camera is unavailable.
-    public func getSupportedFlashModes() throws -> [String] {
-        guard let currentDevice = currentCameraDevice else { throw CameraError.cameraUnavailable }
-
-        var supportedFlashModes: [String] = []
-
-        if currentDevice.hasFlash {
-            for mode in photoOutput.supportedFlashModes {
-                if let stringMode = flashModeReverseMap[mode as AVCaptureDevice.FlashMode] {
-                    supportedFlashModes.append(stringMode)
-                }
-            }
+    /// - Returns: An array of supported flash modes, fallback is .off
+    public func getSupportedFlashModes() -> [AVCaptureDevice.FlashMode] {
+        if let camera = currentCameraDevice, camera.hasFlash {
+            return photoOutput.supportedFlashModes
         }
 
-        if supportedFlashModes.isEmpty {
-            supportedFlashModes.append("off")
-        }
-
-        return supportedFlashModes
+        return [.off]
     }
 
     /// Gets the minimum, maximum, and current zoom factors supported by the current camera device.
@@ -207,9 +208,11 @@ import Foundation
 
     /// Sets the zoom factor for the current camera device.
     ///
-    /// - Parameter factor: The zoom factor to set.
+    /// - Parameters:
+    ///   - factor: The zoom factor to set.
+    ///   - ramp: If enabled the zoom will be applied via ramp
     /// - Throws: An error if the zoom factor cannot be set.
-    public func setZoomFactor(_ factor: CGFloat) throws {
+    public func setZoomFactor(_ factor: CGFloat, ramp: Bool = true) throws {
         guard let currentDevice = currentCameraDevice else { throw CameraError.cameraUnavailable }
 
         let supportedZoomFactors = getSupportedZoomFactors()
@@ -221,40 +224,46 @@ import Foundation
             try currentDevice.lockForConfiguration()
             defer { currentDevice.unlockForConfiguration() }
 
-            currentDevice.ramp(toVideoZoomFactor: factor, withRate: 5.0)
+            if ramp {
+                currentDevice.ramp(toVideoZoomFactor: factor, withRate: 5.0)
+            } else {
+                currentDevice.videoZoomFactor = factor
+            }
         } catch {
             throw CameraError.configurationFailed(error)
-        }
-    }
-
-    /// MARK: - Camera Session Management
-
-    /// Prewarms camera session to reduce startup time
-    public func prewarmSession(for position: AVCaptureDevice.Position = .back) {
-        guard !isPrewarmed && !captureSession.isRunning else { return }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            if let camera = self.getBestCameraDevice(for: position) {
-                try? self.configureSession(with: camera)
-                self.isPrewarmed = true
-            }
         }
     }
 
     /// Configures the capture session with the specified camera device.
     ///
     /// - Parameters:
-    ///   - device: The camera device to use for the capture session.
-    private func configureSession(with device: AVCaptureDevice) throws {
+    ///   - configuration: The configuration object for the camera session.
+    private func configureSession(configuration: CameraSessionConfiguration) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
-        try self.setInput(device: device)
-        try self.setupOutput()
+        let device: AVCaptureDevice
+        if let deviceId = configuration.deviceId {
+            device = try getCameraDeviceById(deviceId)
+        } else {
+            device = try getCameraDevice(for: configuration.position)
+        }
 
         if captureSession.canSetSessionPreset(.photo) {
             captureSession.sessionPreset = .photo
+        }
+
+        try self.setInput(with: device)
+        try self.setupPhotoOutput()
+
+        try? device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+
+        device.exposureMode = .continuousAutoExposure
+        device.focusMode = .continuousAutoFocus
+
+        if let zoomFactor = configuration.zoomFactor {
+            try? setZoomFactor(CGFloat(zoomFactor), ramp: false)
         }
     }
 
@@ -263,16 +272,16 @@ import Foundation
     ///
     /// - Parameter device: The camera device to use as input.
     /// - Throws: An error if the input cannot be set.
-    private func setInput(device: AVCaptureDevice) throws {
-        if let curr = captureSession.inputs.first, curr == device {
+    private func setInput(with device: AVCaptureDevice) throws {
+        guard currentCameraDevice?.uniqueID != device.uniqueID else {
             // Nothing todo, input is already configured for the desired device
             return
         }
 
-        do {
-            // Remove any existing inputs
-            captureSession.inputs.forEach { captureSession.removeInput($0) }
+        // Remove any existing inputs
+        captureSession.inputs.forEach { captureSession.removeInput($0) }
 
+        do {
             let input = try AVCaptureDeviceInput(device: device)
             if !captureSession.canAddInput(input) {
                 throw CameraError.inputAdditionFailed
@@ -291,8 +300,10 @@ import Foundation
 
     /// Set up output for the capture session in case it's not configured yet
     /// Make sure to call `captureSession.beginConfiguration` before calling this
-    private func setupOutput() throws {
-        if captureSession.outputs.first != nil {
+    ///
+    /// - Throws: An error if the output cannot be set.
+    private func setupPhotoOutput() throws {
+        if (captureSession.outputs.contains { $0 is AVCapturePhotoOutput }) {
             // Nothing todo, we already have an output and since we only
             // use outputs for taking photos here we don't need a new one
             return
@@ -308,7 +319,59 @@ import Foundation
         captureSession.addOutput(photoOutput)
     }
 
-    /// Delegate method called when a photo has been captured.
+    /// Retrieve a list of a available camera devices
+    ///
+    /// - Returns:  a list of all  available camera devices.
+    public func getAvailableDevices() -> [AVCaptureDevice] {
+        return AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInWideAngleCamera,
+                .builtInUltraWideCamera,
+                .builtInTelephotoCamera,
+                .builtInDualCamera,
+                .builtInDualWideCamera,
+                .builtInTripleCamera,
+                .builtInTrueDepthCamera,
+            ],
+            mediaType: .video,
+            position: .unspecified
+        ).devices
+    }
+
+    /// Gets the  best match camera device for the specified position.
+    ///
+    /// - Parameters:
+    ///   - position: The position of the camera device to get
+    /// - Returns: The camera device for the specified position
+    /// - Throws: An error if no camera device is found.
+    private func getCameraDevice(for position: AVCaptureDevice.Position?) throws -> AVCaptureDevice
+    {
+        if let match = getAvailableDevices().first(where: { $0.position == position }) {
+            return match
+        }
+
+        // Fallback to default video device
+        guard let device = AVCaptureDevice.default(for: .video) else {
+            throw CameraError.cameraUnavailable
+        }
+
+        return device
+    }
+
+    /// Gets the best camera device for the specified position.
+    ///
+    /// - Parameters:
+    ///   - deviceId: The unique identifier of the camera device to get
+    /// - Returns: The camera device for the specified position
+    /// - Throws: An error if no camera device is found.
+    private func getCameraDeviceById(_ deviceId: String) throws -> AVCaptureDevice {
+        guard let device = getAvailableDevices().first(where: { $0.uniqueID == deviceId }) else {
+            throw CameraError.cameraUnavailable
+        }
+        return device
+    }
+
+    /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`
     ///
     /// - Parameters:
     ///   - output: The photo output that captured the photo.
@@ -332,57 +395,110 @@ import Foundation
         photoCaptureHandler?(image, nil)
     }
 
-    /// Gets the best camera device for the specified position.
-    /// This method prefers virtual devices over phsyical devices for improving UX, paying with a little bit of performance while initializing.
-    ///
-    /// - Parameter position: The position of the camera device to get.
-    /// - Returns: The camera device for the specified position, or `nil` if no device is found.
-    private func getBestCameraDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        // Get available camera devices prioritized by best fit
-        let devices = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [
-                .builtInTripleCamera,
-                .builtInDualCamera,
-                .builtInUltraWideCamera,
-                .builtInWideAngleCamera,
-            ], mediaType: .video, position: .unspecified
-        ).devices
-
-        guard !devices.isEmpty else { return nil }
-
-        // First try to find exact position match
-        if let exactMatch = devices.first(where: { $0.position == position }) {
-            return exactMatch
-        }
-
-        // Fallback to any available camera if the requested position isn't available
-        return devices.first
-    }
-
     /// MARK: - UI Preview Layer
 
     /// Sets up the preview layer for the capture session which will
     /// display the camera feed in the view.
     ///
-    /// - Parameter view: The view that will display the camera preview.
+    /// - Parameters:
+    ///   - view: The view that will display the camera preview.
+    ///   - completion: The completion handler after successfully adding the previewLayer to the provided view
     /// - Throws: An error if the preview layer cannot be set up.
-    private func displayPreview(on view: UIView) throws {
-        guard captureSession.isRunning else { throw CameraError.sessionNotRunning }
+    private func displayPreview(on view: UIView, completion: @escaping (Error?) -> Void) {
+        guard captureSession.isRunning else {
+            completion(CameraError.sessionNotRunning)
+            return
+        }
 
         self.webView = view
 
         videoPreviewLayer.session = captureSession
         videoPreviewLayer.videoGravity = .resizeAspectFill
 
-        // Make the webview transparent
-        view.isOpaque = false
-        view.backgroundColor = UIColor.clear
-        view.scrollView.backgroundColor = UIColor.clear
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            view.isOpaque = false
+            view.backgroundColor = UIColor.clear
+            view.scrollView.backgroundColor = UIColor.clear
 
-        self.videoPreviewLayer.frame = view.bounds
-        view.layer.insertSublayer(self.videoPreviewLayer, at: 0)
+            self.videoPreviewLayer.frame = view.bounds
+            view.layer.insertSublayer(self.videoPreviewLayer, at: 0)
 
-        self.updatePreviewOrientation()
+            self.updatePreviewOrientation()
+
+            completion(nil)
+        }
+    }
+
+    private func upgradeToTripleCameraIfAvailable() async {
+        guard captureSession.isRunning else { return }
+
+        // Check if a triple camera is available (only on newer Pro models)
+        let devices = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInTripleCamera],
+            mediaType: .video,
+            position: .back
+        ).devices
+
+        // If we don't have a triple camera, exit early
+        guard let tripleCamera = devices.first else { return }
+
+        // Don't do anything if we're already using the triple camera
+        if currentCameraDevice?.uniqueID == tripleCamera.uniqueID {
+            return
+        }
+
+        await addBlurOverlay()
+
+        await Task.detached(priority: .userInitiated) {
+            self.captureSession.beginConfiguration()
+
+            do {
+                try self.setInput(with: tripleCamera)
+                try self.setZoomFactor(2.0, ramp: false)
+            } catch {
+                // Fail silently if we can't upgrade to the triple camera
+                print("Failed to upgrade to triple camera: \(error.localizedDescription)")
+            }
+
+            self.captureSession.commitConfiguration()
+        }.value
+
+        // Small delay to let camera stabilize
+        try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3 seconds
+
+        await removeBlurOverlayWithAnimation()
+    }
+
+    @MainActor
+    private func addBlurOverlay() async {
+        guard let view = self.webView else { return }
+
+        let blurEffect = UIBlurEffect(style: .light)
+        let blurOverlayView = UIVisualEffectView(effect: blurEffect)
+        self.blurOverlayView = blurOverlayView
+
+        blurOverlayView.frame = view.bounds
+        blurOverlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(blurOverlayView, aboveSubview: view.subviews.first ?? view)
+    }
+
+    @MainActor
+    private func removeBlurOverlayWithAnimation(duration: TimeInterval = 0.3) async {
+        guard let blurEffectView = blurOverlayView else { return }
+
+        await withCheckedContinuation { continuation in
+            UIView.animate(
+                withDuration: duration,
+                animations: {
+                    blurEffectView.alpha = 0
+                },
+                completion: { _ in
+                    blurEffectView.removeFromSuperview()
+                    self.blurOverlayView = nil
+                    continuation.resume()
+                })
+        }
     }
 
     /// MARK: - Orientation Observers
@@ -400,9 +516,7 @@ import Foundation
 
     /// Updates the preview layer orientation based on the current device orientation.
     private func updatePreviewOrientation() {
-        guard let connection = self.videoPreviewLayer.connection,
-            connection.isVideoOrientationSupported
-        else {
+        guard let connection = self.videoPreviewLayer.connection, connection.isVideoOrientationSupported else {
             return
         }
 
@@ -447,7 +561,9 @@ import Foundation
     @objc private func handleAppWillResignActive() {
         // Pause the session when app goes to background to save resources
         if captureSession.isRunning {
-            captureSession.stopRunning()
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.captureSession.stopRunning()
+            }
         }
     }
 
@@ -455,7 +571,9 @@ import Foundation
     @objc private func handleAppDidBecomeActive() {
         // Resume the session when app comes back to foreground
         if !captureSession.isRunning && webView != nil {
-            captureSession.startRunning()
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.captureSession.startRunning()
+            }
         }
     }
 }

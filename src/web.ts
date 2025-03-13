@@ -1,6 +1,13 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { CameraViewPlugin, FlashMode, PermissionStatus } from './definitions';
+import type { CameraDevice, CameraViewPlugin, FlashMode, PermissionStatus } from './definitions';
+
+export class CameraNotStartedError extends Error {
+  constructor() {
+    super('Camera view is not started.');
+    this.name = 'CameraNotStartedError';
+  }
+}
 
 export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /** @inheritdoc */
@@ -24,7 +31,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  switchCamera(): Promise<void> {
+  getAvailableDevices(): Promise<Array<CameraDevice>> {
+    throw new Error('Method not implemented.');
+  }
+
+  /** @inheritdoc */
+  flipCamera(): Promise<void> {
     throw new Error('Method not implemented.');
   }
 

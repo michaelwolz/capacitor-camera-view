@@ -73,7 +73,7 @@ class CameraViewPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun switchCamera(call: PluginCall) {
+    fun flipCamera(call: PluginCall) {
         // TODO: Implement camera switching
         call.resolve()
     }
