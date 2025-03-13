@@ -1,0 +1,55 @@
+:host {
+  height: 100vh;
+  width: 100vw;
+}
+
+ion-toolbar {
+  --background: transparent;
+  --color: white;
+}
+
+ion-icon {
+  color: white;
+}
+
+.loading-screen {
+  background-color: #333;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#cameraView {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#webCamera {
+  height: 100%;
+  width: 100%;
+  background-color: rgb(20, 20, 20);
+}
+
+ion-fab-button {
+  --background: rgba(255, 255, 255, 0.5);
+  --background-activated: #rgba(255, 255, 255, 0.8);
+  --background-hover: #rgba(255, 255, 255, 0.8);
+  color: black;
+}
+
+.camera-trigger {
+  margin-bottom: var(--ion-safe-area-bottom, 0);
+  ion-spinner {
+    --color: black;
+    color: black;
+  }
+}

@@ -1,26 +1,95 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
-    <ion-title> Capacitor Camera View </ion-title>
+    <ion-title>Capacitor Camera View ♥</ion-title>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title>Capacitor Camera View</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content [fullscreen]="true" class="ion-padding">
+  <ion-list lines="full" class="ion-margin-bottom">
+    <ion-item>
+      <ion-select
+        [(ngModel)]="deviceId"
+        label="Device"
+        placeholder="Default camera device"
+        label-placement="floating"
+      >
+        <ion-select-option [value]="null">
+          Default camera device
+        </ion-select-option>
 
-  <div id="cameraControls" class="text-center">
-    @if (isWeb) {
-      <div id="web-camera"></div>
+        @for (device of cameraDevices(); track device.id) {
+          <ion-select-option value="{{ device.id }}">
+            ({{ device.position }}) - {{ device.name }}
+          </ion-select-option>
+        }
+      </ion-select>
+    </ion-item>
+
+    @if (!deviceId()) {
+      <ion-item>
+        <ion-select
+          [(ngModel)]="position"
+          label="Camera Position"
+          label-placement="floating"
+        >
+          <ion-select-option value="back"> Back </ion-select-option>
+          <ion-select-option value="front"> Front </ion-select-option>
+        </ion-select>
+      </ion-item>
     }
 
-    @if (cameraRunning()) {
-      <ion-button (click)="capturePhoto()">Take Picture</ion-button>
-      <ion-button (click)="stopCamera()">Stop Camera</ion-button>
-    } @else {
-      <button (click)="startCamera()" class="text-6xl">📸</button>
-    }
-  </div>
+    <ion-item>
+      <ion-select [(ngModel)]="preset" label="Camera Preset" label-placement="floating">
+        <ion-select-option value="photo">Photo</ion-select-option>
+        <ion-select-option value="high">High</ion-select-option>
+        <ion-select-option value="medium">Medium</ion-select-option>
+        <ion-select-option value="low">Low</ion-select-option>
+      </ion-select>
+    </ion-item>
+
+    <ion-item>
+      <ion-range
+        [(ngModel)]="quality"
+        min="0"
+        max="100"
+        step="1"
+        snaps="true"
+        [label]="'Photo Quality (' + quality() + ')'"
+        labelPlacement="stacked"
+      >
+        <ion-icon size="small" slot="start" name="sunny-outline"></ion-icon>
+        <ion-icon slot="end" name="sunny"></ion-icon>
+      </ion-range>
+    </ion-item>
+
+    <ion-item>
+      <ion-range
+        [(ngModel)]="initialZoomFactor"
+        min="1.0"
+        max="3.0"
+        step="0.25"
+        snaps="true"
+        [label]="'Initial Zoom Level (' + initialZoomFactor() + 'x)'"
+        labelPlacement="stacked"
+      >
+        <ion-icon size="small" slot="start" name="search-outline"></ion-icon>
+        <ion-icon slot="end" name="search"></ion-icon>
+      </ion-range>
+    </ion-item>
+
+    <ion-item>
+      <ion-checkbox
+        [(ngModel)]="useTripleCameraIfAvailable"
+        color="primary"
+        justify="space-between"
+      >
+        Use Triple Camera (iPhone Pro only)
+      </ion-checkbox>
+    </ion-item>
+  </ion-list>
+
+  <ion-button (click)="startCamera()" expand="block">
+    <ion-icon name="camera-outline" slot="start" />
+    Start Camera
+  </ion-button>
 </ion-content>

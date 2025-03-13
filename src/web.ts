@@ -21,17 +21,17 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  isRunning(): Promise<boolean> {
+  isRunning(): Promise<{ isRunning: boolean }> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  capture(): Promise<string> {
+  capture(): Promise<{ photo: string }> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  getAvailableDevices(): Promise<Array<CameraDevice>> {
+  getAvailableDevices(): Promise<{ devices: Array<CameraDevice> }> {
     throw new Error('Method not implemented.');
   }
 
@@ -52,12 +52,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  getFlashMode(): Promise<FlashMode> {
+  getFlashMode(): Promise<{ flashMode: FlashMode }> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  getSupportedFlashModes(): Promise<FlashMode[]> {
+  getSupportedFlashModes(): Promise<{ flashModes: FlashMode[] }> {
     throw new Error('Method not implemented.');
   }
 
@@ -68,12 +68,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  checkPermissions(): Promise<PermissionStatus> {
+  checkPermissions(): Promise<{ camera: PermissionStatus }> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  requestPermissions(): Promise<PermissionStatus> {
+  requestPermissions(): Promise<{ camera: PermissionStatus }> {
     throw new Error('Method not implemented.');
   }
 }

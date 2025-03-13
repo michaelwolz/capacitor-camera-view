@@ -1,56 +1,93 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, inject, model, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import {
-  IonHeader,
-  IonToolbar,
-  IonTitle,
-  IonContent,
   IonButton,
+  IonCheckbox,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonItem,
+  IonList,
+  IonRange,
+  IonSelect,
+  IonSelectOption,
+  IonTitle,
+  IonToolbar,
+  ModalController,
 } from '@ionic/angular/standalone';
-import { CameraViewService } from '../../services/camera-view.service';
-import { FlashMode } from 'capacitor-camera-view';
-import { Capacitor } from '@capacitor/core';
+import { CameraDevice, CameraPreset, FlashMode } from 'capacitor-camera-view';
+import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
+import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
+import { GalleryService } from '../../services/gallery.service';
 
 @Component({
   selector: 'app-camera-view',
   templateUrl: 'camera-view.page.html',
-  imports: [IonHeader, IonToolbar, IonTitle, IonContent, IonButton],
+  imports: [
+    FormsModule,
+    IonButton,
+    IonCheckbox,
+    IonContent,
+    IonHeader,
+    IonIcon,
+    IonItem,
+    IonList,
+    IonRange,
+    IonSelect,
+    IonSelectOption,
+    IonTitle,
+    IonToolbar,
+  ],
 })
-export class CameraViewPage {
-  readonly #cameraViewService = inject(CameraViewService);
+export class CameraSettingsPage implements OnInit {
+  readonly #cameraViewService = inject(CapacitorCameraViewService);
+  readonly #galleryService = inject(GalleryService);
+  readonly #modalController = inject(ModalController);
 
-  readonly isWeb = Capacitor.getPlatform() === 'web';
+  protected readonly cameraDevices = signal<CameraDevice[]>([]);
 
-  protected readonly photos = signal<string[]>([]);
+  protected deviceId = model<string | null>(null);
+  protected position = model<string>('back');
+  protected preset = model<CameraPreset>('photo');
+  protected quality = model<number>(85);
+  protected useTripleCameraIfAvailable = model<boolean>(false);
+  protected initialZoomFactor = model<number>(1.0);
 
-  protected cameraRunning = signal(false);
-
-  constructor() {
-    effect(() => {
-      document.body.classList.toggle('camera-running', this.cameraRunning());
+  ngOnInit() {
+    this.#cameraViewService.getAvailableDevices().then((devices) => {
+      this.cameraDevices.set(devices);
     });
   }
 
-  async startCamera() {
-    await this.#cameraViewService.start();
-    this.cameraRunning.set(true);
-  }
+  protected async startCamera(): Promise<void> {
+    const cameraModal = await this.#modalController.create({
+      component: CameraModalComponent,
+      animated: false,
+      componentProps: {
+        deviceId: this.deviceId(),
+        position: this.position(),
+        preset: this.preset(),
+        quality: this.quality(),
+        useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
+        initialZoomFactor: this.initialZoomFactor(),
+      },
+    });
 
-  async stopCamera() {
-    await this.#cameraViewService.stop();
-    this.cameraRunning.set(false);
+    await cameraModal.present();
+
+    const { data } = await cameraModal.onDidDismiss<{ photo: string }>();
+
+    if (data?.photo) {
+      this.#galleryService.addPhoto(data?.photo);
+    }
   }
 
   async isCameraRunning() {
     return this.#cameraViewService.isRunning();
   }
 
-  async capturePhoto() {
-    const photo = await this.#cameraViewService.capture();
-    this.photos.update((photos) => [...photos, photo]);
-  }
-
   async getSupportedFlashModes() {
-    return this.#cameraViewService.getSupportedFlashModes();
+    console.log(await this.#cameraViewService.getSupportedFlashModes());
   }
 
   async setFlashMode(flashMode: FlashMode) {
@@ -58,10 +95,10 @@ export class CameraViewPage {
   }
 
   async getZoom() {
-    return this.#cameraViewService.getZoom();
+    console.log(await this.#cameraViewService.getZoom());
   }
 
-  async setZoomLevel(zoomLevel: number) {
-    return this.#cameraViewService.setZoomLevel(zoomLevel);
+  async setZoomFactor(zoomFactor: number) {
+    return this.#cameraViewService.setZoom(zoomFactor);
   }
 }

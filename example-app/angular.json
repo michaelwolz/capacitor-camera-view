@@ -33,7 +33,7 @@
                 "output": "assets"
               }
             ],
-            "styles": ["src/global.css"],
+            "styles": ["src/global.scss"],
             "scripts": [],
             "browser": "src/main.ts"
           },
@@ -107,7 +107,7 @@
                 "output": "assets"
               }
             ],
-            "styles": ["src/global.css"],
+            "styles": ["src/global.scss"],
             "scripts": []
           },
           "configurations": {

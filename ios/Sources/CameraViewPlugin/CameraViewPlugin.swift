@@ -73,7 +73,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func isRunning(_ call: CAPPluginCall) {
         call.resolve([
-            "value": implementation.isRunning()
+            "isRunning": implementation.isRunning()
         ])
     }
 
@@ -102,7 +102,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             call.resolve([
-                "value": imageData.base64EncodedString()
+                "photo": imageData.base64EncodedString()
             ])
         })
     }
@@ -110,14 +110,17 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func getAvailableDevices(_ call: CAPPluginCall) {
         let devices = implementation.getAvailableDevices()
 
+        var result = JSArray()
+        for device in devices {
+            var deviceInfo = JSObject()
+            deviceInfo["id"] = device.uniqueID
+            deviceInfo["name"] = device.localizedName
+            deviceInfo["position"] = device.position == .front ? "front" : "back"
+            result.append(deviceInfo)
+        }
+
         call.resolve([
-            "value": devices.map { device in
-                return [
-                    "id": device.uniqueID,
-                    "name": device.localizedName,
-                    "position": device.position == .front ? "front" : "back",
-                ]
-            }
+            "devices": result
         ])
     }
 
@@ -147,7 +150,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        let ramp = call.getBool("ramp") ?? true
+        let ramp = call.getBool("ramp") ?? false
 
         do {
             try implementation.setZoomFactor(level, ramp: ramp)
@@ -162,7 +165,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         let flashMode = implementation.getFlashMode()
 
         call.resolve([
-            "value": flashMode
+            "flashMode": flashMode
         ])
     }
 
@@ -171,7 +174,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         let supportedFlashModeStrArr = supportedFlashModes.map { flashModeToStrMap[$0] }
 
         call.resolve([
-            "value": supportedFlashModeStrArr
+            "flashModes": supportedFlashModeStrArr
         ])
     }
 
@@ -208,7 +211,9 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             cameraState = "prompt"
         }
 
-        call.resolve(["camera": cameraState])
+        call.resolve([
+            "camera": cameraState
+        ])
     }
 
     @objc override public func requestPermissions(_ call: CAPPluginCall) {

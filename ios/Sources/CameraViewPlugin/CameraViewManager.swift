@@ -51,7 +51,7 @@ import Foundation
             guard let self = self else { return }
 
             do {
-                try self.configureSession(configuration: configuration)
+                try self.initiateCaptureSession(configuration: configuration)
             } catch {
                 DispatchQueue.main.async {
                     completion(error)
@@ -138,7 +138,7 @@ import Foundation
             throw CameraError.cameraUnavailable
         }
 
-      //  try configureSession(with: device)
+        try setInput(with: device)
     }
 
     /// Flips the camera to the opposite position (front to back or back to front).
@@ -147,7 +147,7 @@ import Foundation
         let newPosition: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
 
         let newCamera = try getCameraDevice(for: newPosition)
-      //  try configureSession(with: newCamera)
+        try setInput(with: newCamera)
     }
 
     /// Sets the flash mode for the currently active camera device.
@@ -213,7 +213,7 @@ import Foundation
     ///   - ramp: If enabled the zoom will be applied via ramp
     /// - Throws: An error if the zoom factor cannot be set.
     public func setZoomFactor(_ factor: CGFloat, ramp: Bool = true) throws {
-        guard let currentDevice = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard let device = currentCameraDevice else { throw CameraError.cameraUnavailable }
 
         let supportedZoomFactors = getSupportedZoomFactors()
         guard factor >= supportedZoomFactors.min && factor <= supportedZoomFactors.max else {
@@ -221,27 +221,28 @@ import Foundation
         }
 
         do {
-            try currentDevice.lockForConfiguration()
-            defer { currentDevice.unlockForConfiguration() }
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
 
             if ramp {
-                currentDevice.ramp(toVideoZoomFactor: factor, withRate: 5.0)
+                device.ramp(toVideoZoomFactor: factor, withRate: 6.0)
             } else {
-                currentDevice.videoZoomFactor = factor
+                device.videoZoomFactor = factor
             }
         } catch {
             throw CameraError.configurationFailed(error)
         }
     }
 
-    /// Configures the capture session with the specified camera device.
+    /// Initiates the capture session with the specified camera device.
     ///
     /// - Parameters:
     ///   - configuration: The configuration object for the camera session.
-    private func configureSession(configuration: CameraSessionConfiguration) throws {
+    private func initiateCaptureSession(configuration: CameraSessionConfiguration) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
+        // Configure the camera device
         let device: AVCaptureDevice
         if let deviceId = configuration.deviceId {
             device = try getCameraDeviceById(deviceId)
@@ -249,21 +250,20 @@ import Foundation
             device = try getCameraDevice(for: configuration.position)
         }
 
-        if captureSession.canSetSessionPreset(.photo) {
-            captureSession.sessionPreset = .photo
+        // Set the session preset if supported
+        if captureSession.canSetSessionPreset(configuration.preset) {
+            captureSession.sessionPreset = configuration.preset
         }
 
-        try self.setInput(with: device)
-        try self.setupPhotoOutput()
+        // Set the camera input
+        try setInput(with: device)
 
-        try? device.lockForConfiguration()
-        defer { device.unlockForConfiguration() }
+        // Set up the photo output
+        try setupPhotoOutput()
 
-        device.exposureMode = .continuousAutoExposure
-        device.focusMode = .continuousAutoFocus
-
+        // Set the initial zoom factor if specified
         if let zoomFactor = configuration.zoomFactor {
-            try? setZoomFactor(CGFloat(zoomFactor), ramp: false)
+            try setZoomFactor(zoomFactor, ramp: false)
         }
     }
 
@@ -430,6 +430,11 @@ import Foundation
         }
     }
 
+    /// MARK: - Triple Camera
+
+    /// Upgrades the camera to the triple camera if available.
+    /// Initializing the triple camera is an expensive operation and takes some time.
+    /// This is why by default the regular physical camera is used and then later upgraded to the triple camera if available (Pro models only).
     private func upgradeToTripleCameraIfAvailable() async {
         guard captureSession.isRunning else { return }
 
@@ -448,6 +453,7 @@ import Foundation
             return
         }
 
+        // Add a blur overlay to the webview to have a smooth transition when switching to the triple camera
         await addBlurOverlay()
 
         await Task.detached(priority: .userInitiated) {
@@ -455,6 +461,7 @@ import Foundation
 
             do {
                 try self.setInput(with: tripleCamera)
+                // TODO: Consider configured zoom factor from the initial camera???
                 try self.setZoomFactor(2.0, ramp: false)
             } catch {
                 // Fail silently if we can't upgrade to the triple camera
@@ -470,6 +477,7 @@ import Foundation
         await removeBlurOverlayWithAnimation()
     }
 
+    /// Adds a blur overlay to the webview to have a smooth transition when switching to the triple camera
     @MainActor
     private func addBlurOverlay() async {
         guard let view = self.webView else { return }
@@ -483,6 +491,8 @@ import Foundation
         view.insertSubview(blurOverlayView, aboveSubview: view.subviews.first ?? view)
     }
 
+    /// Removes the blur overlay with a fade out animation to have a smooth transition
+    /// - Parameter duration: The duration of the fade out animation
     @MainActor
     private func removeBlurOverlayWithAnimation(duration: TimeInterval = 0.3) async {
         guard let blurEffectView = blurOverlayView else { return }

@@ -28,7 +28,6 @@ npx cap sync
 * [`requestPermissions()`](#requestpermissions)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
-* [Enums](#enums)
 
 </docgen-index>
 
@@ -64,12 +63,12 @@ Stop the camera view
 ### isRunning()
 
 ```typescript
-isRunning() => Promise<boolean>
+isRunning() => Promise<{ isRunning: boolean; }>
 ```
 
 Check if the camera view is running.
 
-**Returns:** <code>Promise&lt;boolean&gt;</code>
+**Returns:** <code>Promise&lt;{ isRunning: boolean; }&gt;</code>
 
 --------------------
 
@@ -77,7 +76,7 @@ Check if the camera view is running.
 ### capture(...)
 
 ```typescript
-capture(options: { quality: number; }) => Promise<string>
+capture(options: { quality: number; }) => Promise<{ photo: string; }>
 ```
 
 Capture a photo.
@@ -86,7 +85,7 @@ Capture a photo.
 | ------------- | --------------------------------- |
 | **`options`** | <code>{ quality: number; }</code> |
 
-**Returns:** <code>Promise&lt;string&gt;</code>
+**Returns:** <code>Promise&lt;{ photo: string; }&gt;</code>
 
 --------------------
 
@@ -105,12 +104,12 @@ Switches between front and back camera.
 ### getAvailableDevices()
 
 ```typescript
-getAvailableDevices() => Promise<Array<CameraDevice>>
+getAvailableDevices() => Promise<{ devices: Array<CameraDevice>; }>
 ```
 
 Get available devices for taking photos.
 
-**Returns:** <code>Promise&lt;CameraDevice[]&gt;</code>
+**Returns:** <code>Promise&lt;{ devices: CameraDevice[]; }&gt;</code>
 
 --------------------
 
@@ -146,12 +145,12 @@ Set zoom level.
 ### getFlashMode()
 
 ```typescript
-getFlashMode() => Promise<FlashMode>
+getFlashMode() => Promise<{ flashMode: FlashMode; }>
 ```
 
 Get flash mode.
 
-**Returns:** <code>Promise&lt;<a href="#flashmode">FlashMode</a>&gt;</code>
+**Returns:** <code>Promise&lt;{ flashMode: <a href="#flashmode">FlashMode</a>; }&gt;</code>
 
 --------------------
 
@@ -159,12 +158,12 @@ Get flash mode.
 ### getSupportedFlashModes()
 
 ```typescript
-getSupportedFlashModes() => Promise<Array<FlashMode>>
+getSupportedFlashModes() => Promise<{ flashModes: Array<FlashMode>; }>
 ```
 
 Get supported flash modes.
 
-**Returns:** <code>Promise&lt;FlashMode[]&gt;</code>
+**Returns:** <code>Promise&lt;{ flashModes: FlashMode[]; }&gt;</code>
 
 --------------------
 
@@ -187,12 +186,12 @@ Set flash mode.
 ### checkPermissions()
 
 ```typescript
-checkPermissions() => Promise<PermissionStatus>
+checkPermissions() => Promise<{ camera: PermissionStatus; }>
 ```
 
 Check camera permission.
 
-**Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
+**Returns:** <code>Promise&lt;{ camera: <a href="#permissionstatus">PermissionStatus</a>; }&gt;</code>
 
 --------------------
 
@@ -200,12 +199,12 @@ Check camera permission.
 ### requestPermissions()
 
 ```typescript
-requestPermissions() => Promise<PermissionStatus>
+requestPermissions() => Promise<{ camera: PermissionStatus; }>
 ```
 
 Request camera permission.
 
-**Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
+**Returns:** <code>Promise&lt;{ camera: <a href="#permissionstatus">PermissionStatus</a>; }&gt;</code>
 
 --------------------
 
@@ -219,20 +218,11 @@ Configuration for the camera session.
 
 | Prop                             | Type                                                      | Description                                              |
 | -------------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
-| **`cameraPosition`**             | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera (front or back)                   |
+| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera (front or back)                   |
 | **`deviceId`**                   | <code>string</code>                                       | The device ID of the camera to use                       |
 | **`preset`**                     | <code><a href="#camerapreset">CameraPreset</a></code>     | The preset to use for the camera session                 |
 | **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iOS only) |
 | **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use for the camera session    |
-
-
-#### CameraDevice
-
-| Prop           | Type                                                      |
-| -------------- | --------------------------------------------------------- |
-| **`id`**       | <code>string</code>                                       |
-| **`name`**     | <code>string</code>                                       |
-| **`position`** | <code><a href="#cameraposition">CameraPosition</a></code> |
 
 
 #### Array
@@ -286,6 +276,15 @@ Configuration for the camera session.
 | **slice** | (start?: number \| undefined, end?: number \| undefined) =&gt; T[] |
 
 
+#### CameraDevice
+
+| Prop           | Type                                                      |
+| -------------- | --------------------------------------------------------- |
+| **`id`**       | <code>string</code>                                       |
+| **`name`**     | <code>string</code>                                       |
+| **`position`** | <code><a href="#cameraposition">CameraPosition</a></code> |
+
+
 #### PermissionStatus
 
 Permission status for the camera.
@@ -298,33 +297,27 @@ Permission status for the camera.
 ### Type Aliases
 
 
+#### CameraPosition
+
+Position options for the camera session.
+
+<code>'front' | 'back'</code>
+
+
 #### CameraPreset
 
 <code>'low' | 'medium' | 'high' | 'photo'</code>
 
 
+#### FlashMode
+
+Flash mode options for the camera session.
+
+<code>'off' | 'on' | 'auto'</code>
+
+
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
-
-
-### Enums
-
-
-#### CameraPosition
-
-| Members     | Value                |
-| ----------- | -------------------- |
-| **`FRONT`** | <code>'front'</code> |
-| **`BACK`**  | <code>'back'</code>  |
-
-
-#### FlashMode
-
-| Members    | Value               |
-| ---------- | ------------------- |
-| **`OFF`**  | <code>'off'</code>  |
-| **`ON`**   | <code>'on'</code>   |
-| **`AUTO`** | <code>'auto'</code> |
 
 </docgen-api>

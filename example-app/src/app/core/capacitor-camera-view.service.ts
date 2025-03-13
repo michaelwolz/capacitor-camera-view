@@ -1,5 +1,12 @@
 import { Injectable } from '@angular/core';
-import { CameraPosition, CameraView, CameraViewPlugin, FlashMode, PermissionStatus } from 'capacitor-camera-view';
+import {
+  CameraDevice,
+  CameraSessionConfiguration,
+  CameraView,
+  CameraViewPlugin,
+  FlashMode,
+  PermissionStatus,
+} from 'capacitor-camera-view';
 
 @Injectable({
   providedIn: 'root',
@@ -13,10 +20,10 @@ export class CapacitorCameraViewService {
 
   /**
    * Start the camera view
-   * @param cameraPosition The position of the camera (front or back)
+   * @param options Configuration options for the camera session
    */
-  async start(cameraPosition: CameraPosition = CameraPosition.BACK): Promise<void> {
-    return this.cameraView.start({ cameraPosition });
+  async start(options: CameraSessionConfiguration = {}): Promise<void> {
+    return this.cameraView.start(options);
   }
 
   /**
@@ -30,7 +37,7 @@ export class CapacitorCameraViewService {
    * Check if the camera view is running
    */
   async isRunning(): Promise<boolean> {
-    return this.cameraView.isRunning();
+    return (await this.cameraView.isRunning()).isRunning;
   }
 
   /**
@@ -39,14 +46,21 @@ export class CapacitorCameraViewService {
    * @returns A base64 encoded string of the captured photo
    */
   async capture(quality: number = 90): Promise<string> {
-    return this.cameraView.capture({ quality });
+    return (await this.cameraView.capture({ quality })).photo;
   }
 
   /**
+   * Get a list of available camera devices
+   * @returns Array of available camera devices
+   */
+  async getAvailableDevices(): Promise<Array<CameraDevice>> {
+    return (await this.cameraView.getAvailableDevices()).devices;
+  }
+  /**
    * Switch between front and back camera
    */
-  async switchCamera(): Promise<void> {
-    return this.cameraView.switchCamera();
+  async flipCamera(): Promise<void> {
+    await this.cameraView.flipCamera();
   }
 
   /**
@@ -60,9 +74,10 @@ export class CapacitorCameraViewService {
   /**
    * Set the zoom level
    * @param level The zoom level to set
+   * @param ramp Whether to animate the zoom level change, defaults to true (iOS / Android only)
    */
-  async setZoom(level: number): Promise<void> {
-    return this.cameraView.setZoom({ level });
+  async setZoom(level: number, ramp?: boolean): Promise<void> {
+    return this.cameraView.setZoom({ level, ramp });
   }
 
   /**
@@ -70,7 +85,7 @@ export class CapacitorCameraViewService {
    * @returns The current flash mode
    */
   async getFlashMode(): Promise<FlashMode> {
-    return this.cameraView.getFlashMode();
+    return (await this.cameraView.getFlashMode()).flashMode;
   }
 
   /**
@@ -78,7 +93,7 @@ export class CapacitorCameraViewService {
    * @returns Array of supported flash modes
    */
   async getSupportedFlashModes(): Promise<FlashMode[]> {
-    return this.cameraView.getSupportedFlashModes();
+    return (await this.cameraView.getSupportedFlashModes()).flashModes;
   }
 
   /**
@@ -94,7 +109,7 @@ export class CapacitorCameraViewService {
    * @returns The current permission status
    */
   async checkPermissions(): Promise<PermissionStatus> {
-    return this.cameraView.checkPermissions();
+    return (await this.cameraView.checkPermissions()).camera;
   }
 
   /**
@@ -102,6 +117,6 @@ export class CapacitorCameraViewService {
    * @returns The updated permission status after request
    */
   async requestPermissions(): Promise<PermissionStatus> {
-    return this.cameraView.requestPermissions();
+    return (await this.cameraView.requestPermissions()).camera;
   }
 }

@@ -10,19 +10,12 @@ export interface PermissionStatus {
 /**
  * Position options for the camera session.
  */
-export enum CameraPosition {
-  FRONT = 'front',
-  BACK = 'back',
-}
+export type CameraPosition = 'front' | 'back';
 
 /**
  * Flash mode options for the camera session.
  */
-export enum FlashMode {
-  OFF = 'off',
-  ON = 'on',
-  AUTO = 'auto',
-}
+export type FlashMode = 'off' | 'on' | 'auto';
 
 export interface CameraDevice {
   id: string;
@@ -37,7 +30,7 @@ export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
  */
 export interface CameraSessionConfiguration {
   /** Position of the camera (front or back) */
-  cameraPosition?: CameraPosition;
+  position?: CameraPosition;
 
   /** The device ID of the camera to use */
   deviceId?: string;
@@ -66,7 +59,7 @@ export interface CameraViewPlugin {
   /**
    * Check if the camera view is running.
    */
-  isRunning(): Promise<boolean>;
+  isRunning(): Promise<{ isRunning: boolean }>;
 
   /**
    * Capture a photo.
@@ -78,7 +71,7 @@ export interface CameraViewPlugin {
    *
    * @returns A base64 encoded string of the captured photo.
    */
-  capture(options: { quality: number }): Promise<string>;
+  capture(options: { quality: number }): Promise<{ photo: string }>;
 
   /**
    * Switches between front and back camera.
@@ -93,7 +86,7 @@ export interface CameraViewPlugin {
    *
    * @returns An array of available capture devices
    */
-  getAvailableDevices(): Promise<Array<CameraDevice>>;
+  getAvailableDevices(): Promise<{ devices: Array<CameraDevice> }>;
 
   /**
    * Get zoom levels options and current zoom level.
@@ -112,7 +105,7 @@ export interface CameraViewPlugin {
    * Camera view must be started before calling this method.
    *
    * @param options.level - The zoom level to set.
-   * @param options.ramp - Whether to animate the zoom level change, defaults to true (iOS / Android only)
+   * @param options.ramp - Whether to animate the zoom level change, defaults to false (iOS / Android only)
    */
   setZoom(options: { level: number; ramp?: boolean }): Promise<void>;
 
@@ -124,7 +117,7 @@ export interface CameraViewPlugin {
    *
    * @returns The current flash mode.
    */
-  getFlashMode(): Promise<FlashMode>;
+  getFlashMode(): Promise<{ flashMode: FlashMode }>;
 
   /**
    * Get supported flash modes.
@@ -134,7 +127,7 @@ export interface CameraViewPlugin {
    *
    * @returns An array of supported flash modes.
    */
-  getSupportedFlashModes(): Promise<Array<FlashMode>>;
+  getSupportedFlashModes(): Promise<{ flashModes: Array<FlashMode> }>;
 
   /**
    * Set flash mode.
@@ -149,10 +142,10 @@ export interface CameraViewPlugin {
   /**
    * Check camera permission.
    */
-  checkPermissions(): Promise<PermissionStatus>;
+  checkPermissions(): Promise<{ camera: PermissionStatus }>;
 
   /**
    * Request camera permission.
    */
-  requestPermissions(): Promise<PermissionStatus>;
+  requestPermissions(): Promise<{ camera: PermissionStatus }>;
 }

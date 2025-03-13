@@ -1,0 +1,65 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>Camera</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="stopCamera()">
+        <ion-icon slot="icon-only" name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<div id="cameraView">
+  @if (!cameraRunning()) {
+    <div class="loading-screen">
+      <ion-spinner color="white"></ion-spinner>
+    </div>
+  } @else {
+    @if (isWeb) {
+      <div id="webCamera"></div>
+    }
+  }
+</div>
+
+@if (cameraRunning()) {
+  <ion-fab
+    class="camera-actions"
+    slot="fixed"
+    horizontal="end"
+    vertical="center"
+  >
+    <ion-fab-button (click)="nextFlashMode()" size="small">
+      @let fm = flashMode();
+      @if (fm === "off") {
+        <ion-icon name="flash-off" size="small"></ion-icon>
+      } @else if (fm === "on") {
+        <ion-icon name="flash" size="small"></ion-icon>
+      } @else if (fm === "auto") {
+        <div style="line-height: 0.5; margin-top: -5px">
+          <ion-icon name="flash" size="small"></ion-icon><br>
+          <span style="font-size: 0.6rem">AUTO</span>
+        </div>
+      }
+    </ion-fab-button>
+
+    <ion-fab-button size="small" (click)="flipCamera()">
+      <ion-icon name="camera-reverse"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+
+  <ion-fab
+    class="camera-trigger"
+    slot="fixed"
+    horizontal="center"
+    vertical="bottom"
+  >
+    <ion-fab-button (click)="capturePhoto()" [disabled]="isCapturingPhoto()">
+      @if (isCapturingPhoto()) {
+        <ion-spinner></ion-spinner>
+      } @else {
+        <ion-icon name="camera-outline"></ion-icon>
+      }
+    </ion-fab-button>
+  </ion-fab>
+}
