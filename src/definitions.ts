@@ -29,6 +29,9 @@ export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
  * Configuration for the camera session.
  */
 export interface CameraSessionConfiguration {
+  /** Enables the barcode scanner, defaults to `false` */
+  enableBarcodeScanner?: boolean;
+
   /** Position of the camera (front or back) */
   position?: CameraPosition;
 

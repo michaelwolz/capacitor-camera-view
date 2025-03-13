@@ -218,6 +218,7 @@ Configuration for the camera session.
 
 | Prop                             | Type                                                      | Description                                              |
 | -------------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
+| **`enableBarcodeScanner`**       | <code>boolean</code>                                      | Enables the barcode scanner, defaults to `false`         |
 | **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera (front or back)                   |
 | **`deviceId`**                   | <code>string</code>                                       | The device ID of the camera to use                       |
 | **`preset`**                     | <code><a href="#camerapreset">CameraPreset</a></code>     | The preset to use for the camera session                 |

@@ -262,7 +262,7 @@ import Foundation
         try setupPhotoOutput()
 
         // Setup metadata output for QR code scanning if enabled
-        if configuration.enableQrCodeScanning {
+        if configuration.enableBarcodeScanner {
             try setupMetadataOutput()
         }
 

@@ -10,7 +10,7 @@ private let strToPreset: [String: AVCaptureSession.Preset] = [
 
 public struct CameraSessionConfiguration {
     let deviceId: String?
-    let enableQrCodeScanning: Bool
+    let enableBarcodeScanner: Bool
     let position: AVCaptureDevice.Position
     let preset: AVCaptureSession.Preset
     let useTripleCameraIfAvailable: Bool
@@ -22,7 +22,7 @@ public struct CameraSessionConfiguration {
 /// - Parameter call: The Capacitor plugin call.
 public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionConfiguration {
     let deviceId = call.getString("deviceId")
-    let enableBarcodeScanning = call.getBool("enableQrCodeScanning", false)
+    let enableBarcodeScanner = call.getBool("enableQrCodeScanning", false)
     let position: AVCaptureDevice.Position = call.getString("position") == "front" ? .front : .back
     let preset: AVCaptureSession.Preset = strToPreset[call.getString("preset", "photo")] ?? .photo
     let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable",  false)
@@ -30,7 +30,7 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
 
     return CameraSessionConfiguration(
         deviceId: deviceId,
-        enableQrCodeScanning: enableBarcodeScanning,
+        enableBarcodeScanner: enableBarcodeScanner,
         position: position,
         preset: preset,
         useTripleCameraIfAvailable: useTripleCameraIfAvailable,
