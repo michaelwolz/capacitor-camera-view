@@ -6,24 +6,34 @@ import {
   input,
   OnInit,
   signal,
+  viewChild,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Capacitor } from '@capacitor/core';
 import {
   IonButton,
   IonButtons,
+  IonChip,
   IonFab,
   IonFabButton,
   IonHeader,
   IonIcon,
+  IonLabel,
   IonSpinner,
   IonTitle,
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
+import type { FlashMode } from 'capacitor-camera-view';
 import { CameraPosition, CameraPreset } from 'capacitor-camera-view';
+import { concat, map, of, switchMap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 
-import type { FlashMode } from 'capacitor-camera-view';
+function getDistance(touch1: Touch, touch2: Touch): number {
+  const dx = touch1.clientX - touch2.clientX;
+  const dy = touch1.clientY - touch2.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
 @Component({
   selector: 'app-camera-modal',
@@ -39,6 +49,8 @@ import type { FlashMode } from 'capacitor-camera-view';
     IonToolbar,
     IonTitle,
     IonSpinner,
+    IonLabel,
+    IonChip,
   ],
   host: {
     class: 'camera-modal',
@@ -49,7 +61,11 @@ export class CameraModalComponent implements OnInit {
   readonly #elementRef = inject(ElementRef);
   readonly #modalController = inject(ModalController);
 
+  protected barcodeRect =
+    viewChild.required<ElementRef<HTMLDivElement>>('barcodeRect');
+
   public readonly deviceId = input<string>();
+  public readonly enableBarcodeDetection = input<boolean>(false);
   public readonly position = input<CameraPosition>('back');
   public readonly preset = input<CameraPreset>('photo');
   public readonly quality = input<number>(85);
@@ -59,6 +75,15 @@ export class CameraModalComponent implements OnInit {
   protected readonly cameraRunning = signal(true);
   protected readonly flashMode = signal<FlashMode>('auto');
   protected readonly isCapturingPhoto = signal(false);
+
+  protected readonly detectedBarcode = toSignal(
+    this.#cameraViewService.barcodeData.pipe(
+      switchMap((value) =>
+        concat(of(value), timer(1000).pipe(map(() => undefined))),
+      ),
+    ),
+    { initialValue: undefined },
+  );
 
   protected readonly isWeb = Capacitor.getPlatform() === 'web';
 
@@ -73,6 +98,27 @@ export class CameraModalComponent implements OnInit {
   constructor() {
     effect(() => {
       document.body.classList.toggle('camera-running', this.cameraRunning());
+    });
+
+    effect(() => {
+      const barcodeData = this.detectedBarcode();
+      const element = this.barcodeRect().nativeElement;
+
+      if (barcodeData) {
+        const boundingRect = barcodeData.boundingRect;
+
+        element.style.visibility = 'visible';
+        element.style.opacity = '1';
+        element.style.left = `${boundingRect.x - 10}px`;
+        element.style.top = `${boundingRect.y - 10}px`;
+        element.style.width = `${boundingRect.width + 20}px`;
+        element.style.height = `${boundingRect.height + 20}px`;
+      } else {
+        element.style.opacity = '0';
+        element.style.width = `0%`;
+        element.style.height = `0%`;
+        element.style.visibility = 'hidden';
+      }
     });
   }
 
@@ -98,6 +144,7 @@ export class CameraModalComponent implements OnInit {
   protected async startCamera(): Promise<void> {
     await this.#cameraViewService.start({
       deviceId: this.deviceId(),
+      enableBarcodeDetection: this.enableBarcodeDetection(),
       position: this.position(),
       preset: this.preset(),
       useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
@@ -107,12 +154,15 @@ export class CameraModalComponent implements OnInit {
   }
 
   protected async stopCamera(): Promise<void> {
-    try {
-      await this.#cameraViewService.stop();
-      this.cameraRunning.set(false);
-    } finally {
-      this.#modalController.dismiss();
-    }
+    await this.#cameraViewService.stop();
+    this.cameraRunning.set(false);
+  }
+
+  protected async close(): Promise<void> {
+    this.stopCamera().catch((error) =>
+      console.error('Failed to stop camera', error),
+    );
+    await this.#modalController.dismiss();
   }
 
   protected async capturePhoto(): Promise<void> {
@@ -137,23 +187,21 @@ export class CameraModalComponent implements OnInit {
   }
 
   protected async nextFlashMode(): Promise<void> {
-    const currentFlashMode = this.flashMode();
     const supportedModes = this.#supportedFlashModes;
+    if (supportedModes.length <= 1) return;
 
-    if (supportedModes.length <= 1) {
-      // No alternative modes to switch to
-      return;
-    }
-
-    // Find current index in supported modes
-    const currentIndex = supportedModes.indexOf(currentFlashMode);
-
-    // Get next mode (wrapping around to the beginning if needed)
+    const currentMode = this.flashMode();
+    const currentIndex = supportedModes.indexOf(currentMode);
     const nextIndex = (currentIndex + 1) % supportedModes.length;
     const nextFlashMode = supportedModes[nextIndex] as FlashMode;
 
     this.flashMode.set(nextFlashMode);
     await this.#cameraViewService.setFlashMode(nextFlashMode);
+  }
+
+  protected async readBarcode(): Promise<void> {
+    await this.stopCamera();
+    await this.#modalController.dismiss({ barcode: this.detectedBarcode() });
   }
 
   private async initializeZoomLimits(): Promise<void> {
@@ -162,9 +210,6 @@ export class CameraModalComponent implements OnInit {
       if (zoomRange) {
         this.#minZoom = zoomRange.min;
         this.#maxZoom = zoomRange.max;
-        console.log(
-          `Camera zoom range: min=${this.#minZoom}, max=${this.#maxZoom}`,
-        );
       }
     } catch (error) {
       console.warn('Failed to get zoom range, using default values', error);
@@ -179,43 +224,33 @@ export class CameraModalComponent implements OnInit {
   private setupPinchZoom(): void {
     const element = this.#elementRef.nativeElement;
 
-    element.addEventListener('touchstart', (event: TouchEvent) => {
-      if (event.touches.length >= 2) {
-        this.#touchStartDistance = this.getDistance(
-          event.touches[0],
-          event.touches[1],
-        );
-        this.#initialZoomFactorOnPinch = this.#currentZoomFactor;
-      }
-    });
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length < 2) return;
 
-    element.addEventListener('touchmove', (event: TouchEvent) => {
-      if (event.touches.length >= 2) {
-        const currentDistance = this.getDistance(
-          event.touches[0],
-          event.touches[1],
-        );
+      this.#touchStartDistance = getDistance(
+        event.touches[0],
+        event.touches[1],
+      );
+      this.#initialZoomFactorOnPinch = this.#currentZoomFactor;
+    };
 
-        if (this.#touchStartDistance > 0) {
-          // Calculate new zoom factor
-          const scale = currentDistance / this.#touchStartDistance;
-          const newZoomFactor = Math.max(
-            this.#minZoom,
-            Math.min(this.#maxZoom, this.#initialZoomFactorOnPinch * scale),
-          );
+    const handleTouchMove = (event: TouchEvent) => {
+      if (event.touches.length < 2 || this.#touchStartDistance <= 0) return;
 
-          this.setZoom(newZoomFactor);
-        }
+      const currentDistance = getDistance(event.touches[0], event.touches[1]);
 
-        // Prevent default behavior to avoid scrolling
-        event.preventDefault();
-      }
-    });
-  }
+      // Calculate new zoom factor
+      const scale = currentDistance / this.#touchStartDistance;
+      const newZoomFactor = Math.max(
+        this.#minZoom,
+        Math.min(this.#maxZoom, this.#initialZoomFactorOnPinch * scale),
+      );
 
-  private getDistance(touch1: Touch, touch2: Touch): number {
-    const dx = touch1.clientX - touch2.clientX;
-    const dy = touch1.clientY - touch2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
+      this.setZoom(newZoomFactor);
+      event.preventDefault(); // Prevent scrolling
+    };
+
+    element.addEventListener('touchstart', handleTouchStart);
+    element.addEventListener('touchmove', handleTouchMove);
   }
 }

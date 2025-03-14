@@ -2,11 +2,11 @@ import AVFoundation
 import Foundation
 
 /// A camera implementation that handles camera session management and photo capture.
-@objc public class CameraViewManager: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate {
-    private let captureSession = AVCaptureSession()
-    private let photoOutput = AVCapturePhotoOutput()
-    private let videoPreviewLayer = AVCaptureVideoPreviewLayer()
-    private var isPrewarmed = false
+@objc public class CameraViewManager: NSObject {
+    internal let captureSession = AVCaptureSession()
+    internal let avPhotoOutput = AVCapturePhotoOutput()
+
+    internal let videoPreviewLayer = AVCaptureVideoPreviewLayer()
 
     /// The currently active camera device.
     private var currentCameraDevice: AVCaptureDevice?
@@ -14,14 +14,14 @@ import Foundation
     /// Currently selected flash mode.
     private var flashMode: AVCaptureDevice.FlashMode = .auto
 
-    /// Callback for when photo capture completes.
-    private var photoCaptureHandler: ((UIImage?, Error?) -> Void)?
-
     /// Reference to the blur overlay view that is shown when switching to the triple camera in order to have a smooth transition
     private var blurOverlayView: UIVisualEffectView?
 
     /// Reference to the webView that is used by the Capacitor plugin for the preview layer is shown on
     private var webView: UIView?
+
+    /// Callback for when photo capture completes.
+    internal var photoCaptureHandler: ((UIImage?, Error?) -> Void)?
 
     public override init() {
         super.init()
@@ -128,7 +128,7 @@ import Foundation
             photoSettings.flashMode = .off
         }
 
-        photoOutput.capturePhoto(with: photoSettings, delegate: self)
+        avPhotoOutput.capturePhoto(with: photoSettings, delegate: self)
         photoCaptureHandler = completion
     }
 
@@ -157,7 +157,7 @@ import Foundation
     public func setFlashMode(_ mode: AVCaptureDevice.FlashMode) throws {
         guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
         guard camera.hasFlash else { throw CameraError.unsupportedFlashMode }
-        guard photoOutput.supportedFlashModes.contains(mode)
+        guard avPhotoOutput.supportedFlashModes.contains(mode)
         else {
             throw CameraError.unsupportedFlashMode
         }
@@ -175,7 +175,7 @@ import Foundation
     /// - Returns: An array of supported flash modes, fallback is .off
     public func getSupportedFlashModes() -> [AVCaptureDevice.FlashMode] {
         if let camera = currentCameraDevice, camera.hasFlash {
-            return photoOutput.supportedFlashModes
+            return avPhotoOutput.supportedFlashModes
         }
 
         return [.off]
@@ -262,7 +262,7 @@ import Foundation
         try setupPhotoOutput()
 
         // Setup metadata output for QR code scanning if enabled
-        if configuration.enableBarcodeScanner {
+        if configuration.enableBarcodeDetection {
             try setupMetadataOutput()
         }
 
@@ -302,50 +302,6 @@ import Foundation
             }
         }
     }
-
-    /// Set up output for the capture session in case it's not configured yet
-    /// Make sure to call `captureSession.beginConfiguration` before calling this
-    ///
-    /// - Throws: An error if the output cannot be set.
-    private func setupPhotoOutput() throws {
-        if (captureSession.outputs.contains { $0 is AVCapturePhotoOutput }) {
-            // Nothing todo, we already have an output and since we only
-            // use outputs for taking photos here we don't need a new one
-            return
-        }
-
-        // Balanced should be a good choice for most use case
-        photoOutput.maxPhotoQualityPrioritization = .balanced
-
-        if !captureSession.canAddOutput(photoOutput) {
-            throw CameraError.outputAdditionFailed
-        }
-
-        captureSession.addOutput(photoOutput)
-    }
-
-    /// Set up metadata output for the capture session in case it's not configured yet
-    /// Make sure to call `captureSession.beginConfiguration` before calling this
-    ///
-    /// - Throws: An error if the output cannot be set.
-    private func setupMetadataOutput() throws {
-        let metadataOutput = AVCaptureMetadataOutput()
-
-        if (captureSession.outputs.contains { $0 is AVCaptureMetadataOutput }) {
-            // Nothing todo, we already have an output
-            return
-        }
-
-        if !captureSession.canAddOutput(metadataOutput) {
-            throw CameraError.outputAdditionFailed
-        }
-
-        captureSession.addOutput(metadataOutput)
-
-        metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-        metadataOutput.metadataObjectTypes = [.qr]
-    }
-
 
     /// Retrieve a list of a available camera devices
     ///
@@ -398,48 +354,6 @@ import Foundation
         }
         return device
     }
-
-    /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`
-    ///
-    /// - Parameters:
-    ///   - output: The photo output that captured the photo.
-    ///   - photo: The captured photo.
-    ///   - error: An error that occurred during photo capture.
-    public func photoOutput(
-        _ output: AVCapturePhotoOutput,
-        didFinishProcessingPhoto photo: AVCapturePhoto,
-        error: Error?
-    ) {
-        if let error = error {
-            photoCaptureHandler?(nil, error)
-            return
-        }
-
-        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
-            photoCaptureHandler?(nil, CameraError.photoOutputError)
-            return
-        }
-
-        photoCaptureHandler?(image, nil)
-    }
-
-    public func metadataOutput(
-        _ output: AVCaptureMetadataOutput,
-        didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection
-    ) {
-        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
-            return
-        }
-
-        guard let qrCode = metadataObject.stringValue else {
-            return
-        }
-
-        print(metadataObject.corners)
-        print("QR Code: \(qrCode)")
-    }
-
 
     /// MARK: - UI Preview Layer
 

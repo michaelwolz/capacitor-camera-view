@@ -6,9 +6,12 @@ import {
   cameraReverse,
   cameraSharp,
   close,
+  closeCircle,
   flash,
   flashOff,
   imagesSharp,
+  qrCode,
+  qrCodeOutline,
   search,
   searchOutline,
   sunny,
@@ -33,7 +36,9 @@ export class AppComponent {
       close,
       flash,
       flashOff,
-      cameraReverse
+      cameraReverse,
+      qrCodeOutline,
+      closeCircle
     });
   }
 }

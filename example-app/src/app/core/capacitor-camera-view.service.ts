@@ -1,21 +1,34 @@
 import { Injectable } from '@angular/core';
+import { PermissionState } from '@capacitor/core';
 import {
+  BarcodeDetectionData,
   CameraDevice,
   CameraSessionConfiguration,
   CameraView,
   CameraViewPlugin,
   FlashMode,
-  PermissionStatus,
 } from 'capacitor-camera-view';
+import { Subject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CapacitorCameraViewService {
-  private cameraView: CameraViewPlugin;
+  #cameraView: CameraViewPlugin;
+  #barcodeData = new Subject<BarcodeDetectionData>();
+
+  /**
+   * Observable for barcode detection events
+   */
+  readonly barcodeData = this.#barcodeData.asObservable();
 
   constructor() {
-    this.cameraView = CameraView;
+    this.#cameraView = CameraView;
+
+    // Add event listeners
+    this.#cameraView.addListener('barcodeDetected', (event) => {
+      this.#barcodeData.next(event);
+    });
   }
 
   /**
@@ -23,21 +36,21 @@ export class CapacitorCameraViewService {
    * @param options Configuration options for the camera session
    */
   async start(options: CameraSessionConfiguration = {}): Promise<void> {
-    return this.cameraView.start(options);
+    return this.#cameraView.start(options);
   }
 
   /**
    * Stop the camera view
    */
   async stop(): Promise<void> {
-    return this.cameraView.stop();
+    return this.#cameraView.stop();
   }
 
   /**
    * Check if the camera view is running
    */
   async isRunning(): Promise<boolean> {
-    return (await this.cameraView.isRunning()).isRunning;
+    return (await this.#cameraView.isRunning()).isRunning;
   }
 
   /**
@@ -46,7 +59,7 @@ export class CapacitorCameraViewService {
    * @returns A base64 encoded string of the captured photo
    */
   async capture(quality: number = 90): Promise<string> {
-    return (await this.cameraView.capture({ quality })).photo;
+    return (await this.#cameraView.capture({ quality })).photo;
   }
 
   /**
@@ -54,13 +67,13 @@ export class CapacitorCameraViewService {
    * @returns Array of available camera devices
    */
   async getAvailableDevices(): Promise<Array<CameraDevice>> {
-    return (await this.cameraView.getAvailableDevices()).devices;
+    return (await this.#cameraView.getAvailableDevices()).devices;
   }
   /**
    * Switch between front and back camera
    */
   async flipCamera(): Promise<void> {
-    await this.cameraView.flipCamera();
+    await this.#cameraView.flipCamera();
   }
 
   /**
@@ -68,7 +81,7 @@ export class CapacitorCameraViewService {
    * @returns Object with min, max and current zoom levels
    */
   async getZoom(): Promise<{ min: number; max: number; current: number }> {
-    return this.cameraView.getZoom();
+    return this.#cameraView.getZoom();
   }
 
   /**
@@ -77,7 +90,7 @@ export class CapacitorCameraViewService {
    * @param ramp Whether to animate the zoom level change, defaults to true (iOS / Android only)
    */
   async setZoom(level: number, ramp?: boolean): Promise<void> {
-    return this.cameraView.setZoom({ level, ramp });
+    return this.#cameraView.setZoom({ level, ramp });
   }
 
   /**
@@ -85,7 +98,7 @@ export class CapacitorCameraViewService {
    * @returns The current flash mode
    */
   async getFlashMode(): Promise<FlashMode> {
-    return (await this.cameraView.getFlashMode()).flashMode;
+    return (await this.#cameraView.getFlashMode()).flashMode;
   }
 
   /**
@@ -93,7 +106,7 @@ export class CapacitorCameraViewService {
    * @returns Array of supported flash modes
    */
   async getSupportedFlashModes(): Promise<FlashMode[]> {
-    return (await this.cameraView.getSupportedFlashModes()).flashModes;
+    return (await this.#cameraView.getSupportedFlashModes()).flashModes;
   }
 
   /**
@@ -101,22 +114,22 @@ export class CapacitorCameraViewService {
    * @param mode The flash mode to set
    */
   async setFlashMode(mode: FlashMode): Promise<void> {
-    return this.cameraView.setFlashMode({ mode });
+    return this.#cameraView.setFlashMode({ mode });
   }
 
   /**
    * Check camera permission status
    * @returns The current permission status
    */
-  async checkPermissions(): Promise<PermissionStatus> {
-    return (await this.cameraView.checkPermissions()).camera;
+  async checkPermissions(): Promise<PermissionState> {
+    return (await this.#cameraView.checkPermissions()).camera;
   }
 
   /**
    * Request camera permissions
    * @returns The updated permission status after request
    */
-  async requestPermissions(): Promise<PermissionStatus> {
-    return (await this.cameraView.requestPermissions()).camera;
+  async requestPermissions(): Promise<PermissionState> {
+    return (await this.#cameraView.requestPermissions()).camera;
   }
 }

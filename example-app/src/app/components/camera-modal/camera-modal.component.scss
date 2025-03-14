@@ -53,3 +53,44 @@ ion-fab-button {
     color: black;
   }
 }
+
+ion-chip.barcode-detected {
+  --background: #dce358;
+  --color: black;
+
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: fadeInUp 0.5s ease-out forwards;
+  color: black;
+  ion-icon {
+    color: black;
+  }
+}
+
+.container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.barcode-rect {
+  position: absolute;
+  border: 2px solid #dce358;
+  border-radius: 10px;
+  visibility: hidden;
+  opacity: 0;
+  transition: 0.2s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

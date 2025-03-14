@@ -1,6 +1,16 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { CameraDevice, CameraViewPlugin, FlashMode, PermissionStatus } from './definitions';
+import type {
+  CameraViewPlugin,
+  CaptureResponse,
+  FlashMode,
+  GetAvailableDevicesResponse,
+  GetFlashModeResponse,
+  GetSupportedFlashModesResponse,
+  GetZoomResponse,
+  IsRunningResponse,
+  PermissionStatus,
+} from './definitions';
 
 export class CameraNotStartedError extends Error {
   constructor() {
@@ -21,17 +31,17 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  isRunning(): Promise<{ isRunning: boolean }> {
+  isRunning(): Promise<IsRunningResponse> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  capture(): Promise<{ photo: string }> {
+  capture(): Promise<CaptureResponse> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  getAvailableDevices(): Promise<{ devices: Array<CameraDevice> }> {
+  getAvailableDevices(): Promise<GetAvailableDevicesResponse> {
     throw new Error('Method not implemented.');
   }
 
@@ -41,7 +51,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  getZoom(): Promise<{ min: number; max: number; current: number }> {
+  getZoom(): Promise<GetZoomResponse> {
     throw new Error('Method not implemented.');
   }
 
@@ -52,12 +62,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  getFlashMode(): Promise<{ flashMode: FlashMode }> {
+  getFlashMode(): Promise<GetFlashModeResponse> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  getSupportedFlashModes(): Promise<{ flashModes: FlashMode[] }> {
+  getSupportedFlashModes(): Promise<GetSupportedFlashModesResponse> {
     throw new Error('Method not implemented.');
   }
 
@@ -68,12 +78,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /** @inheritdoc */
-  checkPermissions(): Promise<{ camera: PermissionStatus }> {
+  checkPermissions(): Promise<PermissionStatus> {
     throw new Error('Method not implemented.');
   }
 
   /** @inheritdoc */
-  requestPermissions(): Promise<{ camera: PermissionStatus }> {
+  requestPermissions(): Promise<PermissionStatus> {
     throw new Error('Method not implemented.');
   }
 }

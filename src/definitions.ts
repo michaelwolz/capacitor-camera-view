@@ -1,154 +1,304 @@
-import type { PermissionState } from '@capacitor/core';
+import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 
 /**
- * Permission status for the camera.
+ * Main plugin interface for Capacitor Camera View functionality.
  */
-export interface PermissionStatus {
-  camera: PermissionState;
-}
-
-/**
- * Position options for the camera session.
- */
-export type CameraPosition = 'front' | 'back';
-
-/**
- * Flash mode options for the camera session.
- */
-export type FlashMode = 'off' | 'on' | 'auto';
-
-export interface CameraDevice {
-  id: string;
-  name: string;
-  position: CameraPosition;
-}
-
-export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
-
-/**
- * Configuration for the camera session.
- */
-export interface CameraSessionConfiguration {
-  /** Enables the barcode scanner, defaults to `false` */
-  enableBarcodeScanner?: boolean;
-
-  /** Position of the camera (front or back) */
-  position?: CameraPosition;
-
-  /** The device ID of the camera to use */
-  deviceId?: string;
-
-  /** The preset to use for the camera session */
-  preset?: CameraPreset;
-
-  /** Whether to use the triple camera if available (iOS only) */
-  useTripleCameraIfAvailable?: boolean;
-
-  /** The initial zoom factor to use for the camera session */
-  zoomFactor?: number;
-}
-
 export interface CameraViewPlugin {
   /**
-   * Start the camera view
+   * Start the camera view with optional configuration.
+   *
+   * @param options - Configuration options for the camera session
+   * @returns A promise that resolves when the camera has started
    */
   start(options?: CameraSessionConfiguration): Promise<void>;
 
   /**
-   * Stop the camera view
+   * Stop the camera view and release resources.
+   *
+   * @returns A promise that resolves when the camera has stopped
    */
   stop(): Promise<void>;
 
   /**
-   * Check if the camera view is running.
+   * Check if the camera view is currently running.
+   *
+   * @returns A promise that resolves with an object containing the running state of the camera
    */
-  isRunning(): Promise<{ isRunning: boolean }>;
+  isRunning(): Promise<IsRunningResponse>;
 
   /**
-   * Capture a photo.
+   * Capture a photo using the current camera configuration.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @param options.quality - The JPEG quality of the captured photo on a scale of 0-100.
-   *
-   * @returns A base64 encoded string of the captured photo.
+   * @param options - Capture configuration options
+   * @param options.quality - The JPEG quality of the captured photo on a scale of 0-100
+   * @returns A promise that resolves with an object containing a base64 encoded string of the captured photo
    */
-  capture(options: { quality: number }): Promise<{ photo: string }>;
+  capture(options: { quality: number }): Promise<CaptureResponse>;
 
   /**
-   * Switches between front and back camera.
+   * Switch between front and back camera.
    *
-   * @note
-   * Camera view must be started before calling this method.
+   * @returns A promise that resolves when the camera has been flipped
    */
   flipCamera(): Promise<void>;
 
   /**
-   * Get available devices for taking photos.
+   * Get available camera devices for capturing photos.
    *
-   * @returns An array of available capture devices
+   * @returns A promise that resolves with an object containing an array of available capture devices
    */
-  getAvailableDevices(): Promise<{ devices: Array<CameraDevice> }>;
+  getAvailableDevices(): Promise<GetAvailableDevicesResponse>;
 
   /**
-   * Get zoom levels options and current zoom level.
+   * Get current zoom level information and available range.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @returns An object containing min, max and current zoom levels.
+   * @returns A promise that resolves with an object containing min, max and current zoom levels
    */
-  getZoom(): Promise<{ min: number; max: number; current: number }>;
+  getZoom(): Promise<GetZoomResponse>;
 
   /**
-   * Set zoom level.
+   * Set the camera zoom level.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @param options.level - The zoom level to set.
+   * @param options - Zoom configuration options
+   * @param options.level - The zoom level to set
    * @param options.ramp - Whether to animate the zoom level change, defaults to false (iOS / Android only)
+   * @returns A promise that resolves when the zoom level has been set
    */
   setZoom(options: { level: number; ramp?: boolean }): Promise<void>;
 
   /**
-   * Get flash mode.
+   * Get current flash mode setting.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @returns The current flash mode.
+   * @returns A promise that resolves with an object containing the current flash mode
    */
-  getFlashMode(): Promise<{ flashMode: FlashMode }>;
+  getFlashMode(): Promise<GetFlashModeResponse>;
 
   /**
-   * Get supported flash modes.
+   * Get supported flash modes for the current camera.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @returns An array of supported flash modes.
+   * @returns A promise that resolves with an object containing an array of supported flash modes
    */
-  getSupportedFlashModes(): Promise<{ flashModes: Array<FlashMode> }>;
+  getSupportedFlashModes(): Promise<GetSupportedFlashModesResponse>;
 
   /**
-   * Set flash mode.
+   * Set the camera flash mode.
    *
-   * @note
-   * Camera view must be started before calling this method.
-   *
-   * @param options.mode - The flash mode to set.
+   * @param options - Flash mode configuration options
+   * @param options.mode - The flash mode to set
+   * @returns A promise that resolves when the flash mode has been set
    */
   setFlashMode(options: { mode: FlashMode }): Promise<void>;
 
   /**
-   * Check camera permission.
+   * Check camera permission status without requesting permissions.
+   *
+   * @returns A promise that resolves with an object containing the camera permission status
    */
-  checkPermissions(): Promise<{ camera: PermissionStatus }>;
+  checkPermissions(): Promise<PermissionStatus>;
 
   /**
-   * Request camera permission.
+   * Request camera permission from the user.
+   *
+   * @returns A promise that resolves with an object containing the camera permission status
    */
-  requestPermissions(): Promise<{ camera: PermissionStatus }>;
+  requestPermissions(): Promise<PermissionStatus>;
+
+  /**
+   * Listen for barcode detection events.
+   * This event is emitted when a barcode is detected in the camera preview.
+   *
+   * @param eventName - The name of the event to listen for ('barcodeDetected')
+   * @param listenerFunc - The callback function to execute when a barcode is detected
+   * @returns A promise that resolves with an event subscription
+   */
+  addListener(
+    eventName: 'barcodeDetected',
+    listenerFunc: (data: BarcodeDetectionData) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Remove all listeners for this plugin.
+   *
+   * @param eventName - Optional event name to remove listeners for
+   * @returns A promise that resolves when the listeners are removed
+   */
+  removeAllListeners(eventName?: string): Promise<void>;
+}
+
+// ------------------------------------------------------------------------------
+// Camera Configuration Types
+// ------------------------------------------------------------------------------
+
+/**
+ * Position options for the camera.
+ * - 'front': Front-facing camera
+ * - 'back': Rear-facing camera
+ */
+export type CameraPosition = 'front' | 'back';
+
+/**
+ * Flash mode options for the camera.
+ * - 'off': Flash disabled
+ * - 'on': Flash always on
+ * - 'auto': Flash automatically enabled in low-light conditions
+ */
+export type FlashMode = 'off' | 'on' | 'auto';
+
+/**
+ * Quality preset options for the camera session.
+ * - 'low': Lower quality, reduced resource usage
+ * - 'medium': Balanced quality and resource usage
+ * - 'high': Higher quality, increased resource usage
+ * - 'photo': Optimized for still photography
+ */
+export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
+
+/**
+ * Represents a physical camera device on the device.
+ */
+export interface CameraDevice {
+  /** The unique identifier of the camera device */
+  id: string;
+
+  /** The human-readable name of the camera device */
+  name: string;
+
+  /** The position of the camera device (front or back) */
+  position: CameraPosition;
+}
+
+/**
+ * Configuration options for starting a camera session.
+ */
+export interface CameraSessionConfiguration {
+  /**
+   * Enables the barcode detection functionality
+   * @default false
+   */
+  enableBarcodeDetection?: boolean;
+
+  /**
+   * Position of the camera to use
+   * @default 'back'
+   */
+  position?: CameraPosition;
+
+  /**
+   * Specific device ID of the camera to use
+   * If provided, takes precedence over position
+   */
+  deviceId?: string;
+
+  /**
+   * Quality preset to use for the camera session
+   * @default 'high'
+   */
+  preset?: CameraPreset;
+
+  /**
+   * Whether to use the triple camera if available (iOS only)
+   * @default false
+   */
+  useTripleCameraIfAvailable?: boolean;
+
+  /**
+   * The initial zoom factor to use
+   * @default 1.0
+   */
+  zoomFactor?: number;
+}
+
+// ------------------------------------------------------------------------------
+// Response Interfaces
+// ------------------------------------------------------------------------------
+
+/**
+ * Response for checking if the camera view is running.
+ */
+export interface IsRunningResponse {
+  /** Indicates if the camera view is currently active and running */
+  isRunning: boolean;
+}
+
+/**
+ * Response for capturing a photo.
+ */
+export interface CaptureResponse {
+  /** The base64 encoded string of the captured photo */
+  photo: string;
+}
+
+/**
+ * Response for getting available camera devices.
+ */
+export interface GetAvailableDevicesResponse {
+  /** An array of available camera devices */
+  devices: CameraDevice[];
+}
+
+/**
+ * Response for getting zoom level information.
+ */
+export interface GetZoomResponse {
+  /** The minimum zoom level supported */
+  min: number;
+
+  /** The maximum zoom level supported */
+  max: number;
+
+  /** The current zoom level */
+  current: number;
+}
+
+/**
+ * Response for getting the current flash mode.
+ */
+export interface GetFlashModeResponse {
+  /** The current flash mode setting */
+  flashMode: FlashMode;
+}
+
+/**
+ * Response for getting supported flash modes.
+ */
+export interface GetSupportedFlashModesResponse {
+  /** An array of flash modes supported by the current camera */
+  flashModes: FlashMode[];
+}
+
+/**
+ * Data for a detected barcode.
+ */
+export interface BarcodeDetectionData {
+  /** The decoded string value of the barcode */
+  value: string;
+
+  /** The type/format of the barcode (e.g., 'qr', 'code128', etc.) */
+  type: string;
+
+  /** The bounding rectangle of the barcode in the camera frame. */
+  boundingRect: BoundingRect;
+}
+
+/**
+ * Rectangle defining the boundary of the barcode in the camera frame.
+ * Coordinates are normalized between 0 and 1 relative to the camera frame.
+ */
+export interface BoundingRect {
+  /** X-coordinate of the top-left corner */
+  x: number;
+  /** Y-coordinate of the top-left corner */
+  y: number;
+  /** Width of the bounding rectangle (should match the actual width of the barcode) */
+  width: number;
+  /** Height of the bounding rectangle (should match the actual height of the barcode) */
+  height: number;
+}
+
+/**
+ * Response for the camera permission status.
+ */
+export interface PermissionStatus {
+  /** The state of the camera permission */
+  camera: PermissionState;
 }

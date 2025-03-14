@@ -11,11 +11,17 @@ import {
   IonRange,
   IonSelect,
   IonSelectOption,
+  IonTextarea,
   IonTitle,
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
-import { CameraDevice, CameraPreset, FlashMode } from 'capacitor-camera-view';
+import {
+  BarcodeDetectionData,
+  CameraDevice,
+  CameraPreset,
+  FlashMode,
+} from 'capacitor-camera-view';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 import { GalleryService } from '../../services/gallery.service';
@@ -37,6 +43,7 @@ import { GalleryService } from '../../services/gallery.service';
     IonSelectOption,
     IonTitle,
     IonToolbar,
+    IonTextarea,
   ],
 })
 export class CameraSettingsPage implements OnInit {
@@ -47,11 +54,14 @@ export class CameraSettingsPage implements OnInit {
   protected readonly cameraDevices = signal<CameraDevice[]>([]);
 
   protected deviceId = model<string | null>(null);
+  protected enableBarcodeDetection = model<boolean>(false);
   protected position = model<string>('back');
   protected preset = model<CameraPreset>('photo');
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
+
+  protected barcodeValue = signal<string | undefined>(undefined);
 
   ngOnInit() {
     this.#cameraViewService.getAvailableDevices().then((devices) => {
@@ -65,6 +75,7 @@ export class CameraSettingsPage implements OnInit {
       animated: false,
       componentProps: {
         deviceId: this.deviceId(),
+        enableBarcodeDetection: this.enableBarcodeDetection(),
         position: this.position(),
         preset: this.preset(),
         quality: this.quality(),
@@ -75,10 +86,19 @@ export class CameraSettingsPage implements OnInit {
 
     await cameraModal.present();
 
-    const { data } = await cameraModal.onDidDismiss<{ photo: string }>();
+    const { data } = await cameraModal.onDidDismiss<{
+      photo: string;
+      barcode: BarcodeDetectionData;
+    }>();
 
     if (data?.photo) {
       this.#galleryService.addPhoto(data?.photo);
+    }
+
+    if (data?.barcode) {
+      this.barcodeValue.set(data.barcode.value);
+    } else {
+      this.barcodeValue.set(undefined);
     }
   }
 

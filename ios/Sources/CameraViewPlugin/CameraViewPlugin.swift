@@ -40,6 +40,30 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private let implementation = CameraViewManager()
+    private var notificationObserver: NSObjectProtocol?
+
+    override public func load() {
+        // Add observer for barcode detection events
+        notificationObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("barcodeDetected"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let barcodeData = notification.userInfo as? [String: Any] else {
+                return
+            }
+
+            // Emit event to JS
+            self.notifyListeners("barcodeDetected", data: barcodeData)
+        }
+    }
+
+    deinit {
+        if let observer = notificationObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     @objc func start(_ call: CAPPluginCall) {
         guard let webView = self.webView else {

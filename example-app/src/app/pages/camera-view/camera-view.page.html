@@ -39,7 +39,11 @@
     }
 
     <ion-item>
-      <ion-select [(ngModel)]="preset" label="Camera Preset" label-placement="floating">
+      <ion-select
+        [(ngModel)]="preset"
+        label="Camera Preset"
+        label-placement="floating"
+      >
         <ion-select-option value="photo">Photo</ion-select-option>
         <ion-select-option value="high">High</ion-select-option>
         <ion-select-option value="medium">Medium</ion-select-option>
@@ -53,7 +57,6 @@
         min="0"
         max="100"
         step="1"
-        snaps="true"
         [label]="'Photo Quality (' + quality() + ')'"
         labelPlacement="stacked"
       >
@@ -86,10 +89,30 @@
         Use Triple Camera (iPhone Pro only)
       </ion-checkbox>
     </ion-item>
+
+    <ion-item>
+      <ion-checkbox
+        [(ngModel)]="enableBarcodeDetection"
+        color="primary"
+        justify="space-between"
+      >
+        Enable Barcode Detection
+      </ion-checkbox>
+    </ion-item>
   </ion-list>
 
   <ion-button (click)="startCamera()" expand="block">
     <ion-icon name="camera-outline" slot="start" />
     Start Camera
   </ion-button>
+
+  @if (barcodeValue()) {
+    <ion-textarea
+      [value]="barcodeValue()"
+      label="Barcode value"
+      labelPlacement="floating"
+      fill="solid"
+      placeholder="Enter text"
+    ></ion-textarea>
+  }
 </ion-content>
