@@ -138,7 +138,7 @@ export class CameraModalComponent implements OnInit {
     });
 
     this.initializeZoomLimits();
-    this.setupPinchZoom();
+    this.#initializeEventListeners();
   }
 
   protected async startCamera(): Promise<void> {
@@ -156,6 +156,7 @@ export class CameraModalComponent implements OnInit {
   protected async stopCamera(): Promise<void> {
     await this.#cameraViewService.stop();
     this.cameraRunning.set(false);
+    this.#destroyEventListeners();
   }
 
   protected async close(): Promise<void> {
@@ -216,41 +217,53 @@ export class CameraModalComponent implements OnInit {
     }
   }
 
-  private async setZoom(zoomFactor: number): Promise<void> {
+  async #setZoom(zoomFactor: number): Promise<void> {
     this.#currentZoomFactor = zoomFactor;
     await this.#cameraViewService.setZoom(zoomFactor, false);
   }
 
-  private setupPinchZoom(): void {
-    const element = this.#elementRef.nativeElement;
+  #initializeEventListeners(): void {
+    this.#elementRef.nativeElement.addEventListener(
+      'touchstart',
+      this.#handleTouchStart,
+    );
+    this.#elementRef.nativeElement.addEventListener(
+      'touchmove',
+      this.#handleTouchMove,
+    );
+  }
 
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length < 2) return;
+  #destroyEventListeners(): void {
+    this.#elementRef.nativeElement.removeEventListener(
+      'touchstart',
+      this.#handleTouchStart,
+    );
+    this.#elementRef.nativeElement.removeEventListener(
+      'touchmove',
+      this.#handleTouchMove,
+    );
+  }
 
-      this.#touchStartDistance = getDistance(
-        event.touches[0],
-        event.touches[1],
-      );
-      this.#initialZoomFactorOnPinch = this.#currentZoomFactor;
-    };
+  #handleTouchStart(event: TouchEvent): void {
+    if (event.touches.length < 2) return;
 
-    const handleTouchMove = (event: TouchEvent) => {
-      if (event.touches.length < 2 || this.#touchStartDistance <= 0) return;
+    this.#touchStartDistance = getDistance(event.touches[0], event.touches[1]);
+    this.#initialZoomFactorOnPinch = this.#currentZoomFactor;
+  }
 
-      const currentDistance = getDistance(event.touches[0], event.touches[1]);
+  #handleTouchMove(event: TouchEvent): void {
+    if (event.touches.length < 2 || this.#touchStartDistance <= 0) return;
 
-      // Calculate new zoom factor
-      const scale = currentDistance / this.#touchStartDistance;
-      const newZoomFactor = Math.max(
-        this.#minZoom,
-        Math.min(this.#maxZoom, this.#initialZoomFactorOnPinch * scale),
-      );
+    const currentDistance = getDistance(event.touches[0], event.touches[1]);
 
-      this.setZoom(newZoomFactor);
-      event.preventDefault(); // Prevent scrolling
-    };
+    // Calculate new zoom factor
+    const scale = currentDistance / this.#touchStartDistance;
+    const newZoomFactor = Math.max(
+      this.#minZoom,
+      Math.min(this.#maxZoom, this.#initialZoomFactorOnPinch * scale),
+    );
 
-    element.addEventListener('touchstart', handleTouchStart);
-    element.addEventListener('touchmove', handleTouchMove);
+    this.#setZoom(newZoomFactor);
+    event.preventDefault(); // Prevent scrolling
   }
 }
