@@ -72,7 +72,13 @@ export class CameraModalComponent implements OnInit {
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
   public readonly initialZoomFactor = input<number>(1.0);
 
-  protected readonly cameraRunning = signal(true);
+  protected readonly cameraStarted = toSignal(
+    this.#cameraViewService.cameraStarted,
+    {
+      requireSync: true,
+    },
+  );
+
   protected readonly flashMode = signal<FlashMode>('auto');
   protected readonly isCapturingPhoto = signal(false);
 
@@ -87,7 +93,7 @@ export class CameraModalComponent implements OnInit {
 
   protected readonly isWeb = Capacitor.getPlatform() === 'web';
 
-  #supportedFlashModes = ['auto'];
+  #supportedFlashModes = signal<Array<FlashMode>>(['off']);
 
   #currentZoomFactor = this.initialZoomFactor();
   #touchStartDistance = 0;
@@ -97,7 +103,10 @@ export class CameraModalComponent implements OnInit {
 
   constructor() {
     effect(() => {
-      document.body.classList.toggle('camera-running', this.cameraRunning());
+      const flashModes = this.#supportedFlashModes();
+      if (!flashModes.includes(this.flashMode())) {
+        this.flashMode.set((flashModes[0] as FlashMode) ?? 'off');
+      }
     });
 
     effect(() => {
@@ -123,21 +132,11 @@ export class CameraModalComponent implements OnInit {
   }
 
   public ngOnInit() {
-    this.#cameraViewService
-      .getSupportedFlashModes()
-      .then((supportedFlashModes) => {
-        this.#supportedFlashModes = supportedFlashModes;
-        if (!supportedFlashModes.includes(this.flashMode())) {
-          this.flashMode.set(supportedFlashModes[0] as FlashMode);
-        }
-      });
-
     this.startCamera().catch((error) => {
       console.error('Failed to start camera', error);
       this.#modalController.dismiss();
     });
 
-    this.initializeZoomLimits();
     this.#initializeEventListeners();
   }
 
@@ -150,12 +149,20 @@ export class CameraModalComponent implements OnInit {
       useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
       zoomFactor: this.initialZoomFactor(),
     });
-    this.cameraRunning.set(true);
+
+    await Promise.all([
+      this.#initializeZoomLimits(),
+      this.#initializeFlashModes()
+    ]);
   }
 
   protected async stopCamera(): Promise<void> {
-    await this.#cameraViewService.stop();
-    this.cameraRunning.set(false);
+    try {
+      await this.#cameraViewService.stop();
+    } catch (error) {
+      console.error('Failed to stop camera', error);
+    }
+
     this.#destroyEventListeners();
   }
 
@@ -188,7 +195,7 @@ export class CameraModalComponent implements OnInit {
   }
 
   protected async nextFlashMode(): Promise<void> {
-    const supportedModes = this.#supportedFlashModes;
+    const supportedModes = this.#supportedFlashModes();
     if (supportedModes.length <= 1) return;
 
     const currentMode = this.flashMode();
@@ -205,7 +212,12 @@ export class CameraModalComponent implements OnInit {
     await this.#modalController.dismiss({ barcode: this.detectedBarcode() });
   }
 
-  private async initializeZoomLimits(): Promise<void> {
+  async #setZoom(zoomFactor: number): Promise<void> {
+    this.#currentZoomFactor = zoomFactor;
+    await this.#cameraViewService.setZoom(zoomFactor, false);
+  }
+
+  async #initializeZoomLimits(): Promise<void> {
     try {
       const zoomRange = await this.#cameraViewService.getZoom();
       if (zoomRange) {
@@ -217,9 +229,14 @@ export class CameraModalComponent implements OnInit {
     }
   }
 
-  async #setZoom(zoomFactor: number): Promise<void> {
-    this.#currentZoomFactor = zoomFactor;
-    await this.#cameraViewService.setZoom(zoomFactor, false);
+  async #initializeFlashModes(): Promise<void> {
+    try {
+      this.#supportedFlashModes.set(
+        await this.#cameraViewService.getSupportedFlashModes(),
+      );
+    } catch (error) {
+      console.warn('Failed to get supported flash modes', error);
+    }
   }
 
   #initializeEventListeners(): void {

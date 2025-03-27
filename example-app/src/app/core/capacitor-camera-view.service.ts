@@ -8,7 +8,7 @@ import {
   CameraViewPlugin,
   FlashMode,
 } from 'capacitor-camera-view';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
@@ -22,12 +22,19 @@ export class CapacitorCameraViewService {
    */
   readonly barcodeData = this.#barcodeData.asObservable();
 
+  readonly #cameraStarted = new BehaviorSubject<boolean>(false);
+  public readonly cameraStarted = this.#cameraStarted.asObservable();
+
   constructor() {
     this.#cameraView = CameraView;
 
     // Add event listeners
     this.#cameraView.addListener('barcodeDetected', (event) => {
       this.#barcodeData.next(event);
+    });
+
+    this.cameraStarted.subscribe((started) => {
+      document.body.classList.toggle('camera-running', started);
     });
   }
 
@@ -36,14 +43,16 @@ export class CapacitorCameraViewService {
    * @param options Configuration options for the camera session
    */
   async start(options: CameraSessionConfiguration = {}): Promise<void> {
-    return this.#cameraView.start(options);
+    await this.#cameraView.start(options);
+    this.#cameraStarted.next(true);
   }
 
   /**
    * Stop the camera view
    */
   async stop(): Promise<void> {
-    return this.#cameraView.stop();
+    await this.#cameraView.stop();
+    this.#cameraStarted.next(false);
   }
 
   /**

@@ -1,7 +1,6 @@
 package com.michaelwolz.capacitorcameraview
 
 import android.Manifest
-import android.content.pm.PackageManager
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -10,82 +9,140 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
+import com.getcapacitor.annotation.PermissionCallback
+import androidx.lifecycle.LifecycleOwner
 
 @CapacitorPlugin(
     name = "CameraView",
-    permissions = [
-        Permission(
-            strings = [Manifest.permission.CAMERA],
-            alias = "camera"
-        )
-    ]
+    permissions = [Permission(strings = [Manifest.permission.CAMERA], alias = "camera")]
 )
 class CameraViewPlugin : Plugin() {
     private val implementation = CameraView()
 
     @PluginMethod
-    fun echo(call: PluginCall) {
-        val value = call.getString("value")
-
-        val ret = JSObject()
-        ret.put("value", implementation.echo(value))
-        call.resolve(ret)
+    fun start(call: PluginCall) {
+        if (getPermissionState("camera") == PermissionState.GRANTED) {
+            startCamera(call)
+        } else {
+            requestPermissionForAlias("camera", call, "cameraPermsCallback")
+        }
     }
 
-    @PluginMethod
-    fun start(call: PluginCall) {
-        val cameraPosition = call.getString("cameraPosition")
-        if (cameraPosition == null) {
-            call.reject("Camera position must be provided")
+    @PermissionCallback
+    private fun cameraPermsCallback(call: PluginCall) {
+        if (getPermissionState("camera") == PermissionState.GRANTED) {
+            startCamera(call)
+        } else {
+            call.reject("Permission is required to take a picture")
+        }
+    }
+
+    private fun startCamera(call: PluginCall) {
+        val webView = bridge.webView
+        val context = webView.context
+
+        if (context !is LifecycleOwner) {
+            call.reject("WebView context must be a LifecycleOwner")
             return
         }
 
-        // TODO: Implement camera start with position
-        call.resolve()
+        implementation.startSession(
+            config = sessionConfigFromPluginCall(call),
+            webView = webView,
+            lifecycleOwner = context,
+            callback = { error ->
+                if (error != null) {
+                    call.reject("Failed to start camera preview", error)
+                } else {
+                    call.resolve()
+                }
+            }
+        )
     }
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        // TODO: Implement camera stop
-        call.resolve()
+        implementation.stopSession({ error ->
+            if (error != null) {
+                call.reject("Failed to stop camera preview", error)
+            } else {
+                call.resolve()
+            }
+        })
     }
 
     @PluginMethod
     fun isRunning(call: PluginCall) {
-        val ret = JSObject()
-        // TODO: Check if camera is running
-        ret.put("value", false)
-        call.resolve(ret)
+        val result = JSObject()
+        result.put("isRunning", implementation.isRunning())
+
+        call.resolve(result)
     }
 
     @PluginMethod
     fun capture(call: PluginCall) {
-        val quality = call.getInt("quality")
-        if (quality == null) {
-            call.reject("Quality must be provided")
+        val quality = (call.getDouble("quality") ?: 90).toInt()
+
+        if (quality < 0 || quality > 100) {
+            call.reject("Quality must be between 0 and 100")
             return
         }
 
-        val ret = JSObject()
-        // TODO: Implement photo capture with quality
-        ret.put("value", "base64_encoded_image_data")
-        call.resolve(ret)
+        implementation.capturePhoto(quality) { photo, error ->
+            if (error != null) {
+                call.reject("Failed to capture image", error)
+                return@capturePhoto
+            }
+
+            if (photo == null) {
+                call.reject("No image data")
+                return@capturePhoto
+            }
+
+            val result = JSObject()
+            result.put("photo", photo)
+
+            call.resolve(result)
+        }
+    }
+
+    @PluginMethod
+    fun getAvailableDevices(call: PluginCall) {
+        val devices = implementation.getAvailableDevices()
+        val result = JSObject()
+        val devicesArray = JSArray()
+
+        for (device in devices) {
+            val deviceInfo = JSObject()
+            deviceInfo.put("id", device.id)
+            deviceInfo.put("name", device.name)
+            deviceInfo.put("position", device.position)
+            devicesArray.put(deviceInfo)
+        }
+
+        result.put("devices", devicesArray)
+        call.resolve(result)
     }
 
     @PluginMethod
     fun flipCamera(call: PluginCall) {
-        // TODO: Implement camera switching
-        call.resolve()
+        implementation.flipCamera { error ->
+            if (error != null) {
+                call.reject("Failed to flip camera", error)
+            } else {
+                call.resolve()
+            }
+        }
     }
 
     @PluginMethod
     fun getZoom(call: PluginCall) {
-        val ret = JSObject()
-        // TODO: Get current zoom levels
-        ret.put("min", 1.0)
-        ret.put("max", 10.0)
-        ret.put("current", 1.0)
-        call.resolve(ret)
+        val zoom = implementation.getSupportedZoomFactors()
+        val result = JSObject()
+        result.put("min", zoom.min)
+        result.put("max", zoom.max)
+        result.put("current", zoom.current)
+        call.resolve(result)
     }
 
     @PluginMethod
@@ -96,30 +153,35 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        // TODO: Implement zoom level setting
-        call.resolve()
+        try {
+            implementation.setZoomFactor(level)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to set zoom level", e)
+        }
     }
 
     @PluginMethod
     fun getFlashMode(call: PluginCall) {
-        val ret = JSObject()
-        // TODO: Get current flash mode
-        ret.put("value", "off")
-        call.resolve(ret)
+        val flashMode = implementation.getFlashMode()
+        val result = JSObject()
+        result.put("flashMode", flashMode)
+
+        call.resolve(result)
     }
 
     @PluginMethod
     fun getSupportedFlashModes(call: PluginCall) {
-        val ret = JSObject()
-        val flashModes = JSArray()
-        flashModes.put("off")
-        flashModes.put("on")
-        flashModes.put("auto")
-        flashModes.put("torch")
+        val supportedFlashModes = implementation.getSupportedFlashModes()
+        val result = JSObject()
+        val modesArray = JSArray()
 
-        // TODO: Get supported flash modes
-        ret.put("value", flashModes)
-        call.resolve(ret)
+        for (mode in supportedFlashModes) {
+            modesArray.put(mode)
+        }
+
+        result.put("flashModes", modesArray)
+        call.resolve(result)
     }
 
     @PluginMethod
@@ -130,33 +192,21 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        // TODO: Set flash mode
-        call.resolve()
+        if (!listOf("off", "on", "auto").contains(mode)) {
+            call.reject("Invalid flash mode")
+            return
+        }
+
+        try {
+            implementation.setFlashMode(mode)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to set flash mode", e)
+        }
     }
 
-    @PluginMethod
-    override public fun checkPermissions(call: PluginCall) {
-        val permissionStatus = getPermissionStatus("camera")
-        val ret = JSObject()
-        ret.put("camera", permissionStatus.toString().lowercase())
-        call.resolve(ret)
-    }
-
-    @PluginMethod
-    override public fun requestPermissions(call: PluginCall) {
-        // Save the call for later resolution
-        bridge.saveCall(call)
-
-        // Request permissions
-        requestPermissionForAlias("camera", call, "cameraPermsCallback")
-    }
-
-    @PermissionCallback
-    private fun cameraPermsCallback(call: PluginCall) {
-        val permissionStatus = getPermissionStatus("camera")
-
-        val ret = JSObject()
-        ret.put("camera", permissionStatus.toString().lowercase())
-        call.resolve(ret)
+    override fun handleOnDestroy() {
+        implementation.cleanup()
+        super.handleOnDestroy()
     }
 }

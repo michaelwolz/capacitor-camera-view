@@ -12,7 +12,7 @@
   </ion-header>
 
   <div id="cameraView">
-    @if (!cameraRunning()) {
+    @if (!cameraStarted()) {
       <div class="loading-screen">
         <ion-spinner color="white"></ion-spinner>
       </div>
@@ -23,7 +23,7 @@
     }
   </div>
 
-  @if (cameraRunning()) {
+  @if (cameraStarted()) {
     <ion-fab
       class="camera-actions"
       slot="fixed"

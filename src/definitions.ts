@@ -61,7 +61,7 @@ export interface CameraViewPlugin {
    *
    * @param options - Zoom configuration options
    * @param options.level - The zoom level to set
-   * @param options.ramp - Whether to animate the zoom level change, defaults to false (iOS / Android only)
+   * @param options.ramp - Whether to animate the zoom level change, defaults to false (iOS only)
    * @returns A promise that resolves when the zoom level has been set
    */
   setZoom(options: { level: number; ramp?: boolean }): Promise<void>;
@@ -196,7 +196,7 @@ export interface CameraSessionConfiguration {
   preset?: CameraPreset;
 
   /**
-   * Whether to use the triple camera if available (iOS only)
+   * Whether to use the triple camera if available (iPhone Pro models only)
    * @default false
    */
   useTripleCameraIfAvailable?: boolean;
