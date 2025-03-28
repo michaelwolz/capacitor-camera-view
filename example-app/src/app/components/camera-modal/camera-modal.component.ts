@@ -26,7 +26,7 @@ import {
 } from '@ionic/angular/standalone';
 import type { FlashMode } from 'capacitor-camera-view';
 import { CameraPosition, CameraPreset } from 'capacitor-camera-view';
-import { concat, map, of, switchMap, timer } from 'rxjs';
+import { concat, map, of, switchMap, tap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 
 function getDistance(touch1: Touch, touch2: Touch): number {
@@ -84,6 +84,7 @@ export class CameraModalComponent implements OnInit {
 
   protected readonly detectedBarcode = toSignal(
     this.#cameraViewService.barcodeData.pipe(
+      tap((value) => console.log('Barcode detected:', value)),
       switchMap((value) =>
         concat(of(value), timer(1000).pipe(map(() => undefined))),
       ),
@@ -152,7 +153,7 @@ export class CameraModalComponent implements OnInit {
 
     await Promise.all([
       this.#initializeZoomLimits(),
-      this.#initializeFlashModes()
+      this.#initializeFlashModes(),
     ]);
   }
 
