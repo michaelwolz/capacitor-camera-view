@@ -12,33 +12,43 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.getcapacitor.Plugin
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class CameraView {
     // Camera components
     private var camera: Camera? = null
-    private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var cameraExecutor: ExecutorService = Executors.newFixedThreadPool(2)
     private var cameraProvider: ProcessCameraProvider? = null
     private var previewView: PreviewView? = null
 
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
-    private var isSessionRunning = false
+    private var isSessionRunning = AtomicBoolean(false)
+    private var enableBarcodeDetection = false
 
+    // Camera use cases
     private var imageCapture: ImageCapture? = null
+    private var imageAnalysis: ImageAnalysis? = null
 
+    // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
+    private var pluginDelegate: Plugin? = null
     private var webView: WebView? = null
 
     private var orientationEventListener: OrientationEventListener? = null
@@ -48,25 +58,33 @@ class CameraView {
     /** Starts a camera session with the provided configuration. */
     fun startSession(
         config: CameraSessionConfiguration,
-        webView: WebView,
-        lifecycleOwner: LifecycleOwner,
+        plugin: Plugin,
         callback: (Exception?) -> Unit
     ) {
-        if (isSessionRunning) {
+        if (isSessionRunning.get()) {
             callback(null)
             return
         }
 
-        // Store references
-        this.webView = webView
-        this.lifecycleOwner = lifecycleOwner
-        this.currentCameraSelector = if (config.position == "front") {
-            CameraSelector.DEFAULT_FRONT_CAMERA
-        } else {
-            CameraSelector.DEFAULT_BACK_CAMERA
+        val webView = plugin.bridge.webView
+        val context = webView.context
+        val lifecycleOwner = context as? LifecycleOwner ?: run {
+            callback(Exception("WebView context must be a LifecycleOwner"))
+            return
         }
 
-        val context = webView.context
+        // Store references for later use
+        this.webView = webView
+        this.lifecycleOwner = lifecycleOwner
+        this.pluginDelegate = plugin
+
+        // Apply base configuration
+        this.enableBarcodeDetection = config.enableBarcodeDetection
+        this.currentCameraSelector = when (config.position) {
+            "front" -> CameraSelector.DEFAULT_FRONT_CAMERA
+            else -> CameraSelector.DEFAULT_BACK_CAMERA
+        }
+        // TODO: Set initial zoom level if provided in config
 
         // Create and configure UI on main thread
         mainHandler.post {
@@ -83,12 +101,10 @@ class CameraView {
 
     /** Stop the camera session and release resources */
     fun stopSession(callback: ((Exception?) -> Unit)? = null) {
-        if (!isSessionRunning) {
+        if (!isSessionRunning.getAndSet(false)) {
             callback?.invoke(null)
             return
         }
-
-        isSessionRunning = false
 
         mainHandler.post {
             try {
@@ -96,6 +112,7 @@ class CameraView {
                 cameraProvider?.unbindAll()
                 cameraProvider = null
                 imageCapture = null
+                imageAnalysis = null
 
                 previewView?.let { view ->
                     try {
@@ -125,12 +142,12 @@ class CameraView {
 
     /** Checks if the camera session is running */
     fun isRunning(): Boolean {
-        return isSessionRunning
+        return isSessionRunning.get()
     }
 
     /** Capture a photo with the current camera configuration */
     fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
-        if (!isSessionRunning) {
+        if (!isSessionRunning.get()) {
             callback(null, Exception("Camera session not running"))
             return
         }
@@ -170,17 +187,15 @@ class CameraView {
 
     /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
-        // Flip the camera selector
-        currentCameraSelector = if (currentCameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
-            CameraSelector.DEFAULT_FRONT_CAMERA
-        } else {
-            CameraSelector.DEFAULT_BACK_CAMERA
+        currentCameraSelector = when (currentCameraSelector) {
+            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
+            else -> CameraSelector.DEFAULT_FRONT_CAMERA
         }
 
         val lifecycleOwner = this.lifecycleOwner
         val cameraProvider = this.cameraProvider
 
-        if (!isSessionRunning || lifecycleOwner == null || cameraProvider == null) {
+        if (!isSessionRunning.get() || lifecycleOwner == null || cameraProvider == null) {
             callback(Exception("Camera not properly initialized"))
             return
         }
@@ -253,13 +268,17 @@ class CameraView {
     /** Clean up resources when the plugin is being destroyed */
     fun cleanup() {
         // First stop any running session
-        if (isSessionRunning) {
+        if (isSessionRunning.get()) {
             stopSession()
         }
 
         // Disable orientation listener if still active
         orientationEventListener?.disable()
         orientationEventListener = null
+
+        // Release camera use cases
+        imageAnalysis = null
+        imageCapture = null
 
         // Shutdown the executor service
         if (!cameraExecutor.isShutdown) {
@@ -333,6 +352,24 @@ class CameraView {
             val useCases = mutableListOf<androidx.camera.core.UseCase>(preview)
             imageCapture?.let { useCases.add(it) }
 
+            // Add barcode scanning analyzer if enabled
+            if (enableBarcodeDetection) {
+                val resolutionSelector = ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                    .build()
+
+                imageAnalysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setResolutionSelector(resolutionSelector)
+                    .build()
+                    .also {
+                        it.setAnalyzer(cameraExecutor, BarcodeAnalyzer { result ->
+                            notifyBarcodeDetected(result)
+                        })
+                    }
+                imageAnalysis?.let { useCases.add(it) }
+            }
+
             // Bind all use cases to lifecycle
             camera = cameraProvider.bindToLifecycle(
                 lifecycleOwner,
@@ -340,7 +377,7 @@ class CameraView {
                 *useCases.toTypedArray()
             )
 
-            isSessionRunning = true
+            isSessionRunning.set(true)
             callback(null)
         } catch (e: Exception) {
             Log.e(TAG, "Use case binding failed", e)
@@ -395,6 +432,14 @@ class CameraView {
         } else {
             Log.w(TAG, "Cannot detect orientation changes")
             orientationEventListener = null
+        }
+    }
+
+    private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
+        pluginDelegate?.let { plugin ->
+            if (plugin is CameraViewPlugin) {
+                plugin.notifyBarcodeDetected(result)
+            }
         }
     }
 

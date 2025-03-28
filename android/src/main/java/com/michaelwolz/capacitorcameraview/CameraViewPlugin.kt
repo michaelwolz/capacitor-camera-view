@@ -1,6 +1,7 @@
 package com.michaelwolz.capacitorcameraview
 
 import android.Manifest
+import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -10,7 +11,6 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
-import androidx.lifecycle.LifecycleOwner
 
 @CapacitorPlugin(
     name = "CameraView",
@@ -38,21 +38,12 @@ class CameraViewPlugin : Plugin() {
     }
 
     private fun startCamera(call: PluginCall) {
-        val webView = bridge.webView
-        val context = webView.context
-
-        if (context !is LifecycleOwner) {
-            call.reject("WebView context must be a LifecycleOwner")
-            return
-        }
-
         implementation.startSession(
             config = sessionConfigFromPluginCall(call),
-            webView = webView,
-            lifecycleOwner = context,
+            plugin = this,
             callback = { error ->
                 if (error != null) {
-                    call.reject("Failed to start camera preview", error)
+                    call.reject("Failed to start camera preview: ${error.localizedMessage}", error)
                 } else {
                     call.resolve()
                 }
@@ -64,7 +55,7 @@ class CameraViewPlugin : Plugin() {
     fun stop(call: PluginCall) {
         implementation.stopSession({ error ->
             if (error != null) {
-                call.reject("Failed to stop camera preview", error)
+                call.reject("Failed to stop camera preview: ${error.localizedMessage}", error)
             } else {
                 call.resolve()
             }
@@ -73,9 +64,9 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun isRunning(call: PluginCall) {
-        val result = JSObject()
-        result.put("isRunning", implementation.isRunning())
-
+        val result = JSObject().apply {
+            put("isRunning", implementation.isRunning())
+        }
         call.resolve(result)
     }
 
@@ -89,46 +80,39 @@ class CameraViewPlugin : Plugin() {
         }
 
         implementation.capturePhoto(quality) { photo, error ->
-            if (error != null) {
-                call.reject("Failed to capture image", error)
-                return@capturePhoto
+            when {
+                error != null -> call.reject(
+                    "Failed to capture image: ${error.localizedMessage}",
+                    error
+                )
+
+                photo == null -> call.reject("No image data")
+                else -> call.resolve(JSObject().apply { put("photo", photo) })
             }
-
-            if (photo == null) {
-                call.reject("No image data")
-                return@capturePhoto
-            }
-
-            val result = JSObject()
-            result.put("photo", photo)
-
-            call.resolve(result)
         }
     }
 
     @PluginMethod
     fun getAvailableDevices(call: PluginCall) {
         val devices = implementation.getAvailableDevices()
-        val result = JSObject()
-        val devicesArray = JSArray()
-
-        for (device in devices) {
-            val deviceInfo = JSObject()
-            deviceInfo.put("id", device.id)
-            deviceInfo.put("name", device.name)
-            deviceInfo.put("position", device.position)
-            devicesArray.put(deviceInfo)
+        val devicesArray = JSArray().apply {
+            devices.forEach { device ->
+                put(JSObject().apply {
+                    put("id", device.id)
+                    put("name", device.name)
+                    put("position", device.position)
+                })
+            }
         }
 
-        result.put("devices", devicesArray)
-        call.resolve(result)
+        call.resolve(JSObject().apply { put("devices", devicesArray) })
     }
 
     @PluginMethod
     fun flipCamera(call: PluginCall) {
         implementation.flipCamera { error ->
             if (error != null) {
-                call.reject("Failed to flip camera", error)
+                call.reject("Failed to flip camera: ${error.localizedMessage}", error)
             } else {
                 call.resolve()
             }
@@ -138,11 +122,11 @@ class CameraViewPlugin : Plugin() {
     @PluginMethod
     fun getZoom(call: PluginCall) {
         val zoom = implementation.getSupportedZoomFactors()
-        val result = JSObject()
-        result.put("min", zoom.min)
-        result.put("max", zoom.max)
-        result.put("current", zoom.current)
-        call.resolve(result)
+        call.resolve(JSObject().apply {
+            put("min", zoom.min)
+            put("max", zoom.max)
+            put("current", zoom.current)
+        })
     }
 
     @PluginMethod
@@ -157,31 +141,30 @@ class CameraViewPlugin : Plugin() {
             implementation.setZoomFactor(level)
             call.resolve()
         } catch (e: Exception) {
-            call.reject("Failed to set zoom level", e)
+            call.reject("Failed to set zoom level: ${e.localizedMessage}", e)
         }
     }
 
     @PluginMethod
     fun getFlashMode(call: PluginCall) {
-        val flashMode = implementation.getFlashMode()
-        val result = JSObject()
-        result.put("flashMode", flashMode)
+        if (!implementation.isRunning()) {
+            call.reject("Camera is not running")
+            return
+        }
 
-        call.resolve(result)
+        call.resolve(JSObject().apply {
+            put("flashMode", implementation.getFlashMode())
+        })
     }
 
     @PluginMethod
     fun getSupportedFlashModes(call: PluginCall) {
         val supportedFlashModes = implementation.getSupportedFlashModes()
-        val result = JSObject()
-        val modesArray = JSArray()
-
-        for (mode in supportedFlashModes) {
-            modesArray.put(mode)
+        val modesArray = JSArray().apply {
+            supportedFlashModes.forEach { put(it) }
         }
 
-        result.put("flashModes", modesArray)
-        call.resolve(result)
+        call.resolve(JSObject().apply { put("flashModes", modesArray) })
     }
 
     @PluginMethod
@@ -192,8 +175,9 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        if (!listOf("off", "on", "auto").contains(mode)) {
-            call.reject("Invalid flash mode")
+        val validModes = listOf("off", "on", "auto")
+        if (!validModes.contains(mode)) {
+            call.reject("Invalid flash mode. Must be one of: ${validModes.joinToString(", ")}")
             return
         }
 
@@ -201,8 +185,26 @@ class CameraViewPlugin : Plugin() {
             implementation.setFlashMode(mode)
             call.resolve()
         } catch (e: Exception) {
-            call.reject("Failed to set flash mode", e)
+            call.reject("Failed to set flash mode: ${e.localizedMessage}", e)
         }
+    }
+
+    /**
+     * Called by the CameraView when a barcode is detected.
+     */
+    fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
+        val jsObject = JSObject().apply {
+            put("value", result.value)
+            put("type", result.type)
+            put("boundingRect", JSObject().apply {
+                put("x", result.boundingRect.x)
+                put("y", result.boundingRect.y)
+                put("width", result.boundingRect.width)
+                put("height", result.boundingRect.height)
+            })
+        }
+
+        notifyListeners("barcodeDetected", jsObject)
     }
 
     override fun handleOnDestroy() {
