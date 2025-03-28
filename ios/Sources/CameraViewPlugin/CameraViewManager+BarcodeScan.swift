@@ -62,25 +62,30 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
 
         let barcodeType = metadataObject.type.rawValue
 
-        let foo = videoPreviewLayer.transformedMetadataObject(for: metadataObject)
+        // Transform the metadata object to the coordinate space of the video preview layer
+        // This is necessary to get the correct bounding box for the detected barcode
+        // Which in our case should always equal to the device's screen
+        // This way we can simply use pixel coordinates to get the bounding box of the detected barcode and easily show it in the webview
+        guard let transformedMetadataObject = videoPreviewLayer.transformedMetadataObject(for: metadataObject)
+        else { 
+            return 
+        }
 
         let boundingRect: [String: Double] = [
-            "x": Double(foo!.bounds.origin.x),
-            "y": Double(foo!.bounds.origin.y),
-            "width": Double(foo!.bounds.width),
-            "height": Double(foo!.bounds.height),
-        ]
-
-        let barcodeData: [String: Any] = [
-            "value": barcodeValue,
-            "type": barcodeType,
-            "boundingRect": boundingRect,
+            "x": Double(transformedMetadataObject.bounds.origin.x),
+            "y": Double(transformedMetadataObject.bounds.origin.y),
+            "width": Double(transformedMetadataObject.bounds.width),
+            "height": Double(transformedMetadataObject.bounds.height),
         ]
 
         NotificationCenter.default.post(
             name: Notification.Name("barcodeDetected"),
             object: nil,
-            userInfo: barcodeData
+            userInfo: [
+                "value": barcodeValue,
+                "type": barcodeType,
+                "boundingRect": boundingRect,
+            ]
         )
     }
 }
