@@ -39,19 +39,6 @@
     }
 
     <ion-item>
-      <ion-select
-        [(ngModel)]="preset"
-        label="Camera Preset"
-        label-placement="floating"
-      >
-        <ion-select-option value="photo">Photo</ion-select-option>
-        <ion-select-option value="high">High</ion-select-option>
-        <ion-select-option value="medium">Medium</ion-select-option>
-        <ion-select-option value="low">Low</ion-select-option>
-      </ion-select>
-    </ion-item>
-
-    <ion-item>
       <ion-range
         [(ngModel)]="quality"
         min="0"

@@ -250,9 +250,9 @@ import Foundation
             device = try getCameraDevice(for: configuration.position)
         }
 
-        // Set the session preset if supported
-        if captureSession.canSetSessionPreset(configuration.preset) {
-            captureSession.sessionPreset = configuration.preset
+        // Set the session preset to photo if supported (which should be the case for all devices)
+        if captureSession.canSetSessionPreset(.photo) {
+            captureSession.sessionPreset = .photo
         }
 
         // Set the camera input

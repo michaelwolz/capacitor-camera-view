@@ -145,15 +145,6 @@ export type CameraPosition = 'front' | 'back';
 export type FlashMode = 'off' | 'on' | 'auto';
 
 /**
- * Quality preset options for the camera session.
- * - 'low': Lower quality, reduced resource usage
- * - 'medium': Balanced quality and resource usage
- * - 'high': Higher quality, increased resource usage
- * - 'photo': Optimized for still photography
- */
-export type CameraPreset = 'low' | 'medium' | 'high' | 'photo';
-
-/**
  * Represents a physical camera device on the device.
  */
 export interface CameraDevice {
@@ -188,12 +179,6 @@ export interface CameraSessionConfiguration {
    * If provided, takes precedence over position
    */
   deviceId?: string;
-
-  /**
-   * Quality preset to use for the camera session
-   * @default 'high'
-   */
-  preset?: CameraPreset;
 
   /**
    * Whether to use the triple camera if available (iPhone Pro models only)

@@ -19,7 +19,6 @@ import {
 import {
   BarcodeDetectionData,
   CameraDevice,
-  CameraPreset,
   FlashMode,
 } from 'capacitor-camera-view';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
@@ -56,7 +55,6 @@ export class CameraSettingsPage implements OnInit {
   protected deviceId = model<string | null>(null);
   protected enableBarcodeDetection = model<boolean>(false);
   protected position = model<string>('back');
-  protected preset = model<CameraPreset>('photo');
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
@@ -77,7 +75,6 @@ export class CameraSettingsPage implements OnInit {
         deviceId: this.deviceId(),
         enableBarcodeDetection: this.enableBarcodeDetection(),
         position: this.position(),
-        preset: this.preset(),
         quality: this.quality(),
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
         initialZoomFactor: this.initialZoomFactor(),

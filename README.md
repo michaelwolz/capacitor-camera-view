@@ -259,8 +259,7 @@ Configuration options for starting a camera session.
 | **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                         | <code>false</code>  |
 | **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                       | <code>'back'</code> |
 | **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position |                     |
-| **`preset`**                     | <code><a href="#camerapreset">CameraPreset</a></code>     | Quality preset to use for the camera session                                        | <code>'high'</code> |
-| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iOS only)                            | <code>false</code>  |
+| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)              | <code>false</code>  |
 | **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                      | <code>1.0</code>    |
 
 
@@ -381,17 +380,6 @@ Position options for the camera.
 - 'back': Rear-facing camera
 
 <code>'front' | 'back'</code>
-
-
-#### CameraPreset
-
-Quality preset options for the camera session.
-- 'low': Lower quality, reduced resource usage
-- 'medium': Balanced quality and resource usage
-- 'high': Higher quality, increased resource usage
-- 'photo': Optimized for still photography
-
-<code>'low' | 'medium' | 'high' | 'photo'</code>
 
 
 #### FlashMode

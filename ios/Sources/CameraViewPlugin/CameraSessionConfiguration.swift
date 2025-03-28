@@ -1,18 +1,10 @@
 import AVFoundation
 import Capacitor
 
-private let strToPreset: [String: AVCaptureSession.Preset] = [
-    "low": .low,
-    "medium": .medium,
-    "hight": .high,
-    "photo": .photo
-]
-
 public struct CameraSessionConfiguration {
     let deviceId: String?
     let enableBarcodeDetection: Bool
     let position: AVCaptureDevice.Position
-    let preset: AVCaptureSession.Preset
     let useTripleCameraIfAvailable: Bool
     let zoomFactor: CGFloat?
 }
@@ -24,7 +16,6 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
     let deviceId = call.getString("deviceId")
     let enableBarcodeDetection = call.getBool("enableBarcodeDetection", false)
     let position: AVCaptureDevice.Position = call.getString("position") == "front" ? .front : .back
-    let preset: AVCaptureSession.Preset = strToPreset[call.getString("preset", "photo")] ?? .photo
     let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable",  false)
     let zoomFactor = call.getDouble("zoomFactor").map { CGFloat($0) }
 
@@ -32,7 +23,6 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
         deviceId: deviceId,
         enableBarcodeDetection: enableBarcodeDetection,
         position: position,
-        preset: preset,
         useTripleCameraIfAvailable: useTripleCameraIfAvailable,
         zoomFactor: zoomFactor
     )

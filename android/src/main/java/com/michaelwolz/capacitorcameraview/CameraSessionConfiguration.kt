@@ -7,7 +7,6 @@ data class CameraSessionConfiguration(
     val deviceId: String? = null,
     val enableBarcodeDetection: Boolean = false,
     val position: String = "back",
-    val preset: String = "high",
     val zoomFactor: Double = 1.0
 )
 
@@ -17,7 +16,6 @@ fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
         deviceId = call.getString("deviceId"),
         enableBarcodeDetection = call.getBoolean("enableBarcodeDetection") ?: false,
         position = call.getString("position") ?: "back",
-        preset = call.getString("preset") ?: "high",
         zoomFactor = call.getDouble("zoomFactor") ?: 1.0
     )
 }
