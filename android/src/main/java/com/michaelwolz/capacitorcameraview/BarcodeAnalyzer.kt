@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.view.PreviewView
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
@@ -16,28 +17,25 @@ import kotlin.math.max
  */
 data class BarcodeDetectionResult(
     val value: String,
+    val displayValue: String,
     val type: String,
     val boundingRect: BoundingRect
 )
 
-/**
- * Normalized rectangle for barcode bounds.
- */
-data class BoundingRect(
-    val x: Float,
-    val y: Float,
-    val width: Float,
-    val height: Float
-)
+/** Normalized rectangle for barcode bounds. */
+data class BoundingRect(val x: Float, val y: Float, val width: Float, val height: Float)
 
 /**
- * Image analyzer for detecting barcodes in camera frames.
- * Optimized for minimal resource usage and quick detection.
+ * Image analyzer for detecting barcodes in camera frames. Optimized for minimal resource usage and
+ * quick detection.
  *
  * @param callback Function called when a barcode is detected
+ * @param previewView Optional preview view to transform coordinates to screen space
  */
-class BarcodeAnalyzer(private val callback: (BarcodeDetectionResult) -> Unit) :
-    ImageAnalysis.Analyzer {
+class BarcodeAnalyzer(
+    private val callback: (BarcodeDetectionResult) -> Unit,
+    private val previewView: PreviewView? = null
+) : ImageAnalysis.Analyzer {
     private val barcodeScanner = BarcodeScanning.getClient()
     private val isProcessing = AtomicBoolean(false)
     private var lastProcessedTimestamp = 0L
@@ -64,44 +62,49 @@ class BarcodeAnalyzer(private val callback: (BarcodeDetectionResult) -> Unit) :
             }
 
             // Create input image with correct rotation
-            val inputImage = InputImage.fromMediaImage(
-                mediaImage,
-                imageProxy.imageInfo.rotationDegrees
-            )
+            val inputImage =
+                InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
 
             // Process the image for barcode detection
-            barcodeScanner.process(inputImage)
+            barcodeScanner
+                .process(inputImage)
                 .addOnSuccessListener { barcodes ->
-                    if (barcodes.isNotEmpty()) {
-                        // Take first valid barcode
-                        val barcode = barcodes.firstOrNull { it.rawValue != null } ?: run {
-                            imageProxy.close()
-                            isProcessing.set(false)
-                            return@addOnSuccessListener
-                        }
-
-                        // Convert barcode format to string
-                        val format = getBarcodeFormatString(barcode.format)
-
-                        // Map the barcode boundingBox to normalized coordinates
-                        val boundingRect = normalizeRect(
-                            rect = barcode.boundingBox ?: Rect(0, 0, 0, 0),
-                            imageWidth = imageProxy.width,
-                            imageHeight = imageProxy.height
-                        )
-
-                        // Create result object and notify
-                        callback(
-                            BarcodeDetectionResult(
-                                value = barcode.rawValue ?: "",
-                                type = format,
-                                boundingRect = boundingRect
-                            )
-                        )
-
-                        // Update timestamp to apply throttling
-                        lastProcessedTimestamp = currentTime
+                    if (barcodes.isEmpty()) {
+                        imageProxy.close()
+                        isProcessing.set(false)
+                        return@addOnSuccessListener
                     }
+
+                    // Take first valid barcode
+                    val barcode =
+                        barcodes.firstOrNull { it.rawValue != null }
+                            ?: run {
+                                imageProxy.close()
+                                isProcessing.set(false)
+                                return@addOnSuccessListener
+                            }
+
+                    // Convert barcode format to string
+                    val format = getBarcodeFormatString(barcode.format)
+
+                    // Get barcode bounding box
+                    val barcodeRect = barcode.boundingBox ?: Rect(0, 0, 0, 0)
+
+                    // Map the barcode boundingBox based on the preview view if available
+                    val boundingRect =
+                        normalizeRect(barcodeRect, imageProxy.width, imageProxy.height)
+
+                    callback(
+                        BarcodeDetectionResult(
+                            value = barcode.rawValue ?: "",
+                            displayValue = barcode.displayValue ?: "",
+                            type = format,
+                            boundingRect = boundingRect
+                        )
+                    )
+
+                    // Update timestamp to apply throttling
+                    lastProcessedTimestamp = currentTime
                 }
                 .addOnFailureListener { exception ->
                     Log.e(TAG, "Barcode scanning failed", exception)
@@ -117,9 +120,7 @@ class BarcodeAnalyzer(private val callback: (BarcodeDetectionResult) -> Unit) :
         }
     }
 
-    /**
-     * Converts a barcode format code to a readable string.
-     */
+    /** Converts a barcode format code to a readable string. */
     private fun getBarcodeFormatString(format: Int): String {
         return when (format) {
             Barcode.FORMAT_QR_CODE -> "qr"
@@ -140,11 +141,9 @@ class BarcodeAnalyzer(private val callback: (BarcodeDetectionResult) -> Unit) :
     }
 
     /**
-     * Normalize a rectangle coordinates to be in range [0,1]
-     * for consistent representation across platforms.
+     * Normalize a rectangle coordinates to be in range [0,1].
      */
     private fun normalizeRect(rect: Rect, imageWidth: Int, imageHeight: Int): BoundingRect {
-        // Ensure we don't divide by zero
         val width = max(1, imageWidth)
         val height = max(1, imageHeight)
 

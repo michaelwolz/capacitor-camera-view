@@ -343,29 +343,37 @@ class CameraView {
                 previewView?.let { view -> it.setSurfaceProvider(view.surfaceProvider) }
             }
 
-            // Configure image capture
+            // Create a resolution selector that fits the preview view
+            // and fallback to the default aspect ratio if needed
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                .build()
+
             imageCapture = ImageCapture.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                 .setFlashMode(currentFlashMode)
                 .build()
 
-            // Build the use case list
+            // Build the use cases list
             val useCases = mutableListOf<androidx.camera.core.UseCase>(preview)
             imageCapture?.let { useCases.add(it) }
 
             // Add barcode scanning analyzer if enabled
             if (enableBarcodeDetection) {
-                val resolutionSelector = ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-                    .build()
-
                 imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setResolutionSelector(resolutionSelector)
                     .build()
                     .also {
-                        it.setAnalyzer(cameraExecutor, BarcodeAnalyzer { result ->
-                            notifyBarcodeDetected(result)
-                        })
+                        it.setAnalyzer(
+                            cameraExecutor, BarcodeAnalyzer(
+                                callback = { result ->
+                                    notifyBarcodeDetected(result)
+                                },
+                                previewView = previewView
+                            )
+                        )
                     }
                 imageAnalysis?.let { useCases.add(it) }
             }

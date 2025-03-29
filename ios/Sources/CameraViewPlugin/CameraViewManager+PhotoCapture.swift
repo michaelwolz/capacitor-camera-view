@@ -13,7 +13,7 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
             return
         }
 
-        // Balanced should be a good choice for most use case
+        // Balanced should be a good choice for most use cases
         avPhotoOutput.maxPhotoQualityPrioritization = .balanced
 
         if !captureSession.canAddOutput(avPhotoOutput) {

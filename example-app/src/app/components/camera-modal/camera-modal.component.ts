@@ -118,14 +118,14 @@ export class CameraModalComponent implements OnInit {
 
         element.style.visibility = 'visible';
         element.style.opacity = '1';
-        element.style.left = `${boundingRect.x - 10}px`;
-        element.style.top = `${boundingRect.y - 10}px`;
-        element.style.width = `${boundingRect.width + 20}px`;
-        element.style.height = `${boundingRect.height + 20}px`;
+        element.style.left = `${boundingRect.x}px`;
+        element.style.top = `${boundingRect.y}px`;
+        element.style.width = `${boundingRect.width}px`;
+        element.style.height = `${boundingRect.height}px`;
       } else {
         element.style.opacity = '0';
-        element.style.width = `0%`;
-        element.style.height = `0%`;
+        element.style.width = `0`;
+        element.style.height = `0`;
         element.style.visibility = 'hidden';
       }
     });
