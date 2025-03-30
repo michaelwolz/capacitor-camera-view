@@ -343,6 +343,10 @@ class CameraView {
                 previewView?.let { view -> it.setSurfaceProvider(view.surfaceProvider) }
             }
 
+            // Get current display rotation
+            val display = previewView?.display
+            val rotation = display?.rotation ?: Surface.ROTATION_0
+
             // Create a resolution selector that fits the preview view
             // and fallback to the default aspect ratio if needed
             val resolutionSelector = ResolutionSelector.Builder()
@@ -352,6 +356,7 @@ class CameraView {
             imageCapture = ImageCapture.Builder()
                 .setResolutionSelector(resolutionSelector)
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetRotation(rotation)
                 .setFlashMode(currentFlashMode)
                 .build()
 
@@ -362,8 +367,9 @@ class CameraView {
             // Add barcode scanning analyzer if enabled
             if (enableBarcodeDetection) {
                 imageAnalysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setResolutionSelector(resolutionSelector)
+                    .setTargetRotation(rotation)
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also {
                         it.setAnalyzer(
@@ -432,6 +438,7 @@ class CameraView {
                     else -> Surface.ROTATION_0
                 }
                 imageCapture?.targetRotation = rotation
+                imageAnalysis?.targetRotation = rotation
             }
         }
 
