@@ -27,6 +27,7 @@ import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
 import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
@@ -38,7 +39,7 @@ import java.util.concurrent.Executors
 class CameraView {
     // Camera components
     private var cameraController: LifecycleCameraController? = null
-    private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val cameraExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
     private var previewView: PreviewView? = null
 
     // Camera state
@@ -85,12 +86,7 @@ class CameraView {
 
         mainHandler.post {
             try {
-                setupPreviewView(context, webView)
-                startCamera(context, lifecycleOwner)
-
-                if (enableBarcodeDetection) {
-                    setupBarcodeScanner()
-                }
+                initializeCamera(context, lifecycleOwner, config)
 
                 callback(null)
             } catch (e: Exception) {
@@ -136,15 +132,15 @@ class CameraView {
     }
 
     /** Capture a photo with the current camera configuration */
-    fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
-        val cameraController = this.cameraController ?: run {
+    fun capturePhoto(quality: Int?, callback: (String?, Exception?) -> Unit) {
+        val controller = this.cameraController ?: run {
             callback(null, Exception("Camera controller not initialized"))
             return
         }
 
         mainHandler.post {
             try {
-                cameraController.takePicture(
+                controller.takePicture(
                     cameraExecutor,
                     object : ImageCapture.OnImageCapturedCallback() {
                         override fun onCaptureSuccess(image: ImageProxy) {
@@ -179,13 +175,13 @@ class CameraView {
             else -> CameraSelector.DEFAULT_FRONT_CAMERA
         }
 
-        val cameraController = this.cameraController ?: run {
+        val controller = this.cameraController ?: run {
             callback(Exception("Camera controller not initialized"))
             return
         }
 
         mainHandler.post {
-            cameraController.cameraSelector = currentCameraSelector
+            controller.cameraSelector = currentCameraSelector
         }
     }
 
@@ -240,7 +236,7 @@ class CameraView {
 
     /** Set the flash mode */
     fun setFlashMode(mode: String) {
-        val cameraController = this.cameraController ?: run {
+        val controller = this.cameraController ?: run {
             throw Exception("Camera controller not initialized")
         }
 
@@ -252,7 +248,7 @@ class CameraView {
             }
 
         mainHandler.post {
-            cameraController.imageCaptureFlashMode = currentFlashMode
+            controller.imageCaptureFlashMode = currentFlashMode
         }
     }
 
@@ -289,24 +285,43 @@ class CameraView {
 
     /** Clean up resources when the plugin is being destroyed */
     fun cleanup() {
-        stopSession()
+        mainHandler.post {
+            try {
+                // Stop camera session
+                cameraController?.unbind()
+                cameraController = null
 
-        imageCapture = null
+                // Remove preview view
+                previewView?.let { view ->
+                    (webView?.parent as? ViewGroup)?.removeView(view)
+                    previewView = null
+                }
 
-        // Shutdown the executor service
-        if (!cameraExecutor.isShutdown) {
-            cameraExecutor.shutdown()
+                // Reset WebView properties
+                webView?.setLayerType(WebView.LAYER_TYPE_NONE, null)
+                webView?.setBackgroundColor(android.graphics.Color.WHITE)
+
+                // Clear references
+                webView = null
+                lifecycleOwner = null
+                imageCapture = null
+
+                // Shutdown executor
+                if (!cameraExecutor.isShutdown) {
+                    cameraExecutor.shutdown()
+                }
+
+                Log.d(TAG, "Camera resources cleaned up successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during cleanup", e)
+            }
         }
-
-        // Clear references
-        this.webView = null
-        this.lifecycleOwner = null
     }
 
-    private fun setupPreviewView(context: Context, webView: WebView) {
+    private fun setupPreviewView(context: Context) {
         // Make WebView transparent
-        webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+        webView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        webView?.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
         previewView =
             PreviewView(context).apply {
@@ -318,51 +333,60 @@ class CameraView {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
 
-        (webView.parent as? ViewGroup)?.addView(previewView, 0)
+        (webView?.parent as? ViewGroup)?.addView(previewView, 0)
     }
 
-    private fun startCamera(
+    private fun initializeCamera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
+        config: CameraSessionConfiguration
     ) {
-        val previewView = this.previewView ?: run {
-            throw Exception("PreviewView not initialized")
+        // Setup preview view
+        setupPreviewView(context)
+
+        // Initialize camera controller
+        val controller = LifecycleCameraController(context).apply {
+            cameraSelector = if (config.position == "front") {
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            } else {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            }
+
+            // Image capture configuration
+            imageCaptureResolutionSelector = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                .build()
+
+            // Set the initial zoom
+            if (config.zoomFactor != 1.0) {
+                cameraControl?.setZoomRatio(config.zoomFactor.toFloat())
+            }
         }
 
-        val controller = LifecycleCameraController(context)
-        this.cameraController = controller
-        previewView.controller = controller
+        cameraController = controller
+        previewView?.controller = controller
 
+        // Setup barcode scanning if needed
+        if (config.enableBarcodeDetection) {
+            setupBarcodeScanner(controller)
+        }
 
-        controller.cameraSelector = currentCameraSelector
-
-        // TODO: Make this best fit depending on the device
-        controller.imageCaptureResolutionSelector = ResolutionSelector.Builder()
-            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-            .build()
-
-        // Bind the camera controller to the lifecycle
+        // Bind to lifecycle
         controller.bindToLifecycle(lifecycleOwner)
-
-        // TODO: This is not working
-        if (this.zoomFactor != 1.0f) {
-            controller.cameraControl?.setZoomRatio(this.zoomFactor)
-        }
     }
 
-    private fun setupBarcodeScanner() {
-        val cameraController = this.cameraController ?: return
+    private fun setupBarcodeScanner(controller: LifecycleCameraController) {
         val previewView = this.previewView ?: return
         val context = webView?.context ?: return
 
         val options = BarcodeScannerOptions.Builder()
-            .enableAllPotentialBarcodes()
+            .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
             .build()
 
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(context)
 
-        cameraController.setImageAnalysisAnalyzer(
+        controller.setImageAnalysisAnalyzer(
             mainExecutor,
             MlKitAnalyzer(
                 listOf(barcodeScanner),
@@ -400,7 +424,7 @@ class CameraView {
     }
 
     /** Converts an ImageProxy to a Base64 encoded string */
-    private fun imageProxyToBase64(image: ImageProxy, quality: Int): String {
+    private fun imageProxyToBase64(image: ImageProxy, quality: Int?): String {
         val buffer = image.planes[0].buffer
         val bytes = ByteArray(buffer.remaining())
         buffer.get(bytes)
@@ -417,12 +441,11 @@ class CameraView {
 
         try {
             val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
             val byteArray = outputStream.toByteArray()
 
             return Base64.encodeToString(byteArray, Base64.NO_WRAP)
         } finally {
-            // Recycle the bitmap to free memory
             bitmap.recycle()
         }
     }
@@ -437,13 +460,17 @@ class CameraView {
 
     /** Get the current zoom factors */
     private fun getZoomFactorsInternal(): ZoomFactors {
-        val cameraInfo = cameraController?.cameraInfo
+        cameraController?.let { controller ->
+            val cameraInfo = controller.cameraInfo
+            val zoomFactors = ZoomFactors(
+                min = 1.0f,
+                max = cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5.0f,
+                current = cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
+            )
+            return zoomFactors
+        }
 
-        return ZoomFactors(
-            min = 1.0f,
-            max = cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5.0f,
-            current = cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
-        )
+        return ZoomFactors(1.0f, 5.0f, 1.0f)
     }
 
     companion object {
