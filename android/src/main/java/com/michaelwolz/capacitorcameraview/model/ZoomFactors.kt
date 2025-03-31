@@ -1,4 +1,4 @@
-package com.michaelwolz.capacitorcameraview
+package com.michaelwolz.capacitorcameraview.model
 
 /**
  * Represents supported zoom factors for the camera.

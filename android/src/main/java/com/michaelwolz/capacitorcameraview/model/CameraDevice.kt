@@ -1,4 +1,4 @@
-package com.michaelwolz.capacitorcameraview
+package com.michaelwolz.capacitorcameraview.model
 
 /**
  * Represents a camera device available on the Android device.

@@ -1,7 +1,6 @@
 package com.michaelwolz.capacitorcameraview
 
 import android.Manifest
-import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -11,6 +10,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
 
 @CapacitorPlugin(
     name = "CameraView",
@@ -121,12 +121,13 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getZoom(call: PluginCall) {
-        val zoom = implementation.getSupportedZoomFactors()
-        call.resolve(JSObject().apply {
-            put("min", zoom.min)
-            put("max", zoom.max)
-            put("current", zoom.current)
-        })
+        implementation.getSupportedZoomFactors { zoomFactors ->
+            call.resolve(JSObject().apply {
+                put("min", zoomFactors.min)
+                put("max", zoomFactors.max)
+                put("current", zoomFactors.current)
+            })
+        }
     }
 
     @PluginMethod
@@ -147,11 +148,6 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getFlashMode(call: PluginCall) {
-        if (!implementation.isRunning()) {
-            call.reject("Camera is not running")
-            return
-        }
-
         call.resolve(JSObject().apply {
             put("flashMode", implementation.getFlashMode())
         })
@@ -159,12 +155,13 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getSupportedFlashModes(call: PluginCall) {
-        val supportedFlashModes = implementation.getSupportedFlashModes()
-        val modesArray = JSArray().apply {
-            supportedFlashModes.forEach { put(it) }
-        }
+        implementation.getSupportedFlashModes { supportedFlashModes ->
+            val modesArray = JSArray().apply {
+                supportedFlashModes.forEach { put(it) }
+            }
 
-        call.resolve(JSObject().apply { put("flashModes", modesArray) })
+            call.resolve(JSObject().apply { put("flashModes", modesArray) })
+        }
     }
 
     @PluginMethod
