@@ -191,6 +191,13 @@ export interface CameraSessionConfiguration {
    * @default 1.0
    */
   zoomFactor?: number;
+
+  /**
+   * Optional HTML ID of the container element where the camera view should be rendered.
+   * If not provided, the camera view will be appended to the document body. Web only.
+   * @example 'cameraContainer'
+   */
+  containerElementId?: string;
 }
 
 // ------------------------------------------------------------------------------
@@ -257,6 +264,9 @@ export interface GetSupportedFlashModesResponse {
 export interface BarcodeDetectionData {
   /** The decoded string value of the barcode */
   value: string;
+
+  /** The display value of the barcode (may differ from the raw value) */
+  displayValue?: string;
 
   /** The type/format of the barcode (e.g., 'qr', 'code128', etc.) */
   type: string;

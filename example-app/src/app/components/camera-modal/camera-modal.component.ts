@@ -24,8 +24,7 @@ import {
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
-import type { FlashMode } from 'capacitor-camera-view';
-import { CameraPosition } from 'capacitor-camera-view';
+import type { CameraPosition, FlashMode } from 'capacitor-camera-view';
 import { concat, map, of, switchMap, tap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 
@@ -118,10 +117,10 @@ export class CameraModalComponent implements OnInit {
 
         element.style.visibility = 'visible';
         element.style.opacity = '1';
-        element.style.left = `${boundingRect.x - 10}px`;
-        element.style.top = `${boundingRect.y - 10}px`;
-        element.style.width = `${boundingRect.width + 20}px`;
-        element.style.height = `${boundingRect.height + 20}px`;
+        element.style.left = `${boundingRect.x - 5}px`;
+        element.style.top = `${boundingRect.y - 5}px`;
+        element.style.width = `${boundingRect.width + 10}px`;
+        element.style.height = `${boundingRect.height + 10}px`;
       } else {
         element.style.opacity = '0';
         element.style.width = `0`;
@@ -147,6 +146,7 @@ export class CameraModalComponent implements OnInit {
       position: this.position(),
       useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
       zoomFactor: this.initialZoomFactor(),
+      containerElementId: 'cameraView',
     });
 
     await Promise.all([

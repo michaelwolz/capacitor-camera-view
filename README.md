@@ -254,13 +254,14 @@ Remove all listeners for this plugin.
 
 Configuration options for starting a camera session.
 
-| Prop                             | Type                                                      | Description                                                                         | Default             |
-| -------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------- |
-| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                         | <code>false</code>  |
-| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                       | <code>'back'</code> |
-| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position |                     |
-| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)              | <code>false</code>  |
-| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                      | <code>1.0</code>    |
+| Prop                             | Type                                                      | Description                                                                                                                                | Default             |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                                                                                | <code>false</code>  |
+| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                                                                              | <code>'back'</code> |
+| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position                                                        |                     |
+| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)                                                                     | <code>false</code>  |
+| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                                                                             | <code>1.0</code>    |
+| **`videoElementId`**             | <code>string</code>                                       | Optional HTML id of the video element to use for rendering the camera view If not provided, a new video element will be created. Web only. |                     |
 
 
 #### IsRunningResponse

@@ -12,6 +12,7 @@ import type {
   CaptureResponse,
   FlashMode,
 } from './definitions';
+import { calculateVisibleArea, canvasToBase64, drawVisibleAreaToCanvas, transformBarcodeBoundingBox } from './utils';
 
 /**
  * Web implementation of the CameraViewPlugin.
@@ -33,41 +34,21 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
   // Barcode detection support
   private barcodeDetectionSupported: boolean = false;
-  private barcodeDetector: any = null; // Will be initialized if supported
+  private barcodeDetector: BarcodeDetector | null = null;
 
   constructor() {
     super();
-
-    // Check for BarcodeDetector support (part of Shape Detection API)
     this.checkBarcodeDetectionSupport();
-  }
-
-  /**
-   * Check if barcode detection is supported in this browser
-   */
-  private async checkBarcodeDetectionSupport() {
-    if ('BarcodeDetector' in window) {
-      try {
-        // @ts-ignore - BarcodeDetector is not in TypeScript DOM lib yet
-        this.barcodeDetector = new BarcodeDetector();
-        this.barcodeDetectionSupported = true;
-      } catch (e) {
-        console.warn('BarcodeDetector is not supported by this browser.');
-        this.barcodeDetectionSupported = false;
-      }
-    }
   }
 
   /**
    * Start the camera with the given configuration
    */
   async start(options?: CameraSessionConfiguration): Promise<void> {
-    // Don't restart if already running
     if (this.#isRunning) {
       return;
     }
 
-    // Try to get user permissions
     const permissionStatus = await this.requestPermissions();
     if (permissionStatus.camera !== 'granted') {
       throw new Error('Camera permission was not granted');
@@ -76,25 +57,31 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
     try {
       // Set up video element if it doesn't exist
       if (!this.videoElement) {
-        await this.setupVideoElement();
+        await this.setupVideoElement(options?.containerElementId);
       }
 
-      // Apply configuration
-      const facingMode = options?.position === 'front' ? 'user' : 'environment';
-      this.currentCamera = facingMode;
+      // Set up video constraints based on options
+      let videoConstraints: MediaTrackConstraints = {};
 
-      // Start media stream
+      // Prefer deviceId if specified
+      if (options?.deviceId) {
+        videoConstraints.deviceId = { exact: options.deviceId };
+        // Remember the current camera mode (though we're using a specific device)
+        this.currentCamera = options?.position === 'front' ? 'user' : 'environment';
+      } else {
+        // Fall back to facing mode
+        const facingMode = options?.position === 'front' ? 'user' : 'environment';
+        this.currentCamera = facingMode;
+        videoConstraints.facingMode = facingMode;
+      }
+
       const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode,
-        },
+        video: videoConstraints,
         audio: false,
       };
 
-      // Get media stream
       this.stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      // Set stream to video element
       if (this.videoElement) {
         this.videoElement.srcObject = this.stream;
         this.videoElement.play();
@@ -127,7 +114,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
       // Clear video source
       if (this.videoElement) {
-        this.videoElement.srcObject = null;
+        this.videoElement = null;
       }
 
       this.#isRunning = false;
@@ -144,40 +131,24 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /**
-   * Capture a photo from the current camera view
+   * Capture a photo using the camera and return it as a base64-encoded JPEG image.
+   * Preserves what the user actually sees in the UI, including cropping from object-fit: cover.
    */
   async capture(options: { quality: number }): Promise<CaptureResponse> {
-    if (!this.#isRunning || !this.videoElement) {
+    const videoElement = this.videoElement;
+
+    if (!this.#isRunning || !videoElement) {
       throw new Error('Camera is not running');
     }
 
     try {
-      // Create canvas if it doesn't exist
-      if (!this.canvasElement) {
-        this.canvasElement = document.createElement('canvas');
-      }
+      const canvas = this.getCanvasElement();
+      const visibleArea = calculateVisibleArea(videoElement);
 
-      const video = this.videoElement;
-      const canvas = this.canvasElement;
+      drawVisibleAreaToCanvas(canvas, videoElement, visibleArea);
 
-      // Set canvas size to match video dimensions
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Could not get canvas context');
-      }
-
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Convert to base64 with specified quality
       const quality = Math.min(1.0, Math.max(0.1, options.quality / 100));
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-
-      // Extract base64 data from data URL
-      const base64Data = dataUrl.split(',')[1];
+      const base64Data = canvasToBase64(canvas, quality);
 
       return { photo: base64Data };
     } catch (err) {
@@ -188,7 +159,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Flip between front and back camera
    */
-  async flipCamera(): Promise<void> {
+  public async flipCamera(): Promise<void> {
     if (!this.#isRunning) {
       throw new Error('Camera is not running');
     }
@@ -223,7 +194,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Get available camera devices
    */
-  async getAvailableDevices(): Promise<GetAvailableDevicesResponse> {
+  public async getAvailableDevices(): Promise<GetAvailableDevicesResponse> {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((device) => device.kind === 'videoinput');
@@ -244,7 +215,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Get current zoom information (web has limited zoom support)
    */
-  async getZoom(): Promise<GetZoomResponse> {
+  public async getZoom(): Promise<GetZoomResponse> {
     // Web has limited zoom capabilities in most browsers
     return {
       min: 1.0,
@@ -256,7 +227,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Set zoom level (limited support in web)
    */
-  async setZoom(options: { level: number; ramp?: boolean }): Promise<void> {
+  public async setZoom(options: { level: number; ramp?: boolean }): Promise<void> {
     // Store the requested zoom level even if we can't apply it
     this.currentZoom = options.level;
 
@@ -267,14 +238,14 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Get current flash mode
    */
-  async getFlashMode(): Promise<GetFlashModeResponse> {
+  public async getFlashMode(): Promise<GetFlashModeResponse> {
     return { flashMode: this.currentFlashMode };
   }
 
   /**
    * Get supported flash modes
    */
-  async getSupportedFlashModes(): Promise<GetSupportedFlashModesResponse> {
+  public async getSupportedFlashModes(): Promise<GetSupportedFlashModesResponse> {
     // Web has limited flash control
     return { flashModes: ['off'] };
   }
@@ -282,7 +253,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Set flash mode (limited support in web)
    */
-  async setFlashMode(options: { mode: FlashMode }): Promise<void> {
+  public async setFlashMode(options: { mode: FlashMode }): Promise<void> {
     this.currentFlashMode = options.mode;
     console.warn('Flash mode control is not fully supported in the web implementation');
   }
@@ -290,7 +261,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Check camera permission without requesting
    */
-  async checkPermissions(): Promise<PermissionStatus> {
+  public async checkPermissions(): Promise<PermissionStatus> {
     try {
       // Use Permissions API if available
       if (navigator.permissions) {
@@ -315,7 +286,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Request camera permission from the user
    */
-  async requestPermissions(): Promise<PermissionStatus> {
+  public async requestPermissions(): Promise<PermissionStatus> {
     try {
       // Try to access the camera to trigger the permission prompt
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -335,36 +306,39 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
    * Start barcode detection if supported
    */
   private async startBarcodeDetection() {
-    if (!this.barcodeDetectionSupported || !this.barcodeDetector || !this.videoElement) {
+    const barcodeDetector = this.barcodeDetector;
+    const videoElement = this.videoElement;
+
+    if (!this.barcodeDetectionSupported || !barcodeDetector || !videoElement) {
       return;
+    }
+
+    // Make sure video is fully loaded before starting detection
+    if (videoElement.readyState < 2) {
+      await new Promise<void>((resolve) => {
+        const loadHandler = () => {
+          videoElement.removeEventListener('loadeddata', loadHandler);
+          resolve();
+        };
+        videoElement.addEventListener('loadeddata', loadHandler);
+      });
     }
 
     // Set up periodic frame analysis for barcode detection
     const detectFrame = async () => {
-      if (!this.#isRunning || !this.videoElement || !this.barcodeDetector) {
+      if (!this.#isRunning || !videoElement || !barcodeDetector) {
         return;
       }
 
       try {
-        // @ts-ignore - BarcodeDetector is not in TypeScript DOM lib yet
-        const barcodes = await this.barcodeDetector.detect(this.videoElement);
+        const barcodes = await barcodeDetector.detect(videoElement);
 
         if (barcodes.length > 0) {
-          // Process the first barcode
           const barcode = barcodes[0];
 
-          // Normalize bounding box coordinates (relative to video size)
-          const videoWidth = this.videoElement.videoWidth;
-          const videoHeight = this.videoElement.videoHeight;
+          // Transform barcode coordinates using the utility function
+          const boundingRect = transformBarcodeBoundingBox(barcode.boundingBox, videoElement);
 
-          const boundingRect = {
-            x: barcode.boundingBox.x / videoWidth,
-            y: barcode.boundingBox.y / videoHeight,
-            width: barcode.boundingBox.width / videoWidth,
-            height: barcode.boundingBox.height / videoHeight,
-          };
-
-          // Notify listeners
           this.notifyListeners('barcodeDetected', {
             value: barcode.rawValue,
             type: barcode.format.toLowerCase(),
@@ -375,37 +349,18 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
         console.error('Barcode detection error', err);
       }
 
-      // Continue detection if still running
       if (this.#isRunning) {
         requestAnimationFrame(detectFrame);
       }
     };
 
-    // Start detection
     requestAnimationFrame(detectFrame);
-  }
-
-  /**
-   * Set up the video element for the camera view
-   */
-  private async setupVideoElement() {
-    // Create video element if it doesn't exist
-    this.videoElement = document.createElement('video');
-    this.videoElement.playsInline = true;
-    this.videoElement.autoplay = true;
-    this.videoElement.muted = true;
-    this.videoElement.style.width = '100%';
-    this.videoElement.style.height = '100%';
-    this.videoElement.style.objectFit = 'cover';
-
-    // Add to DOM
-    document.body.appendChild(this.videoElement);
   }
 
   /**
    * Clean up resources when the plugin is disposed
    */
-  async handleOnDestroy() {
+  public async handleOnDestroy() {
     await this.stop();
 
     // Remove elements from DOM
@@ -419,5 +374,55 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
     }
 
     this.barcodeDetector = null;
+  }
+
+  /**
+   * Check if barcode detection is supported in this browser
+   */
+  private async checkBarcodeDetectionSupport() {
+    if ('BarcodeDetector' in window) {
+      try {
+        this.barcodeDetector = new BarcodeDetector();
+        this.barcodeDetectionSupported = true;
+      } catch (e) {
+        console.warn('BarcodeDetector is not supported by this browser.');
+        this.barcodeDetectionSupported = false;
+      }
+    }
+  }
+
+  /**
+   * Set up the video element for the camera view
+   */
+  private async setupVideoElement(containerElementId?: string) {
+    this.videoElement = document.createElement('video');
+    this.videoElement.playsInline = true;
+    this.videoElement.autoplay = true;
+    this.videoElement.muted = true;
+    this.videoElement.style.width = '100%';
+    this.videoElement.style.height = '100%';
+    this.videoElement.style.objectFit = 'cover';
+
+    // If a container ID is provided, find that element and append the video to it
+    if (containerElementId) {
+      const container = document.getElementById(containerElementId);
+      if (!container) {
+        throw new Error(`Container element with ID ${containerElementId} not found`);
+      }
+      container.appendChild(this.videoElement);
+    } else {
+      // Otherwise, append to body as fallback
+      document.body.appendChild(this.videoElement);
+    }
+  }
+
+  /**
+   * Ensures canvas element exists and returns it
+   */
+  private getCanvasElement(): HTMLCanvasElement {
+    if (!this.canvasElement) {
+      this.canvasElement = document.createElement('canvas');
+    }
+    return this.canvasElement;
   }
 }
