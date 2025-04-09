@@ -93,7 +93,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
         }
       }
     } catch (err) {
-      throw new Error(`Failed to start camera: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Failed to start camera: ${this.formatError(err)}`);
     }
   }
 
@@ -119,7 +119,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
       this.#isRunning = false;
     } catch (err) {
-      throw new Error(`Failed to stop camera: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Failed to stop camera: ${this.formatError(err)}`);
     }
   }
 
@@ -152,7 +152,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
       return { photo: base64Data };
     } catch (err) {
-      throw new Error(`Failed to capture photo: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Failed to capture photo: ${this.formatError(err)}`);
     }
   }
 
@@ -194,7 +194,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
         this.videoElement.srcObject = this.stream;
       }
     } catch (err) {
-      throw new Error(`Failed to flip camera: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Failed to flip camera: ${this.formatError(err)}`);
     }
   }
 
@@ -235,11 +235,16 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
    * Set zoom level (limited support in web)
    */
   public async setZoom(options: { level: number; ramp?: boolean }): Promise<void> {
-    // Store the requested zoom level even if we can't apply it
+    // Store the requested zoom level
     this.currentZoom = options.level;
 
-    // Most browsers don't support zoom via MediaTrackConstraints yet
-    console.warn('Zoom is not fully supported in the web implementation');
+    // Apply visual zoom using CSS transform when native zoom isn't supported
+    if (this.videoElement) {
+      // Calculate scale based on requested zoom
+      const scale = Math.max(1.0, Math.min(options.level, 3.0)); // Limit scale to reasonable bounds
+      this.videoElement.style.transform = `scale(${scale})`;
+      this.videoElement.style.transformOrigin = 'center';
+    }
   }
 
   /**
@@ -331,29 +336,37 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       });
     }
 
+    // Add throttling to reduce CPU usage
+    let lastDetectionTime = 0;
+    const minTimeBetweenDetections = 100; // ms
+
     // Set up periodic frame analysis for barcode detection
     const detectFrame = async () => {
       if (!this.#isRunning || !videoElement || !barcodeDetector) {
         return;
       }
 
-      try {
-        const barcodes = await barcodeDetector.detect(videoElement);
+      const now = Date.now();
+      if (now - lastDetectionTime >= minTimeBetweenDetections) {
+        try {
+          const barcodes = await barcodeDetector.detect(videoElement);
+          lastDetectionTime = now;
 
-        if (barcodes.length > 0) {
-          const barcode = barcodes[0];
+          if (barcodes.length > 0) {
+            const barcode = barcodes[0];
 
-          // Transform barcode coordinates using the utility function
-          const boundingRect = transformBarcodeBoundingBox(barcode.boundingBox, videoElement);
+            // Transform barcode coordinates using the utility function
+            const boundingRect = transformBarcodeBoundingBox(barcode.boundingBox, videoElement);
 
-          this.notifyListeners('barcodeDetected', {
-            value: barcode.rawValue,
-            type: barcode.format.toLowerCase(),
-            boundingRect,
-          });
+            this.notifyListeners('barcodeDetected', {
+              value: barcode.rawValue,
+              type: barcode.format.toLowerCase(),
+              boundingRect,
+            });
+          }
+        } catch (err) {
+          console.error('Barcode detection error', err);
         }
-      } catch (err) {
-        console.error('Barcode detection error', err);
       }
 
       if (this.#isRunning) {
@@ -431,5 +444,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       this.canvasElement = document.createElement('canvas');
     }
     return this.canvasElement;
+  }
+
+  /**
+   * Format error message
+   */
+  private formatError(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
   }
 }

@@ -58,6 +58,9 @@ class CameraView {
 
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
+    private var lastBarcodeDetectionTime = 0L
+    private val BARCODE_DETECTION_THROTTLE_MS = 100 
+
     /** Starts a camera session with the provided configuration. */
     fun startSession(
         config: CameraSessionConfiguration,
@@ -186,6 +189,7 @@ class CameraView {
                 }
 
         mainHandler.post {
+            val outputStream = ByteArrayOutputStream()
             try {
                 val bitmap =
                     previewView.bitmap
@@ -195,7 +199,6 @@ class CameraView {
                         }
 
                 // Convert bitmap to Base64
-                val outputStream = ByteArrayOutputStream()
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
                 val byteArray = outputStream.toByteArray()
                 val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
@@ -204,6 +207,8 @@ class CameraView {
             } catch (e: Exception) {
                 Log.e(TAG, "Error capturing preview frame", e)
                 callback(null, e)
+            } finally {
+                outputStream.close()
             }
         }
     }
@@ -331,7 +336,7 @@ class CameraView {
                 // Stop camera session
                 cameraController?.unbind()
                 cameraController = null
-
+                
                 // Remove preview view
                 previewView?.let { view ->
                     (webView?.parent as? ViewGroup)?.removeView(view)
@@ -451,6 +456,11 @@ class CameraView {
         barcodeScanner: BarcodeScanner,
         previewView: PreviewView
     ) {
+        val now = System.currentTimeMillis()
+        if (now - lastBarcodeDetectionTime < BARCODE_DETECTION_THROTTLE_MS) {
+            return // Skip this frame
+        }
+
         val barcodes = result?.getValue(barcodeScanner) ?: return
         if (barcodes.isEmpty()) return
 
@@ -467,6 +477,7 @@ class CameraView {
             )
 
         notifyBarcodeDetected(barcodeResult)
+        lastBarcodeDetectionTime = now
     }
 
     /** Converts an ImageProxy to a Base64 encoded string */
@@ -477,21 +488,24 @@ class CameraView {
 
         var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 
-        // Apply correct rotation
-        val rotationDegrees = image.imageInfo.rotationDegrees
-        if (rotationDegrees != 0) {
-            val matrix = Matrix()
-            matrix.postRotate(rotationDegrees.toFloat())
-            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-        }
-
         try {
+            // Apply rotation if needed
+            if (image.imageInfo.rotationDegrees != 0) {
+                val matrix = Matrix()
+                matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
+                val rotatedBitmap =
+                    Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                // Recycle the original bitmap to prevent memory leaks
+                bitmap.recycle()
+                bitmap = rotatedBitmap
+            }
+
             val outputStream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
             val byteArray = outputStream.toByteArray()
-
             return Base64.encodeToString(byteArray, Base64.NO_WRAP)
         } finally {
+            // Ensure bitmap is always recycled
             bitmap.recycle()
         }
     }

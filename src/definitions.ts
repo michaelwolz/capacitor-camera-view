@@ -99,6 +99,10 @@ export interface CameraViewPlugin {
    * @param options.ramp - Whether to animate the zoom level change, defaults to false (iOS only)
    * @returns A promise that resolves when the zoom level has been set
    * 
+   * @remarks
+   * On web platforms, zoom functionality may be limited by browser support.
+   * When native zoom is not available, a CSS-based zoom simulation is applied.
+   * 
    * @since 1.0.0
    */
   setZoom(options: { level: number; ramp?: boolean }): Promise<void>;
