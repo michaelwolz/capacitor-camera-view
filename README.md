@@ -1,13 +1,72 @@
-# capacitor-camera-view
+<p align="center">
+  <img src="./banner.png" alt="Capacitor Camera View Banner" width="100%">
+</p>
 
-A Capacitor plugin for embedding a live camera feed directly into your app.
+<h1 align="center">Capacitor Camera View</h1>
 
-## Install
+<p align="center">
+  <b>A Capacitor plugin for embedding a live camera feed directly into your app.</b>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/capacitor-camera-view">
+    <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm" alt="npm version">
+  </a>
+  <a href="https://github.com/your-repo/capacitor-camera-view/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/your-repo/capacitor-camera-view/ci.yml?branch=main&logo=github" alt="Build Status">
+  </a>
+  <a href="https://capacitorjs.com/">
+    <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor" alt="Capacitor Plugin">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  </a>
+</p>
+
+---
+
+## 🚀 Features
+
+- 📹 Embed a **live camera feed** directly into your app.
+- 📸 Capture photos or frames from the camera preview.
+- 🔍 **Barcode detection** support.
+- 🔄 Switch between front and back cameras.
+- 📱 **Virtual triple camera support** for devices with multiple cameras (iOS only).
+- 🔎 Control **zoom** and **flash** modes programmatically.
+- ⚡ **High performance** with optimized native implementations.
+- 🎯 **Simple to use** with a clean and intuitive API.
+- 🌐 Works seamlessly on **iOS**, **Android**, and **Web**.
+
+---
+
+## 📦 Installation
+
+Install the plugin using npm:
 
 ```bash
 npm install capacitor-camera-view
 npx cap sync
 ```
+
+### ⚠️ Make the WebView transparent when starting the camera view
+
+To display the camera view through your app, you need to ensure that the WebView is made transparent. For Ionic applications, this can be done by adding the following styles to your global css file and applying the respective class to the body element as soon as you start the camera (see example app on how to do this in Angular):
+
+```css
+body.camera-running {
+  visibility: hidden;
+  --background: transparent;
+  --ion-background-color: transparent;
+}
+
+.camera-modal {
+  visibility: visible;
+}
+```
+
+## 🧪 Example App
+
+To see the plugin in action, check out the example app in the `example-app` folder. The app demonstrates how to integrate and use the Capacitor Camera View plugin in an Ionic Angular project.
 
 ## API
 
