@@ -51,6 +51,8 @@ Start the camera view with optional configuration.
 | ------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
 | **`options`** | <code><a href="#camerasessionconfiguration">CameraSessionConfiguration</a></code> | - Configuration options for the camera session |
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -61,6 +63,8 @@ stop() => Promise<void>
 ```
 
 Stop the camera view and release resources.
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -74,6 +78,8 @@ isRunning() => Promise<IsRunningResponse>
 Check if the camera view is currently running.
 
 **Returns:** <code>Promise&lt;<a href="#isrunningresponse">IsRunningResponse</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -91,6 +97,8 @@ Capture a photo using the current camera configuration.
 | **`options`** | <code>{ quality: number; }</code> | - Capture configuration options |
 
 **Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -117,6 +125,8 @@ not yet well supported on the web.
 
 **Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&gt;</code>
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -127,6 +137,8 @@ flipCamera() => Promise<void>
 ```
 
 Switch between front and back camera.
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -141,6 +153,8 @@ Get available camera devices for capturing photos.
 
 **Returns:** <code>Promise&lt;<a href="#getavailabledevicesresponse">GetAvailableDevicesResponse</a>&gt;</code>
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -153,6 +167,8 @@ getZoom() => Promise<GetZoomResponse>
 Get current zoom level information and available range.
 
 **Returns:** <code>Promise&lt;<a href="#getzoomresponse">GetZoomResponse</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -169,6 +185,8 @@ Set the camera zoom level.
 | ------------- | ----------------------------------------------- | ---------------------------- |
 | **`options`** | <code>{ level: number; ramp?: boolean; }</code> | - Zoom configuration options |
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -182,6 +200,8 @@ Get current flash mode setting.
 
 **Returns:** <code>Promise&lt;<a href="#getflashmoderesponse">GetFlashModeResponse</a>&gt;</code>
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -194,6 +214,8 @@ getSupportedFlashModes() => Promise<GetSupportedFlashModesResponse>
 Get supported flash modes for the current camera.
 
 **Returns:** <code>Promise&lt;<a href="#getsupportedflashmodesresponse">GetSupportedFlashModesResponse</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -210,6 +232,8 @@ Set the camera flash mode.
 | ------------- | ---------------------------------------------------------- | ---------------------------------- |
 | **`options`** | <code>{ mode: <a href="#flashmode">FlashMode</a>; }</code> | - Flash mode configuration options |
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -223,6 +247,8 @@ Check camera permission status without requesting permissions.
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -235,6 +261,8 @@ requestPermissions() => Promise<PermissionStatus>
 Request camera permission from the user.
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
@@ -255,6 +283,8 @@ This event is emitted when a barcode is detected in the camera preview.
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
+**Since:** 1.0.0
+
 --------------------
 
 
@@ -269,6 +299,8 @@ Remove all listeners for this plugin.
 | Param           | Type                | Description                                   |
 | --------------- | ------------------- | --------------------------------------------- |
 | **`eventName`** | <code>string</code> | - Optional event name to remove listeners for |
+
+**Since:** 1.0.0
 
 --------------------
 
