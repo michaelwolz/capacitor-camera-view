@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  aperture,
   cameraOutline,
   cameraReverse,
   cameraSharp,
@@ -26,6 +27,7 @@ import {
 export class AppComponent {
   constructor() {
     addIcons({
+      aperture,
       cameraSharp,
       cameraOutline,
       imagesSharp,

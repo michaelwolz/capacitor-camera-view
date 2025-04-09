@@ -17,6 +17,7 @@ npx cap sync
 * [`stop()`](#stop)
 * [`isRunning()`](#isrunning)
 * [`capture(...)`](#capture)
+* [`captureSample(...)`](#capturesample)
 * [`flipCamera()`](#flipcamera)
 * [`getAvailableDevices()`](#getavailabledevices)
 * [`getZoom()`](#getzoom)
@@ -84,6 +85,31 @@ capture(options: { quality: number; }) => Promise<CaptureResponse>
 ```
 
 Capture a photo using the current camera configuration.
+
+| Param         | Type                              | Description                     |
+| ------------- | --------------------------------- | ------------------------------- |
+| **`options`** | <code>{ quality: number; }</code> | - Capture configuration options |
+
+**Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&gt;</code>
+
+--------------------
+
+
+### captureSample(...)
+
+```typescript
+captureSample(options: { quality: number; }) => Promise<CaptureResponse>
+```
+
+Captures a frame from the current camera preview without using the full camera capture pipeline.
+
+Unlike `capture()` which may trigger hardware-level photo capture on native platforms,
+this method quickly samples the current video stream. This is suitable computer vision or
+simple snapshots where high fidelity is not required.
+
+On web this method does exactly the same as `capture()` as it only captures a frame from the video stream
+because unfortunately [ImageCapture API](https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture) is 
+not yet well supported on the web.
 
 | Param         | Type                              | Description                     |
 | ------------- | --------------------------------- | ------------------------------- |
@@ -254,14 +280,14 @@ Remove all listeners for this plugin.
 
 Configuration options for starting a camera session.
 
-| Prop                             | Type                                                      | Description                                                                                                                                | Default             |
-| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                                                                                | <code>false</code>  |
-| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                                                                              | <code>'back'</code> |
-| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position                                                        |                     |
-| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)                                                                     | <code>false</code>  |
-| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                                                                             | <code>1.0</code>    |
-| **`videoElementId`**             | <code>string</code>                                       | Optional HTML id of the video element to use for rendering the camera view If not provided, a new video element will be created. Web only. |                     |
+| Prop                             | Type                                                      | Description                                                                                                                                                           | Default             |
+| -------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                                                                                                           | <code>false</code>  |
+| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                                                                                                         | <code>'back'</code> |
+| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position                                                                                   |                     |
+| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)                                                                                                | <code>false</code>  |
+| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                                                                                                        | <code>1.0</code>    |
+| **`containerElementId`**         | <code>string</code>                                       | Optional HTML ID of the container element where the camera view should be rendered. If not provided, the camera view will be appended to the document body. Web only. |                     |
 
 
 #### IsRunningResponse
@@ -351,11 +377,12 @@ Response for the camera permission status.
 
 Data for a detected barcode.
 
-| Prop               | Type                                                  | Description                                                  |
-| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------ |
-| **`value`**        | <code>string</code>                                   | The decoded string value of the barcode                      |
-| **`type`**         | <code>string</code>                                   | The type/format of the barcode (e.g., 'qr', 'code128', etc.) |
-| **`boundingRect`** | <code><a href="#boundingrect">BoundingRect</a></code> | The bounding rectangle of the barcode in the camera frame.   |
+| Prop               | Type                                                  | Description                                                      |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------- |
+| **`value`**        | <code>string</code>                                   | The decoded string value of the barcode                          |
+| **`displayValue`** | <code>string</code>                                   | The display value of the barcode (may differ from the raw value) |
+| **`type`**         | <code>string</code>                                   | The type/format of the barcode (e.g., 'qr', 'code128', etc.)     |
+| **`boundingRect`** | <code><a href="#boundingrect">BoundingRect</a></code> | The bounding rectangle of the barcode in the camera frame.       |
 
 
 #### BoundingRect

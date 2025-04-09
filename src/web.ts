@@ -157,6 +157,13 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /**
+   * Web implementation already uses images from the video stream, so this is the same as `capture()`
+   */
+  async captureSample(options: { quality: number }): Promise<CaptureResponse> {
+    return this.capture(options);
+  }
+
+  /**
    * Flip between front and back camera
    */
   public async flipCamera(): Promise<void> {

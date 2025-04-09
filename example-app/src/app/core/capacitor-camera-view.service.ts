@@ -72,6 +72,15 @@ export class CapacitorCameraViewService {
   }
 
   /**
+   * Capture a sample from the camera view
+   * @param quality The quality of the sample (0-100)
+   * @returns A base64 encoded string of the captured sample
+   */
+  async captureSample(quality: number = 90): Promise<string> {
+    return (await this.#cameraView.captureSample({ quality })).photo;
+  }
+
+  /**
    * Get a list of available camera devices
    * @returns Array of available camera devices
    */

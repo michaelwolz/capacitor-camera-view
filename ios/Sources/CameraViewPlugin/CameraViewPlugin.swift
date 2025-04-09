@@ -28,6 +28,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isRunning", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "captureSample", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getAvailableDevices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "flipCamera", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getZoom", returnType: CAPPluginReturnPromise),
@@ -129,6 +130,36 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
                 "photo": imageData.base64EncodedString()
             ])
         })
+    }
+
+    @objc func captureSample(_ call: CAPPluginCall) {
+        let quality = call.getDouble("quality", 90.0)
+
+        guard quality >= 0.0 && quality <= 100.0 else {
+            call.reject("Quality must be between 0 and 100")
+            return
+        }
+
+        implementation.captureSnapshot() { (image, error) in
+            if let error = error {
+                call.reject("Failed to capture frame", nil, error)
+                return
+            }
+
+            guard let image = image else {
+                call.reject("No frame data", nil, nil)
+                return
+            }
+
+            guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
+                call.reject("Failed to compress image", nil, nil)
+                return
+            }
+
+            call.resolve([
+                "photo": imageData.base64EncodedString()
+            ])
+        }
     }
 
     @objc func getAvailableDevices(_ call: CAPPluginCall) {

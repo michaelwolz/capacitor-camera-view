@@ -67,6 +67,17 @@
         }
       </ion-fab-button>
     </ion-fab>
+
+    <ion-fab
+      class="capture-sample"
+      slot="fixed"
+      horizontal="end"
+      vertical="bottom"
+    >
+      <ion-fab-button (click)="captureSample()" size="small">
+        <ion-icon name="aperture"></ion-icon>
+      </ion-fab-button>
+    </ion-fab>
   }
 
   <div #barcodeRect class="barcode-rect"></div>

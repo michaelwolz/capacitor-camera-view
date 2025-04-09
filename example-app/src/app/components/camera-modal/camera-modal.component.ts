@@ -189,6 +189,23 @@ export class CameraModalComponent implements OnInit {
     this.isCapturingPhoto.set(false);
   }
 
+  protected async captureSample(): Promise<void> {
+    this.isCapturingPhoto.set(true);
+    try {
+      const photo = await this.#cameraViewService.captureSample();
+      this.#modalController.dismiss({ photo });
+    } catch (error) {
+      console.error('Failed to capture sample', error);
+      this.#modalController.dismiss();
+    }
+
+    this.stopCamera().catch((error) => {
+      console.error('Failed to stop camera', error);
+    });
+
+    this.isCapturingPhoto.set(false);
+  }
+
   protected async flipCamera(): Promise<void> {
     await this.#cameraViewService.flipCamera();
   }

@@ -36,6 +36,23 @@ export interface CameraViewPlugin {
   capture(options: { quality: number }): Promise<CaptureResponse>;
 
   /**
+   * Captures a frame from the current camera preview without using the full camera capture pipeline.
+   *
+   * Unlike `capture()` which may trigger hardware-level photo capture on native platforms,
+   * this method quickly samples the current video stream. This is suitable computer vision or
+   * simple snapshots where high fidelity is not required.
+   *
+   * On web this method does exactly the same as `capture()` as it only captures a frame from the video stream
+   * because unfortunately [ImageCapture API](https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture) is 
+   * not yet well supported on the web.
+   *
+   * @param options - Capture configuration options
+   * @param options.quality - The JPEG quality of the captured sample on a scale of 0-100
+   * @returns A promise that resolves with an object containing a base64 encoded string of the captured sample
+   */
+  captureSample(options: { quality: number }): Promise<CaptureResponse>;
+
+  /**
    * Switch between front and back camera.
    *
    * @returns A promise that resolves when the camera has been flipped

@@ -66,10 +66,12 @@ class CameraView {
     ) {
         val webView = plugin.bridge.webView
         val context = webView.context
-        val lifecycleOwner = context as? LifecycleOwner ?: run {
-            callback(Exception("WebView context must be a LifecycleOwner"))
-            return
-        }
+        val lifecycleOwner =
+            context as? LifecycleOwner
+                ?: run {
+                    callback(Exception("WebView context must be a LifecycleOwner"))
+                    return
+                }
 
         // Store references for later use
         this.webView = webView
@@ -78,10 +80,11 @@ class CameraView {
 
         // Apply base configuration
         this.enableBarcodeDetection = config.enableBarcodeDetection
-        this.currentCameraSelector = when (config.position) {
-            "front" -> CameraSelector.DEFAULT_FRONT_CAMERA
-            else -> CameraSelector.DEFAULT_BACK_CAMERA
-        }
+        this.currentCameraSelector =
+            when (config.position) {
+                "front" -> CameraSelector.DEFAULT_FRONT_CAMERA
+                else -> CameraSelector.DEFAULT_BACK_CAMERA
+            }
         this.zoomFactor = config.zoomFactor.toFloat()
 
         mainHandler.post {
@@ -133,10 +136,12 @@ class CameraView {
 
     /** Capture a photo with the current camera configuration */
     fun capturePhoto(quality: Int?, callback: (String?, Exception?) -> Unit) {
-        val controller = this.cameraController ?: run {
-            callback(null, Exception("Camera controller not initialized"))
-            return
-        }
+        val controller =
+            this.cameraController
+                ?: run {
+                    callback(null, Exception("Camera controller not initialized"))
+                    return
+                }
 
         mainHandler.post {
             try {
@@ -168,36 +173,70 @@ class CameraView {
         }
     }
 
-    /** Flip between front and back cameras */
-    fun flipCamera(callback: (Exception?) -> Unit) {
-        currentCameraSelector = when (currentCameraSelector) {
-            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
-            else -> CameraSelector.DEFAULT_FRONT_CAMERA
-        }
-
-        val controller = this.cameraController ?: run {
-            callback(Exception("Camera controller not initialized"))
-            return
-        }
+    /**
+     * Capture a frame directly from the preview without using the full photo pipeline which is
+     * faster but has lower quality.
+     */
+    fun captureSampleFromPreview(quality: Int?, callback: (String?, Exception?) -> Unit) {
+        val previewView =
+            this.previewView
+                ?: run {
+                    callback(null, Exception("Camera preview not initialized"))
+                    return
+                }
 
         mainHandler.post {
-            controller.cameraSelector = currentCameraSelector
+            try {
+                val bitmap =
+                    previewView.bitmap
+                        ?: run {
+                            callback(null, Exception("Preview bitmap not available"))
+                            return@post
+                        }
+
+                // Convert bitmap to Base64
+                val outputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
+                val byteArray = outputStream.toByteArray()
+                val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+                callback(base64String, null)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error capturing preview frame", e)
+                callback(null, e)
+            }
         }
+    }
+
+    /** Flip between front and back cameras */
+    fun flipCamera(callback: (Exception?) -> Unit) {
+        currentCameraSelector =
+            when (currentCameraSelector) {
+                CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
+                else -> CameraSelector.DEFAULT_FRONT_CAMERA
+            }
+
+        val controller =
+            this.cameraController
+                ?: run {
+                    callback(Exception("Camera controller not initialized"))
+                    return
+                }
+
+        mainHandler.post { controller.cameraSelector = currentCameraSelector }
     }
 
     /** Get the min, max, and current zoom values */
     fun getSupportedZoomFactors(callback: (ZoomFactors) -> Unit) {
-        mainHandler.post {
-            callback(getZoomFactorsInternal())
-        }
+        mainHandler.post { callback(getZoomFactorsInternal()) }
     }
 
     /** Set the zoom factor for the camera */
     fun setZoomFactor(factor: Double) {
         mainHandler.post {
-            val cameraControl = cameraController?.cameraControl ?: run {
-                throw Exception("Camera controller not initialized")
-            }
+            val cameraControl =
+                cameraController?.cameraControl
+                    ?: run { throw Exception("Camera controller not initialized") }
 
             val availableZoomFactors = getZoomFactorsInternal()
             val zoomFactor =
@@ -219,10 +258,12 @@ class CameraView {
     /** Get supported flash modes */
     fun getSupportedFlashModes(callback: (supportedFlashModes: List<String>) -> Unit) {
         mainHandler.post {
-            val cameraInfo = cameraController?.cameraInfo ?: run {
-                callback(listOf("off"))
-                return@post
-            }
+            val cameraInfo =
+                cameraController?.cameraInfo
+                    ?: run {
+                        callback(listOf("off"))
+                        return@post
+                    }
 
             callback(
                 if (cameraInfo.hasFlashUnit()) {
@@ -236,9 +277,9 @@ class CameraView {
 
     /** Set the flash mode */
     fun setFlashMode(mode: String) {
-        val controller = this.cameraController ?: run {
-            throw Exception("Camera controller not initialized")
-        }
+        val controller =
+            this.cameraController
+                ?: run { throw Exception("Camera controller not initialized") }
 
         currentFlashMode =
             when (mode) {
@@ -247,9 +288,7 @@ class CameraView {
                 else -> ImageCapture.FLASH_MODE_OFF
             }
 
-        mainHandler.post {
-            controller.imageCaptureFlashMode = currentFlashMode
-        }
+        mainHandler.post { controller.imageCaptureFlashMode = currentFlashMode }
     }
 
     /** Get a list of available camera devices */
@@ -257,19 +296,21 @@ class CameraView {
         val context = webView?.context ?: return emptyList()
 
         try {
-            val cameraManager = context.getSystemService(CAMERA_SERVICE) as? CameraManager
-                ?: return emptyList()
+            val cameraManager =
+                context.getSystemService(CAMERA_SERVICE) as? CameraManager ?: return emptyList()
 
             return cameraManager.cameraIdList.mapNotNull { cameraId ->
                 val characteristics = cameraManager.getCameraCharacteristics(cameraId)
                 val facing =
-                    characteristics.get(CameraCharacteristics.LENS_FACING) ?: return@mapNotNull null
+                    characteristics.get(CameraCharacteristics.LENS_FACING)
+                        ?: return@mapNotNull null
 
-                val position = when (facing) {
-                    CameraCharacteristics.LENS_FACING_FRONT -> "front"
-                    CameraCharacteristics.LENS_FACING_BACK -> "back"
-                    else -> "external"
-                }
+                val position =
+                    when (facing) {
+                        CameraCharacteristics.LENS_FACING_FRONT -> "front"
+                        CameraCharacteristics.LENS_FACING_BACK -> "back"
+                        else -> "external"
+                    }
 
                 CameraDevice(
                     id = cameraId,
@@ -325,10 +366,11 @@ class CameraView {
 
         previewView =
             PreviewView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                 implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
@@ -345,23 +387,28 @@ class CameraView {
         setupPreviewView(context)
 
         // Initialize camera controller
-        val controller = LifecycleCameraController(context).apply {
-            cameraSelector = if (config.position == "front") {
-                CameraSelector.DEFAULT_FRONT_CAMERA
-            } else {
-                CameraSelector.DEFAULT_BACK_CAMERA
-            }
+        val controller =
+            LifecycleCameraController(context).apply {
+                cameraSelector =
+                    if (config.position == "front") {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    } else {
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    }
 
-            // Image capture configuration
-            imageCaptureResolutionSelector = ResolutionSelector.Builder()
-                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-                .build()
+                // Image capture configuration
+                imageCaptureResolutionSelector =
+                    ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(
+                            AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+                        )
+                        .build()
 
-            // Set the initial zoom
-            if (config.zoomFactor != 1.0) {
-                cameraControl?.setZoomRatio(config.zoomFactor.toFloat())
+                // Set the initial zoom
+                if (config.zoomFactor != 1.0) {
+                    cameraControl?.setZoomRatio(config.zoomFactor.toFloat())
+                }
             }
-        }
 
         cameraController = controller
         previewView?.controller = controller
@@ -379,9 +426,10 @@ class CameraView {
         val previewView = this.previewView ?: return
         val context = webView?.context ?: return
 
-        val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-            .build()
+        val options =
+            BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                .build()
 
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(context)
@@ -408,17 +456,15 @@ class CameraView {
 
         val barcode = barcodes.firstOrNull() ?: return
 
-        val webBoundingRect = boundingBoxToWebBoundingRect(
-            previewView,
-            barcode.boundingBox
-        )
+        val webBoundingRect = boundingBoxToWebBoundingRect(previewView, barcode.boundingBox)
 
-        val barcodeResult = BarcodeDetectionResult(
-            value = barcode.rawValue ?: "",
-            displayValue = barcode.displayValue ?: "",
-            type = getBarcodeFormatString(barcode.format),
-            boundingRect = webBoundingRect
-        )
+        val barcodeResult =
+            BarcodeDetectionResult(
+                value = barcode.rawValue ?: "",
+                displayValue = barcode.displayValue ?: "",
+                type = getBarcodeFormatString(barcode.format),
+                boundingRect = webBoundingRect
+            )
 
         notifyBarcodeDetected(barcodeResult)
     }
@@ -462,11 +508,12 @@ class CameraView {
     private fun getZoomFactorsInternal(): ZoomFactors {
         cameraController?.let { controller ->
             val cameraInfo = controller.cameraInfo
-            val zoomFactors = ZoomFactors(
-                min = 1.0f,
-                max = cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5.0f,
-                current = cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
-            )
+            val zoomFactors =
+                ZoomFactors(
+                    min = 1.0f,
+                    max = cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5.0f,
+                    current = cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
+                )
             return zoomFactors
         }
 

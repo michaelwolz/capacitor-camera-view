@@ -5,6 +5,7 @@ import Foundation
 @objc public class CameraViewManager: NSObject {
     internal let captureSession = AVCaptureSession()
     internal let avPhotoOutput = AVCapturePhotoOutput()
+    internal let avVideoDataOutput = AVCaptureVideoDataOutput()
 
     internal let videoPreviewLayer = AVCaptureVideoPreviewLayer()
 
@@ -22,6 +23,9 @@ import Foundation
 
     /// Callback for when photo capture completes.
     internal var photoCaptureHandler: ((UIImage?, Error?) -> Void)?
+
+    /// Callback for when snapshot capture completes.
+    internal var snapshotCompletionHandler: ((UIImage?, Error?) -> Void)?
 
     public override init() {
         super.init()
@@ -130,6 +134,38 @@ import Foundation
 
         avPhotoOutput.capturePhoto(with: photoSettings, delegate: self)
         photoCaptureHandler = completion
+    }
+
+    /// Capture a snapshot of the current camera view. This is faster than actually processing a
+    /// photo via capturePhoto
+    /// - Parameter completion: called with the captured UIImage or an error.
+    public func captureSnapshot(completion: @escaping (UIImage?, Error?) -> Void) {
+        guard let cameraDevice = currentCameraDevice else {
+            completion(nil, CameraError.cameraUnavailable)
+            return
+        }
+
+        guard captureSession.isRunning else {
+            completion(nil, CameraError.sessionNotRunning)
+            return
+        }
+
+        // Create a serial queue for sample buffer processing
+        let sampleBufferQueue = DispatchQueue(label: "com.michaelwolz.capacitorcameraview.snapshotQueue")
+
+        // Set the delegate for a single frame capture
+        snapshotCompletionHandler = completion
+        avVideoDataOutput.setSampleBufferDelegate(self, queue: sampleBufferQueue)
+
+        // Ensure proper orientation
+        if let connection = avVideoDataOutput.connection(with: .video) {
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = videoPreviewLayer.connection?.videoOrientation ?? .portrait
+            }
+            if connection.isVideoMirroringSupported && cameraDevice.position == .front {
+                connection.isVideoMirrored = true
+            }
+        }
     }
 
     public func setCameraById(_ cameraId: String) throws {
@@ -260,6 +296,9 @@ import Foundation
 
         // Set up the photo output
         try setupPhotoOutput()
+
+        // Set up the video data output for snapshots
+        try setupVideoDataOutput()
 
         // Setup metadata output for QR code scanning if enabled
         if configuration.enableBarcodeDetection {

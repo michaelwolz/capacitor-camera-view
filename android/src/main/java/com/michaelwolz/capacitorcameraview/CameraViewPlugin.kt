@@ -73,16 +73,34 @@ class CameraViewPlugin : Plugin() {
     @PluginMethod
     fun capture(call: PluginCall) {
         val quality = call.getInt("quality", 90)
-        
+
         if (quality !in 0..100) {
             call.reject("Quality must be between 0 and 100")
             return
         }
-        
+
         implementation.capturePhoto(quality) { photo, error ->
             when {
                 error != null -> call.reject("Failed to capture image: ${error.message}", error)
                 photo == null -> call.reject("No image data")
+                else -> call.resolve(JSObject().apply { put("photo", photo) })
+            }
+        }
+    }
+
+    @PluginMethod
+    fun captureSample(call: PluginCall) {
+        val quality = call.getInt("quality", 90)
+
+        if (quality !in 0..100) {
+            call.reject("Quality must be between 0 and 100")
+            return
+        }
+
+        implementation.captureSampleFromPreview(quality) { photo, error ->
+            when {
+                error != null -> call.reject("Failed to capture frame: ${error.message}", error)
+                photo == null -> call.reject("No frame data")
                 else -> call.resolve(JSObject().apply { put("photo", photo) })
             }
         }
