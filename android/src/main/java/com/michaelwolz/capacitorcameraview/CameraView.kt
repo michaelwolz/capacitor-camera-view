@@ -7,9 +7,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.location.GnssAntennaInfo.PhaseCenterOffset
 import android.util.Base64
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewGroup.MarginLayoutParams
 import android.webkit.WebView
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -22,6 +25,9 @@ import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.view.OnApplyWindowInsetsListener
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
@@ -35,6 +41,7 @@ import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
 
 /** Throttle time for barcode detection in milliseconds. */
 const val BARCODE_DETECTION_THROTTLE_MS = 100
@@ -453,8 +460,9 @@ class CameraView {
     }
 
     private fun setupBarcodeScanner(controller: LifecycleCameraController) {
+        val webView = this.webView ?: return
         val previewView = this.previewView ?: return
-        val context = webView?.context ?: return
+        val context = webView.context ?: return
 
         val options =
             BarcodeScannerOptions.Builder()
@@ -464,6 +472,13 @@ class CameraView {
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(context)
 
+        // Calcualte a possible top offset of the webView which is not applied to the previewView and
+        // might break the positioning of the bounding box of the barcode in relation to the webView
+        // This is due to capacitors required hack around the edge-to-edge behavior of web views on android
+        val topOffset = calculateTopOffset(webView)
+
+        Log.d(TAG, "Top offset: $topOffset")
+
         controller.setImageAnalysisAnalyzer(
             mainExecutor,
             MlKitAnalyzer(
@@ -471,7 +486,7 @@ class CameraView {
                 ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED,
                 mainExecutor
             ) { result: MlKitAnalyzer.Result? ->
-                processBarcodeResults(result, barcodeScanner, previewView)
+                processBarcodeResults(result, barcodeScanner, previewView, topOffset)
             }
         )
     }
@@ -479,7 +494,8 @@ class CameraView {
     private fun processBarcodeResults(
         result: MlKitAnalyzer.Result?,
         barcodeScanner: BarcodeScanner,
-        previewView: PreviewView
+        previewView: PreviewView,
+        topOffset: Int
     ) {
         val now = System.currentTimeMillis()
         if (now - lastBarcodeDetectionTime < BARCODE_DETECTION_THROTTLE_MS) {
@@ -491,7 +507,7 @@ class CameraView {
 
         val barcode = barcodes.firstOrNull() ?: return
 
-        val webBoundingRect = boundingBoxToWebBoundingRect(previewView, barcode.boundingBox)
+        val webBoundingRect = boundingBoxToWebBoundingRect(previewView, barcode.boundingBox, topOffset)
 
         val barcodeResult =
             BarcodeDetectionResult(

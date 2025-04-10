@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'example-app',
   webDir: 'www',
   android: {
-    adjustMarginsForEdgeToEdge: 'disable'
+    adjustMarginsForEdgeToEdge: 'disable',
   },
 };
 
