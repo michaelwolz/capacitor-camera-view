@@ -43,6 +43,18 @@
       <ion-fab-button size="small" (click)="flipCamera()">
         <ion-icon name="camera-reverse"></ion-icon>
       </ion-fab-button>
+
+      <ion-fab-button [disabled]="!canZoomIn()" size="small" (click)="zoomIn()">
+        <ion-icon name="add"></ion-icon>
+      </ion-fab-button>
+
+      <ion-fab-button
+        [disabled]="!canZoomOut()"
+        size="small"
+        (click)="zoomOut()"
+      >
+        <ion-icon name="remove"></ion-icon>
+      </ion-fab-button>
     </ion-fab>
 
     @if (detectedBarcode()) {

@@ -223,10 +223,11 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
    * Get current zoom information (web has limited zoom support)
    */
   public async getZoom(): Promise<GetZoomResponse> {
-    // Web has limited zoom capabilities in most browsers
+    // Web has limited zoom capabilities in most browsers,
+    // we fake zoomin by scaling the video element
     return {
       min: 1.0,
-      max: 1.0,
+      max: 3.0,
       current: this.currentZoom,
     };
   }
@@ -240,7 +241,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
     // Apply visual zoom using CSS transform when native zoom isn't supported
     if (this.videoElement) {
-      // Calculate scale based on requested zoom
+      this.videoElement.style.transition = options.ramp ? 'transform 0.2s ease-in-out' : 'none';
       const scale = Math.max(1.0, Math.min(options.level, 3.0)); // Limit scale to reasonable bounds
       this.videoElement.style.transform = `scale(${scale})`;
       this.videoElement.style.transformOrigin = 'center';

@@ -146,17 +146,18 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun setZoom(call: PluginCall) {
-        val level = call.getDouble("level")
+        val level = call.getFloat("level")
         if (level == null) {
             call.reject("Zoom level must be provided")
             return
         }
 
-        try {
-            implementation.setZoomFactor(level)
-            call.resolve()
-        } catch (e: Exception) {
-            call.reject("Failed to set zoom level: ${e.localizedMessage}", e)
+        implementation.setZoomFactor(level) { error ->
+            if (error != null) {
+                call.reject(error.localizedMessage)
+            } else {
+                call.resolve()
+            }
         }
     }
 

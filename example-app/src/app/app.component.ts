@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  add,
   aperture,
   cameraOutline,
   cameraReverse,
@@ -11,8 +12,8 @@ import {
   flash,
   flashOff,
   imagesSharp,
-  qrCode,
   qrCodeOutline,
+  remove,
   search,
   searchOutline,
   sunny,
@@ -27,20 +28,22 @@ import {
 export class AppComponent {
   constructor() {
     addIcons({
+      add,
       aperture,
-      cameraSharp,
       cameraOutline,
-      imagesSharp,
-      sunnyOutline,
-      sunny,
-      searchOutline,
-      search,
+      cameraReverse,
+      cameraSharp,
       close,
+      closeCircle,
       flash,
       flashOff,
-      cameraReverse,
+      imagesSharp,
       qrCodeOutline,
-      closeCircle
+      remove,
+      search,
+      searchOutline,
+      sunny,
+      sunnyOutline,
     });
   }
 }

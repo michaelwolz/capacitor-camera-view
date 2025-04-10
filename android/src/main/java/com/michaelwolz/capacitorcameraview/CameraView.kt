@@ -36,6 +36,9 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/** Throttle time for barcode detection in milliseconds. */
+const val BARCODE_DETECTION_THROTTLE_MS = 100
+
 class CameraView {
     // Camera components
     private var cameraController: LifecycleCameraController? = null
@@ -59,7 +62,6 @@ class CameraView {
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     private var lastBarcodeDetectionTime = 0L
-    private val BARCODE_DETECTION_THROTTLE_MS = 100 
 
     /** Starts a camera session with the provided configuration. */
     fun startSession(
@@ -237,17 +239,40 @@ class CameraView {
     }
 
     /** Set the zoom factor for the camera */
-    fun setZoomFactor(factor: Double) {
+    fun setZoomFactor(zoomFactor: Float, callback: ((Exception?) -> Unit)) {
+        val context = webView?.context ?: run {
+            callback(Exception("Context not available"))
+            return;
+        }
+
         mainHandler.post {
-            val cameraControl =
-                cameraController?.cameraControl
-                    ?: run { throw Exception("Camera controller not initialized") }
+            val cameraControl = cameraController?.cameraControl ?: run {
+                callback(Exception("Camera controller not initialized"))
+                return@post
+            }
 
             val availableZoomFactors = getZoomFactorsInternal()
-            val zoomFactor =
-                factor.toFloat().coerceIn(availableZoomFactors.min, availableZoomFactors.max)
 
-            cameraControl.setZoomRatio(zoomFactor)
+            if (zoomFactor !in availableZoomFactors.min..availableZoomFactors.max) {
+                callback(Exception("The requested zoom factor is out of range."))
+            }
+
+            Log.d(TAG, "Setting zoom factor to $zoomFactor")
+            val zoomFuture = cameraControl.setZoomRatio(zoomFactor)
+
+            zoomFuture.addListener(
+                {
+                    try {
+                        zoomFuture.get()
+                        Log.d(TAG, "Zoom factor set successfully to $zoomFactor")
+                        this.zoomFactor = zoomFactor
+                        callback(null)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to set zoom factor", e)
+                        callback(Exception(e.message))
+                    }
+                }, ContextCompat.getMainExecutor(context)
+            )
         }
     }
 
@@ -336,7 +361,7 @@ class CameraView {
                 // Stop camera session
                 cameraController?.unbind()
                 cameraController = null
-                
+
                 // Remove preview view
                 previewView?.let { view ->
                     (webView?.parent as? ViewGroup)?.removeView(view)
@@ -521,17 +546,17 @@ class CameraView {
     /** Get the current zoom factors */
     private fun getZoomFactorsInternal(): ZoomFactors {
         cameraController?.let { controller ->
-            val cameraInfo = controller.cameraInfo
-            val zoomFactors =
-                ZoomFactors(
-                    min = 1.0f,
-                    max = cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5.0f,
-                    current = cameraInfo?.zoomState?.value?.zoomRatio ?: 1.0f
-                )
+            val zoomState = controller.zoomState
+            val zoomFactors = ZoomFactors(
+                min = zoomState.value?.minZoomRatio ?: 1.0f,
+                max = zoomState.value?.maxZoomRatio ?: 1.0f,
+                current = zoomState.value?.zoomRatio ?: 1.0f
+            )
+
             return zoomFactors
         }
 
-        return ZoomFactors(1.0f, 5.0f, 1.0f)
+        return ZoomFactors(1.0f, 1.0f, 1.0f)
     }
 
     companion object {

@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   effect,
   ElementRef,
   inject,
@@ -79,6 +80,17 @@ export class CameraModalComponent implements OnInit {
 
   protected readonly flashMode = signal<FlashMode>('auto');
   protected readonly isCapturingPhoto = signal(false);
+  protected readonly currentZoomFactor = signal(this.initialZoomFactor());
+  protected readonly minZoom = signal(1.0);
+  protected readonly maxZoom = signal(10.0)
+
+  protected readonly canZoomIn = computed(() => {
+    return this.currentZoomFactor() + 0.5 <= this.maxZoom(); 
+  });
+
+  protected readonly canZoomOut = computed(() => {
+    return this.currentZoomFactor() - 0.5 >= this.minZoom(); 
+  });
 
   protected readonly detectedBarcode = toSignal(
     this.#cameraViewService.barcodeData.pipe(
@@ -94,11 +106,8 @@ export class CameraModalComponent implements OnInit {
 
   #supportedFlashModes = signal<Array<FlashMode>>(['off']);
 
-  #currentZoomFactor = this.initialZoomFactor();
   #touchStartDistance = 0;
-  #initialZoomFactorOnPinch = 1.0;
-  #minZoom = 1.0;
-  #maxZoom = 10.0;
+  #initialZoomFactorOnPinch = 1.0;;
 
   constructor() {
     effect(() => {
@@ -223,25 +232,40 @@ export class CameraModalComponent implements OnInit {
     await this.#cameraViewService.setFlashMode(nextFlashMode);
   }
 
+  protected async zoomIn(): Promise<void> {
+    if (this.canZoomIn()) {
+      this.currentZoomFactor.update(curr => curr + 0.5);
+      await this.#cameraViewService.setZoom(this.currentZoomFactor(), true);
+    }
+  }
+
+  protected async zoomOut(): Promise<void> {
+    if (this.canZoomOut()) {
+      this.currentZoomFactor.update(curr => curr - 0.5);
+      await this.#cameraViewService.setZoom(this.currentZoomFactor(), true);
+    }
+  }
+
   protected async readBarcode(): Promise<void> {
     await this.stopCamera();
     await this.#modalController.dismiss({ barcode: this.detectedBarcode() });
   }
 
   async #setZoom(zoomFactor: number): Promise<void> {
-    this.#currentZoomFactor = zoomFactor;
+    this.currentZoomFactor.set(zoomFactor);
     await this.#cameraViewService.setZoom(zoomFactor, false);
   }
 
   async #initializeZoomLimits(): Promise<void> {
     try {
       const zoomRange = await this.#cameraViewService.getZoom();
+      console.log('Zoom range:', zoomRange);
       if (zoomRange) {
-        this.#minZoom = zoomRange.min;
-        this.#maxZoom = zoomRange.max;
+        this.minZoom.set(zoomRange.min);
+        this.maxZoom.set(zoomRange.max);
       }
     } catch (error) {
-      console.warn('Failed to get zoom range, using default values', error);
+      console.warn('Failed to get zoom range, using default values.', error);
     }
   }
 
@@ -281,7 +305,7 @@ export class CameraModalComponent implements OnInit {
     if (event.touches.length < 2) return;
 
     this.#touchStartDistance = getDistance(event.touches[0], event.touches[1]);
-    this.#initialZoomFactorOnPinch = this.#currentZoomFactor;
+    this.#initialZoomFactorOnPinch = this.currentZoomFactor();
   }
 
   #handleTouchMove(event: TouchEvent): void {
@@ -292,8 +316,8 @@ export class CameraModalComponent implements OnInit {
     // Calculate new zoom factor
     const scale = currentDistance / this.#touchStartDistance;
     const newZoomFactor = Math.max(
-      this.#minZoom,
-      Math.min(this.#maxZoom, this.#initialZoomFactorOnPinch * scale),
+      this.minZoom(),
+      Math.min(this.maxZoom(), this.#initialZoomFactorOnPinch * scale),
     );
 
     this.#setZoom(newZoomFactor);
