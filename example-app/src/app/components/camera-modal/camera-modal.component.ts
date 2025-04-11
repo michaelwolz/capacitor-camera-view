@@ -217,6 +217,7 @@ export class CameraModalComponent implements OnInit {
 
   protected async flipCamera(): Promise<void> {
     await this.#cameraViewService.flipCamera();
+    await this.#initializeZoomLimits();
   }
 
   protected async nextFlashMode(): Promise<void> {

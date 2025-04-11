@@ -11,6 +11,9 @@ import android.util.Base64
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -36,7 +39,6 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-
 /** Throttle time for barcode detection in milliseconds. */
 const val BARCODE_DETECTION_THROTTLE_MS = 100
 
@@ -49,8 +51,6 @@ class CameraView(plugin: Plugin) {
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
-    private var enableBarcodeDetection = false
-    private var zoomFactor = 1.0f
 
     // Camera use cases
     private var imageCapture: ImageCapture? = null
@@ -66,10 +66,7 @@ class CameraView(plugin: Plugin) {
     private var lastBarcodeDetectionTime = 0L
 
     /** Starts a camera session with the provided configuration. */
-    fun startSession(
-        config: CameraSessionConfiguration,
-        callback: (Exception?) -> Unit
-    ) {
+    fun startSession(config: CameraSessionConfiguration, callback: (Exception?) -> Unit) {
         val lifecycleOwner =
             context as? LifecycleOwner
                 ?: run {
@@ -79,15 +76,6 @@ class CameraView(plugin: Plugin) {
 
         // Store references for later use
         this.lifecycleOwner = lifecycleOwner
-
-        // Apply base configuration
-        this.enableBarcodeDetection = config.enableBarcodeDetection
-        this.currentCameraSelector =
-            when (config.position) {
-                "front" -> CameraSelector.DEFAULT_FRONT_CAMERA
-                else -> CameraSelector.DEFAULT_BACK_CAMERA
-            }
-        this.zoomFactor = config.zoomFactor.toFloat()
 
         mainHandler.post {
             try {
@@ -213,11 +201,10 @@ class CameraView(plugin: Plugin) {
 
     /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
-        currentCameraSelector =
-            when (currentCameraSelector) {
-                CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
-                else -> CameraSelector.DEFAULT_FRONT_CAMERA
-            }
+        currentCameraSelector = when (currentCameraSelector) {
+            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
+            else -> CameraSelector.DEFAULT_FRONT_CAMERA
+        }
 
         val controller =
             this.cameraController
@@ -237,10 +224,12 @@ class CameraView(plugin: Plugin) {
     /** Set the zoom factor for the camera */
     fun setZoomFactor(zoomFactor: Float, callback: (((Exception?) -> Unit)?) = null) {
         mainHandler.post {
-            val cameraControl = cameraController?.cameraControl ?: run {
-                callback?.invoke(Exception("Camera controller not initialized"))
-                return@post
-            }
+            val cameraControl =
+                cameraController?.cameraControl
+                    ?: run {
+                        callback?.invoke(Exception("Camera controller not initialized"))
+                        return@post
+                    }
 
             val availableZoomFactors = getZoomFactorsInternal()
 
@@ -257,13 +246,13 @@ class CameraView(plugin: Plugin) {
                     try {
                         zoomFuture.get()
                         Log.d(TAG, "Zoom factor set successfully to $zoomFactor")
-                        this.zoomFactor = zoomFactor
                         callback?.invoke(null)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to set zoom factor", e)
                         callback?.invoke(Exception(e.message))
                     }
-                }, ContextCompat.getMainExecutor(context)
+                },
+                ContextCompat.getMainExecutor(context)
             )
         }
     }
@@ -332,11 +321,7 @@ class CameraView(plugin: Plugin) {
                         else -> "external"
                     }
 
-                CameraDevice(
-                    id = cameraId,
-                    name = cameraId,
-                    position = position
-                )
+                CameraDevice(id = cameraId, name = cameraId, position = position)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting camera devices", e)
@@ -396,6 +381,7 @@ class CameraView(plugin: Plugin) {
         (webView.parent as? ViewGroup)?.addView(previewView, 0)
     }
 
+    @OptIn(ExperimentalCamera2Interop::class)
     private fun initializeCamera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
@@ -404,24 +390,33 @@ class CameraView(plugin: Plugin) {
         // Setup preview view
         setupPreviewView(context)
 
-        // Initialize camera controller
-        val controller =
-            LifecycleCameraController(context).apply {
-                cameraSelector =
-                    if (config.position == "front") {
-                        CameraSelector.DEFAULT_FRONT_CAMERA
-                    } else {
-                        CameraSelector.DEFAULT_BACK_CAMERA
-                    }
+        currentCameraSelector = if (config.position == "front") {
+            CameraSelector.DEFAULT_FRONT_CAMERA
+        } else {
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }
 
-                // Image capture configuration
-                imageCaptureResolutionSelector =
-                    ResolutionSelector.Builder()
-                        .setAspectRatioStrategy(
-                            AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
-                        )
-                        .build()
-            }
+        if (config.deviceId != null) {
+            // Prefer specific device id over position
+            currentCameraSelector = CameraSelector.Builder()
+                .addCameraFilter { cameraInfos ->
+                    cameraInfos.filter { info ->
+                        val cameraId = Camera2CameraInfo.from(info).cameraId
+                        cameraId == config.deviceId
+                    }
+                }
+                .build()
+        }
+
+        // Initialize camera controller
+        val controller = LifecycleCameraController(context).apply {
+            cameraSelector = currentCameraSelector
+            imageCaptureResolutionSelector = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(
+                    AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+                )
+                .build()
+        }
 
         cameraController = controller
         previewView?.controller = controller
@@ -435,7 +430,7 @@ class CameraView(plugin: Plugin) {
         controller.bindToLifecycle(lifecycleOwner)
 
         // Set initial zoom factor
-        this.setZoomFactor(this.zoomFactor)
+        this.setZoomFactor(config.zoomFactor, null)
     }
 
     private fun setupBarcodeScanner(controller: LifecycleCameraController) {
@@ -449,9 +444,11 @@ class CameraView(plugin: Plugin) {
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(previewView.context)
 
-        // Calculate a possible top offset of the webView which is not applied to the previewView and
+        // Calculate a possible top offset of the webView which is not applied to the previewView
+        // and
         // might break the positioning of the bounding box of the barcode in relation to the webView
-        // This is due to capacitors required hack around the edge-to-edge behavior of web views on android
+        // This is due to capacitors required hack around the edge-to-edge behavior of web views on
+        // android
         val topOffset = calculateTopOffset(webView)
 
         Log.d(TAG, "Top offset: $topOffset")
@@ -494,12 +491,13 @@ class CameraView(plugin: Plugin) {
         val webBoundingRect =
             boundingBoxToWebBoundingRect(previewView, barcode.boundingBox, topOffset)
 
-        val barcodeResult = BarcodeDetectionResult(
-            value = barcode.rawValue ?: "",
-            displayValue = barcode.displayValue ?: "",
-            type = getBarcodeFormatString(barcode.format),
-            boundingRect = webBoundingRect
-        )
+        val barcodeResult =
+            BarcodeDetectionResult(
+                value = barcode.rawValue ?: "",
+                displayValue = barcode.displayValue ?: "",
+                type = getBarcodeFormatString(barcode.format),
+                boundingRect = webBoundingRect
+            )
 
         notifyBarcodeDetected(barcodeResult)
         lastBarcodeDetectionTime = now
@@ -547,11 +545,12 @@ class CameraView(plugin: Plugin) {
     private fun getZoomFactorsInternal(): ZoomFactors {
         cameraController?.let { controller ->
             val zoomState = controller.zoomState
-            val zoomFactors = ZoomFactors(
-                min = zoomState.value?.minZoomRatio ?: 1.0f,
-                max = zoomState.value?.maxZoomRatio ?: 1.0f,
-                current = zoomState.value?.zoomRatio ?: 1.0f
-            )
+            val zoomFactors =
+                ZoomFactors(
+                    min = zoomState.value?.minZoomRatio ?: 1.0f,
+                    max = zoomState.value?.maxZoomRatio ?: 1.0f,
+                    current = zoomState.value?.zoomRatio ?: 1.0f
+                )
 
             return zoomFactors
         }

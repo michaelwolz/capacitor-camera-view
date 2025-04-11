@@ -5,6 +5,6 @@ data class CameraSessionConfiguration(
     val deviceId: String? = null,
     val enableBarcodeDetection: Boolean = false,
     val position: String = "back",
-    val zoomFactor: Double = 1.0
+    val zoomFactor: Float = 1.0f
 )
 
