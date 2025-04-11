@@ -84,6 +84,10 @@ export interface CameraViewPlugin {
 
   /**
    * Get current zoom level information and available range.
+   * 
+   * @remarks
+   * Make sure the camera is properly initialized before calling this method. Otherwise, this might 
+   * lead to returning default values on android.
    *
    * @returns A promise that resolves with an object containing min, max and current zoom levels
    * 

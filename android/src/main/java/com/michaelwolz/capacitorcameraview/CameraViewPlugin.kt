@@ -17,7 +17,9 @@ import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
     permissions = [Permission(strings = [Manifest.permission.CAMERA], alias = "camera")]
 )
 class CameraViewPlugin : Plugin() {
-    private val implementation = CameraView()
+    private val implementation by lazy {
+        CameraView(this)
+    }
 
     @PluginMethod
     fun start(call: PluginCall) {
@@ -40,7 +42,6 @@ class CameraViewPlugin : Plugin() {
     private fun startCamera(call: PluginCall) {
         implementation.startSession(
             config = sessionConfigFromPluginCall(call),
-            plugin = this,
             callback = { error ->
                 if (error != null) {
                     call.reject("Failed to start camera preview: ${error.localizedMessage}", error)
@@ -53,13 +54,13 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        implementation.stopSession({ error ->
+        implementation.stopSession { error ->
             if (error != null) {
                 call.reject("Failed to stop camera preview: ${error.localizedMessage}", error)
             } else {
                 call.resolve()
             }
-        })
+        }
     }
 
     @PluginMethod

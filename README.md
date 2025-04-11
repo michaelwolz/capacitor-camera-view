@@ -31,7 +31,7 @@
 - 📸 Capture photos or frames from the camera preview.
 - 🔍 **Barcode detection** support.
 - 🔄 Switch between front and back cameras.
-- 📱 **Virtual triple camera support** for devices with multiple cameras (iOS only).
+- 📱 **Virtual triple camera support** for devices with triple camera (iOS only).
 - 🔎 Control **zoom** and **flash** modes programmatically.
 - ⚡ **High performance** with optimized native implementations.
 - 🎯 **Simple to use** with a clean and intuitive API.
@@ -67,6 +67,10 @@ body.camera-running {
 ## 🧪 Example App
 
 To see the plugin in action, check out the example app in the `example-app` folder. The app demonstrates how to integrate and use the Capacitor Camera View plugin in an Ionic Angular project.
+
+## 🍎 Triple Camera Support for iOS
+
+## 🔍 Barcode Detection
 
 ## API
 

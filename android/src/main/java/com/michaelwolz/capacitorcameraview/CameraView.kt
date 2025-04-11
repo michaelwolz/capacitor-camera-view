@@ -7,27 +7,21 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
-import android.location.GnssAntennaInfo.PhaseCenterOffset
 import android.util.Base64
 import android.util.Log
-import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroup.MarginLayoutParams
 import android.webkit.WebView
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
+import androidx.camera.view.CameraController.COORDINATE_SYSTEM_VIEW_REFERENCED
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import androidx.core.view.OnApplyWindowInsetsListener
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
@@ -46,7 +40,7 @@ import java.util.concurrent.Executors
 /** Throttle time for barcode detection in milliseconds. */
 const val BARCODE_DETECTION_THROTTLE_MS = 100
 
-class CameraView {
+class CameraView(plugin: Plugin) {
     // Camera components
     private var cameraController: LifecycleCameraController? = null
     private val cameraExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
@@ -63,8 +57,9 @@ class CameraView {
 
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
-    private var pluginDelegate: Plugin? = null
-    private var webView: WebView? = null
+    private var pluginDelegate: Plugin = plugin
+    private var webView: WebView = plugin.bridge.webView
+    private var context: Context = webView.context
 
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
@@ -73,11 +68,8 @@ class CameraView {
     /** Starts a camera session with the provided configuration. */
     fun startSession(
         config: CameraSessionConfiguration,
-        plugin: Plugin,
         callback: (Exception?) -> Unit
     ) {
-        val webView = plugin.bridge.webView
-        val context = webView.context
         val lifecycleOwner =
             context as? LifecycleOwner
                 ?: run {
@@ -86,9 +78,7 @@ class CameraView {
                 }
 
         // Store references for later use
-        this.webView = webView
         this.lifecycleOwner = lifecycleOwner
-        this.pluginDelegate = plugin
 
         // Apply base configuration
         this.enableBarcodeDetection = config.enableBarcodeDetection
@@ -102,7 +92,6 @@ class CameraView {
         mainHandler.post {
             try {
                 initializeCamera(context, lifecycleOwner, config)
-
                 callback(null)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in camera setup", e)
@@ -121,7 +110,7 @@ class CameraView {
 
                 previewView?.let { view ->
                     try {
-                        (webView?.parent as? ViewGroup)?.removeView(view)
+                        (webView.parent as? ViewGroup)?.removeView(view)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error removing preview view", e)
                     } finally {
@@ -129,8 +118,8 @@ class CameraView {
                     }
                 }
 
-                webView?.setLayerType(WebView.LAYER_TYPE_NONE, null)
-                webView?.setBackgroundColor(android.graphics.Color.WHITE)
+                webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
+                webView.setBackgroundColor(android.graphics.Color.WHITE)
 
                 Log.d(TAG, "Camera session stopped successfully")
                 callback?.invoke(null)
@@ -246,22 +235,18 @@ class CameraView {
     }
 
     /** Set the zoom factor for the camera */
-    fun setZoomFactor(zoomFactor: Float, callback: ((Exception?) -> Unit)) {
-        val context = webView?.context ?: run {
-            callback(Exception("Context not available"))
-            return;
-        }
-
+    fun setZoomFactor(zoomFactor: Float, callback: (((Exception?) -> Unit)?) = null) {
         mainHandler.post {
             val cameraControl = cameraController?.cameraControl ?: run {
-                callback(Exception("Camera controller not initialized"))
+                callback?.invoke(Exception("Camera controller not initialized"))
                 return@post
             }
 
             val availableZoomFactors = getZoomFactorsInternal()
 
             if (zoomFactor !in availableZoomFactors.min..availableZoomFactors.max) {
-                callback(Exception("The requested zoom factor is out of range."))
+                callback?.invoke(Exception("The requested zoom factor is out of range."))
+                return@post
             }
 
             Log.d(TAG, "Setting zoom factor to $zoomFactor")
@@ -273,10 +258,10 @@ class CameraView {
                         zoomFuture.get()
                         Log.d(TAG, "Zoom factor set successfully to $zoomFactor")
                         this.zoomFactor = zoomFactor
-                        callback(null)
+                        callback?.invoke(null)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to set zoom factor", e)
-                        callback(Exception(e.message))
+                        callback?.invoke(Exception(e.message))
                     }
                 }, ContextCompat.getMainExecutor(context)
             )
@@ -330,8 +315,6 @@ class CameraView {
 
     /** Get a list of available camera devices */
     fun getAvailableDevices(): List<CameraDevice> {
-        val context = webView?.context ?: return emptyList()
-
         try {
             val cameraManager =
                 context.getSystemService(CAMERA_SERVICE) as? CameraManager ?: return emptyList()
@@ -351,7 +334,7 @@ class CameraView {
 
                 CameraDevice(
                     id = cameraId,
-                    name = "Camera $cameraId ($position)",
+                    name = cameraId,
                     position = position
                 )
             }
@@ -371,16 +354,15 @@ class CameraView {
 
                 // Remove preview view
                 previewView?.let { view ->
-                    (webView?.parent as? ViewGroup)?.removeView(view)
+                    (webView.parent as? ViewGroup)?.removeView(view)
                     previewView = null
                 }
 
                 // Reset WebView properties
-                webView?.setLayerType(WebView.LAYER_TYPE_NONE, null)
-                webView?.setBackgroundColor(android.graphics.Color.WHITE)
+                webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
+                webView.setBackgroundColor(android.graphics.Color.WHITE)
 
                 // Clear references
-                webView = null
                 lifecycleOwner = null
                 imageCapture = null
 
@@ -398,8 +380,8 @@ class CameraView {
 
     private fun setupPreviewView(context: Context) {
         // Make WebView transparent
-        webView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        webView?.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+        webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
         previewView =
             PreviewView(context).apply {
@@ -408,17 +390,16 @@ class CameraView {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
 
-        (webView?.parent as? ViewGroup)?.addView(previewView, 0)
+        (webView.parent as? ViewGroup)?.addView(previewView, 0)
     }
 
     private fun initializeCamera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
-        config: CameraSessionConfiguration
+        config: CameraSessionConfiguration,
     ) {
         // Setup preview view
         setupPreviewView(context)
@@ -440,11 +421,6 @@ class CameraView {
                             AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
                         )
                         .build()
-
-                // Set the initial zoom
-                if (config.zoomFactor != 1.0) {
-                    cameraControl?.setZoomRatio(config.zoomFactor.toFloat())
-                }
             }
 
         cameraController = controller
@@ -457,12 +433,13 @@ class CameraView {
 
         // Bind to lifecycle
         controller.bindToLifecycle(lifecycleOwner)
+
+        // Set initial zoom factor
+        this.setZoomFactor(this.zoomFactor)
     }
 
     private fun setupBarcodeScanner(controller: LifecycleCameraController) {
-        val webView = this.webView ?: return
         val previewView = this.previewView ?: return
-        val context = webView.context ?: return
 
         val options =
             BarcodeScannerOptions.Builder()
@@ -470,9 +447,9 @@ class CameraView {
                 .build()
 
         val barcodeScanner = BarcodeScanning.getClient(options)
-        val mainExecutor = ContextCompat.getMainExecutor(context)
+        val mainExecutor = ContextCompat.getMainExecutor(previewView.context)
 
-        // Calcualte a possible top offset of the webView which is not applied to the previewView and
+        // Calculate a possible top offset of the webView which is not applied to the previewView and
         // might break the positioning of the bounding box of the barcode in relation to the webView
         // This is due to capacitors required hack around the edge-to-edge behavior of web views on android
         val topOffset = calculateTopOffset(webView)
@@ -483,7 +460,7 @@ class CameraView {
             mainExecutor,
             MlKitAnalyzer(
                 listOf(barcodeScanner),
-                ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED,
+                COORDINATE_SYSTEM_VIEW_REFERENCED,
                 mainExecutor
             ) { result: MlKitAnalyzer.Result? ->
                 processBarcodeResults(result, barcodeScanner, previewView, topOffset)
@@ -507,15 +484,22 @@ class CameraView {
 
         val barcode = barcodes.firstOrNull() ?: return
 
-        val webBoundingRect = boundingBoxToWebBoundingRect(previewView, barcode.boundingBox, topOffset)
+        // Debugging: Log bounding box and dimensions
+        Log.d(TAG, "BoundingBox: ${barcode.boundingBox}")
+        Log.d(TAG, "PreviewView dimensions: ${previewView.width}x${previewView.height}")
+        Log.d(TAG, "WebView dimensions: ${webView.width}x${webView.height}")
+        Log.d(TAG, "Top offset: $topOffset")
 
-        val barcodeResult =
-            BarcodeDetectionResult(
-                value = barcode.rawValue ?: "",
-                displayValue = barcode.displayValue ?: "",
-                type = getBarcodeFormatString(barcode.format),
-                boundingRect = webBoundingRect
-            )
+        // Adjust bounding box to webView coordinates
+        val webBoundingRect =
+            boundingBoxToWebBoundingRect(previewView, barcode.boundingBox, topOffset)
+
+        val barcodeResult = BarcodeDetectionResult(
+            value = barcode.rawValue ?: "",
+            displayValue = barcode.displayValue ?: "",
+            type = getBarcodeFormatString(barcode.format),
+            boundingRect = webBoundingRect
+        )
 
         notifyBarcodeDetected(barcodeResult)
         lastBarcodeDetectionTime = now
@@ -552,7 +536,7 @@ class CameraView {
     }
 
     private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
-        pluginDelegate?.let { plugin ->
+        pluginDelegate.let { plugin ->
             if (plugin is CameraViewPlugin) {
                 plugin.notifyBarcodeDetected(result)
             }
