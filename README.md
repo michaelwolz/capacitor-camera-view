@@ -12,8 +12,8 @@
   <a href="https://www.npmjs.com/package/capacitor-camera-view">
     <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm" alt="npm version">
   </a>
-  <a href="https://github.com/your-repo/capacitor-camera-view/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/your-repo/capacitor-camera-view/ci.yml?branch=main&logo=github" alt="Build Status">
+  <a href="https://github.com/michaelwolz/capacitor-camera-view/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/michaelwolz/capacitor-camera-view/ci.yml?branch=main&logo=github" alt="Build Status">
   </a>
   <a href="https://capacitorjs.com/">
     <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor" alt="Capacitor Plugin">
@@ -48,9 +48,67 @@ npm install capacitor-camera-view
 npx cap sync
 ```
 
+### Platform Configuration
+
+#### iOS
+
+Add the following keys to your app's `Info.plist` file:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>To capture photos and videos</string>
+```
+
+#### Android
+
+The `CAMERA` permission is automatically added by Capacitor. Ensure your `AndroidManifest.xml` includes it if needed for specific configurations:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+
+## ▶️ Basic Usage
+
+```typescript
+import { CameraView } from 'capacitor-camera-view';
+
+// Start the camera preview
+const startCamera = async () => {
+  try {
+    await CameraView.start();
+    console.log('Camera started');
+    // Add the CSS class to make the WebView transparent
+    document.body.classList.add('camera-running');
+  } catch (e) {
+    console.error('Error starting camera:', e);
+  }
+};
+
+// Stop the camera preview
+const stopCamera = async () => {
+  try {
+    document.body.classList.remove('camera-running');
+    await CameraView.stop();
+    console.log('Camera stopped');
+  } catch (e) {
+    console.error('Error stopping camera:', e);
+  }
+};
+
+// Capture a photo
+const capturePhoto = async () => {
+  try {
+    const result = await CameraView.capture();
+    console.log('Photo captured:', result.photo); // Base64 encoded string
+  } catch (e) {
+    console.error('Error capturing photo:', e);
+  }
+};
+```
+
 ### ⚠️ Make the WebView transparent when starting the camera view
 
-To display the camera view through your app, you need to ensure that the WebView is made transparent. For Ionic applications, this can be done by adding the following styles to your global css file and applying the respective class to the body element as soon as you start the camera (see example app on how to do this in Angular):
+To display the camera view through your app, you need to ensure that the WebView is made transparent. For Ionic applications, this can be done by adding the following styles to your global CSS file and applying the respective class to the body element as soon as you start the camera (see example app on how to do this in Angular):
 
 ```css
 body.camera-running {
@@ -64,13 +122,55 @@ body.camera-running {
 }
 ```
 
+## 📸 Triple Camera Support for iOS
+
+On supported iPhone models (like the Pro series), this plugin can utilize the **virtual triple camera**. This feature combines the ultra-wide, wide, and telephoto cameras into a single virtual device.
+
+**How it works:** iOS automatically switches between the physical cameras based on factors like zoom level and lighting conditions, providing seamless transitions and optimal image quality across a wider zoom range. You can enable this by setting the `useTripleCameraIfAvailable` option to `true` when calling `start()`.
+
+**Pros:**
+*   Smoother zooming experience across different focal lengths.
+*   Automatic selection of the best lens for the current scene and zoom factor.
+
+**Cons:**
+*   Slightly higher resource usage compared to using a single physical camera (the camera view will take a little longer until initialized).
+*   Only available on specific iPhone models with triple camera systems.
+
+For more details on the underlying technology, refer to Apple's documentation on [AVCaptureDevice.builtInTripleCamera](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtintriplecamera).
+
+## 🔍 Barcode Detection
+
+This plugin supports real-time barcode detection directly from the live camera feed.
+
+**How it works:**
+*   **iOS:** Utilizes the native [`AVCaptureMetadataOutput`](https://developer.apple.com/documentation/avfoundation/avcapturemetadataoutput).
+*   **Android:** Utilizes Google's [**ML Kit Barcode Scanning**](https://developers.google.com/ml-kit/vision/barcode-scanning). 
+*   **Web:** Uses the [**Barcode Detection API**](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API) where available in the browser.
+
+**Enabling Barcode Detection:**
+To enable this feature, set the `enableBarcodeDetection` option to `true` when calling the `start()` method:
+
+```typescript
+await CameraView.start({ enableBarcodeDetection: true });
+```
+
+**Listening for Barcodes:**
+Once enabled, you can listen for the `barcodeDetected` event to receive data about scanned barcodes:
+
+```typescript
+import { CameraView } from 'capacitor-camera-view';
+
+CameraView.addListener('barcodeDetected', (data) => {
+  console.log('Barcode detected:', data.value, data.type);
+  // Handle the detected barcode data (e.g., display it, navigate)
+});
+```
+
+See the [`BarcodeDetectionData`](#barcodedetectiondata) interface for details on the event payload.
+
 ## 🧪 Example App
 
 To see the plugin in action, check out the example app in the `example-app` folder. The app demonstrates how to integrate and use the Capacitor Camera View plugin in an Ionic Angular project.
-
-## 🍎 Triple Camera Support for iOS
-
-## 🔍 Barcode Detection
 
 ## API
 

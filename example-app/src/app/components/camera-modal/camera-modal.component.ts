@@ -5,6 +5,7 @@ import {
   ElementRef,
   inject,
   input,
+  OnDestroy,
   OnInit,
   signal,
   viewChild,
@@ -25,7 +26,7 @@ import {
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
-import type { CameraPosition, FlashMode } from 'capacitor-camera-view';
+import { type CameraPosition, type FlashMode } from 'capacitor-camera-view';
 import { concat, map, of, switchMap, tap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 
@@ -56,7 +57,7 @@ function getDistance(touch1: Touch, touch2: Touch): number {
     class: 'camera-modal',
   },
 })
-export class CameraModalComponent implements OnInit {
+export class CameraModalComponent implements OnInit, OnDestroy {
   readonly #cameraViewService = inject(CapacitorCameraViewService);
   readonly #elementRef = inject(ElementRef);
   readonly #modalController = inject(ModalController);
@@ -148,6 +149,10 @@ export class CameraModalComponent implements OnInit {
     this.#initializeEventListeners();
   }
 
+  public ngOnDestroy(): void {
+    this.#destroyEventListeners();
+  }
+
   protected async startCamera(): Promise<void> {
     await this.#cameraViewService.start({
       deviceId: this.deviceId(),
@@ -170,8 +175,6 @@ export class CameraModalComponent implements OnInit {
     } catch (error) {
       console.error('Failed to stop camera', error);
     }
-
-    this.#destroyEventListeners();
   }
 
   protected async close(): Promise<void> {
@@ -260,7 +263,6 @@ export class CameraModalComponent implements OnInit {
   async #initializeZoomLimits(): Promise<void> {
     try {
       const zoomRange = await this.#cameraViewService.getZoom();
-      console.log('Zoom range:', zoomRange);
       if (zoomRange) {
         this.minZoom.set(zoomRange.min);
         this.maxZoom.set(zoomRange.max);

@@ -25,15 +25,15 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
   // Stream state
   private stream: MediaStream | null = null;
-  #isRunning: boolean = false;
+  #isRunning = false;
 
   // Configuration state
-  private currentCamera: string = 'environment'; // Default to back camera
-  private currentZoom: number = 1.0;
+  private currentCamera = 'environment'; // Default to back camera
+  private currentZoom = 1.0;
   private currentFlashMode: FlashMode = 'off';
 
   // Barcode detection support
-  private barcodeDetectionSupported: boolean = false;
+  private barcodeDetectionSupported = false;
   private barcodeDetector: BarcodeDetector | null = null;
 
   constructor() {
@@ -61,7 +61,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       }
 
       // Set up video constraints based on options
-      let videoConstraints: MediaTrackConstraints = {};
+      const videoConstraints: MediaTrackConstraints = {};
 
       // Prefer deviceId if specified
       if (options?.deviceId) {

@@ -62,9 +62,11 @@ export class CameraSettingsPage implements OnInit {
   protected barcodeValue = signal<string | undefined>(undefined);
 
   ngOnInit() {
-    this.#cameraViewService.getAvailableDevices().then((devices) => {
-      this.cameraDevices.set(devices);
-    });
+    setTimeout(() => {
+      this.#cameraViewService.getAvailableDevices().then((devices) => {
+        this.cameraDevices.set(devices);
+      });
+    }, 100);
   }
 
   protected async startCamera(): Promise<void> {

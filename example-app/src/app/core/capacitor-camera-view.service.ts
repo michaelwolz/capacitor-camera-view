@@ -29,8 +29,10 @@ export class CapacitorCameraViewService {
     this.#cameraView = CameraView;
 
     // Add event listeners
-    this.#cameraView.addListener('barcodeDetected', (event) => {
-      this.#barcodeData.next(event);
+    this.#cameraView.removeAllListeners().then(() => {
+      this.#cameraView.addListener('barcodeDetected', (event) => {
+        this.#barcodeData.next(event);
+      });
     });
 
     this.cameraStarted.subscribe((started) => {
