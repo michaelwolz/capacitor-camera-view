@@ -487,7 +487,10 @@ import Foundation
 
         blurOverlayView.frame = view.bounds
         blurOverlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.insertSubview(blurOverlayView, aboveSubview: view.subviews.first ?? view)
+
+        // Add the blurEffect layer to the view hierarchy just above the preview layer
+        // but below the web content
+        view.insertSubview(blurOverlayView, at: 1)
     }
 
     /// Removes the blur overlay with a fade out animation to have a smooth transition
