@@ -194,6 +194,7 @@ To see the plugin in action, check out the example app in the `example-app` fold
 * [`removeAllListeners(...)`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
+* [Enums](#enums)
 
 </docgen-index>
 
@@ -279,7 +280,7 @@ this method quickly samples the current video stream. This is suitable computer 
 simple snapshots where high fidelity is not required.
 
 On web this method does exactly the same as `capture()` as it only captures a frame from the video stream
-because unfortunately [ImageCapture API](https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture) is 
+because unfortunately [ImageCapture API](https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture) is
 not yet well supported on the web.
 
 | Param         | Type                              | Description                     |
@@ -475,14 +476,15 @@ Remove all listeners for this plugin.
 
 Configuration options for starting a camera session.
 
-| Prop                             | Type                                                      | Description                                                                                                                                                           | Default             |
-| -------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                                                                                                           | <code>false</code>  |
-| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                                                                                                         | <code>'back'</code> |
-| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position                                                                                   |                     |
-| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)                                                                                                | <code>false</code>  |
-| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                                                                                                        | <code>1.0</code>    |
-| **`containerElementId`**         | <code>string</code>                                       | Optional HTML ID of the container element where the camera view should be rendered. If not provided, the camera view will be appended to the document body. Web only. |                     |
+| Prop                             | Type                                                      | Description                                                                                                                                                                                                                                                                                                                                                              | Default                                                                |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| **`enableBarcodeDetection`**     | <code>boolean</code>                                      | Enables the barcode detection functionality                                                                                                                                                                                                                                                                                                                              | <code>false</code>                                                     |
+| **`position`**                   | <code><a href="#cameraposition">CameraPosition</a></code> | Position of the camera to use                                                                                                                                                                                                                                                                                                                                            | <code>'back'</code>                                                    |
+| **`deviceId`**                   | <code>string</code>                                       | Specific device ID of the camera to use If provided, takes precedence over position                                                                                                                                                                                                                                                                                      |                                                                        |
+| **`useTripleCameraIfAvailable`** | <code>boolean</code>                                      | Whether to use the triple camera if available (iPhone Pro models only)                                                                                                                                                                                                                                                                                                   | <code>false</code>                                                     |
+| **`preferredCameraDeviceTypes`** | <code>CameraDeviceType[]</code>                           | Ordered list of preferred camera device types to use (iOS only). The system will attempt to use the first available camera type in the list. If position is also provided, the system will use the first available camera type that matches the position and is in the list. This will fallback to the default camera type if none of the preferred types are available. | <code>undefined - system will decide based on position/deviceId</code> |
+| **`zoomFactor`**                 | <code>number</code>                                       | The initial zoom factor to use                                                                                                                                                                                                                                                                                                                                           | <code>1.0</code>                                                       |
+| **`containerElementId`**         | <code>string</code>                                       | Optional HTML ID of the container element where the camera view should be rendered. If not provided, the camera view will be appended to the document body. Web only.                                                                                                                                                                                                    |                                                                        |
 
 
 #### IsRunningResponse
@@ -618,5 +620,21 @@ Flash mode options for the camera.
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
+
+
+### Enums
+
+
+#### CameraDeviceType
+
+| Members         | Value                    | Description                                                     |
+| --------------- | ------------------------ | --------------------------------------------------------------- |
+| **`WideAngle`** | <code>'wideAngle'</code> | builtInWideAngleCamera - standard camera                        |
+| **`UltraWide`** | <code>'ultraWide'</code> | builtInUltraWideCamera - 0.5x zoom level                        |
+| **`Telephoto`** | <code>'telephoto'</code> | builtInTelephotoCamera - 2x/3x zoom level                       |
+| **`Dual`**      | <code>'dual'</code>      | builtInDualCamera - wide + telephoto combination                |
+| **`DualWide`**  | <code>'dualWide'</code>  | builtInDualWideCamera - wide + ultraWide combination            |
+| **`Triple`**    | <code>'triple'</code>    | builtInTripleCamera - wide + ultraWide + telephoto              |
+| **`TrueDepth`** | <code>'trueDepth'</code> | builtInTrueDepthCamera - front-facing camera with depth sensing |
 
 </docgen-api>

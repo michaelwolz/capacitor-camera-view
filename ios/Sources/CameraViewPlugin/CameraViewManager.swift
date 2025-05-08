@@ -1,6 +1,17 @@
 import AVFoundation
 import Foundation
 
+/// Supported camera device types for the capture session.
+internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
+    .builtInWideAngleCamera,
+    .builtInUltraWideCamera,
+    .builtInTelephotoCamera,
+    .builtInDualCamera,
+    .builtInDualWideCamera,
+    .builtInTripleCamera,
+    .builtInTrueDepthCamera,
+]
+
 /// A camera implementation that handles camera session management and photo capture.
 @objc public class CameraViewManager: NSObject {
     internal let captureSession = AVCaptureSession()
@@ -11,6 +22,9 @@ import Foundation
 
     /// The currently active camera device.
     private var currentCameraDevice: AVCaptureDevice?
+
+    /// List of preferred camera devices, this overrides the SUPPORTED_CAMERA_DEVICE_TYPES for the capture session
+    private var preferredCameraDeviceTypes = SUPPORTED_CAMERA_DEVICE_TYPES
 
     /// Currently selected flash mode.
     private var flashMode: AVCaptureDevice.FlashMode = .auto
@@ -51,6 +65,10 @@ import Foundation
         webView: UIView,
         completion: @escaping (Error?) -> Void
     ) {
+        if let preferredCameraDeviceTypes = configuration.preferredCameraDeviceTypes {
+            self.preferredCameraDeviceTypes = convertToNativeCameraTypes(preferredCameraDeviceTypes)
+        }
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -344,24 +362,29 @@ import Foundation
 
     /// Retrieve a list of a available camera devices
     ///
-    /// - Returns:  a list of all  available camera devices.
+    /// - Returns: a list of all  available camera devices.
     public func getAvailableDevices() -> [AVCaptureDevice] {
         return AVCaptureDevice.DiscoverySession(
-            deviceTypes: [
-                .builtInWideAngleCamera,
-                .builtInUltraWideCamera,
-                .builtInTelephotoCamera,
-                .builtInDualCamera,
-                .builtInDualWideCamera,
-                .builtInTripleCamera,
-                .builtInTrueDepthCamera,
-            ],
+            deviceTypes: SUPPORTED_CAMERA_DEVICE_TYPES,
+            mediaType: .video,
+            position: .unspecified
+        ).devices
+    }
+
+    /// Returns a list of available camera devices based on the preferences by the user
+    ///
+    /// - Returns: a list of camera devices based on the preferredCameraDeviceTypes
+    private func getPreferredCameraDevices()  -> [AVCaptureDevice]  {
+        return AVCaptureDevice.DiscoverySession(
+            deviceTypes: self.preferredCameraDeviceTypes,
             mediaType: .video,
             position: .unspecified
         ).devices
     }
 
     /// Gets the  best match camera device for the specified position.
+    /// This method will consider preferredCameraDevices as possibly provided by the user allowing a best
+    /// match to the users request.
     ///
     /// - Parameters:
     ///   - position: The position of the camera device to get
@@ -369,13 +392,29 @@ import Foundation
     /// - Throws: An error if no camera device is found.
     private func getCameraDevice(for position: AVCaptureDevice.Position?) throws -> AVCaptureDevice
     {
-        if let match = getAvailableDevices().first(where: { $0.position == position }) {
+        let preferredDevices = getPreferredCameraDevices()
+
+        // First try to get the best match based on the users preferred camera device types
+        if let match = preferredDevices.first(where: { $0.position == position }) {
             return match
         }
 
-        // Fallback to default video device
+        // If we haven't found one we try to get a best match for the position by iterating all supported device types
+        // Only doing this when preferredCameraDeviceTypes size differs from SUPPORTED_CAMERA_DEVICE_TYPES, otherwise
+        // we don't have to initialize a new discovery session
+        if preferredCameraDeviceTypes.count < SUPPORTED_CAMERA_DEVICE_TYPES.count,
+           let match = getAvailableDevices().first(where: { $0.position == position }) {
+            return match
+        }
+
+        // Otherwise, fallback to default video device or throw an error
         guard let device = AVCaptureDevice.default(for: .video) else {
             throw CameraError.cameraUnavailable
+        }
+
+        // Log when we're falling back to a device with different position than requested
+        if let requestedPosition = position, device.position != requestedPosition {
+            print("Warning: Falling back to camera at position \(device.position) when \(requestedPosition) was requested")
         }
 
         return device
