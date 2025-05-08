@@ -231,28 +231,21 @@ export interface CameraDevice {
  *
  * @since 1.0.0
  */
-export enum CameraDeviceType {
+export type CameraDeviceType =
   /** builtInWideAngleCamera - standard camera */
-  WideAngle = 'wideAngle',
-
+  | 'wideAngle'
   /** builtInUltraWideCamera - 0.5x zoom level */
-  UltraWide = 'ultraWide',
-
+  | 'ultraWide'
   /** builtInTelephotoCamera - 2x/3x zoom level */
-  Telephoto = 'telephoto',
-
+  | 'telephoto'
   /** builtInDualCamera - wide + telephoto combination */
-  Dual = 'dual',
-
+  | 'dual'
   /** builtInDualWideCamera - wide + ultraWide combination */
-  DualWide = 'dualWide',
-
+  | 'dualWide'
   /** builtInTripleCamera - wide + ultraWide + telephoto */
-  Triple = 'triple',
-
+  | 'triple'
   /** builtInTrueDepthCamera - front-facing camera with depth sensing */
-  TrueDepth = 'trueDepth',
-}
+  | 'trueDepth';
 
 /**
  * Configuration options for starting a camera session.

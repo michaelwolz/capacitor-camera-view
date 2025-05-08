@@ -30,4 +30,3 @@ public func convertToNativeCameraType(_ stringType: String) -> AVCaptureDevice.D
 public func convertToNativeCameraTypes(_ stringTypes: [String]) -> [AVCaptureDevice.DeviceType] {
     return stringTypes.compactMap { convertToNativeCameraType($0) }
 }
-

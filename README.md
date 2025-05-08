@@ -194,7 +194,6 @@ To see the plugin in action, check out the example app in the `example-app` fold
 * [`removeAllListeners(...)`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
-* [Enums](#enums)
 
 </docgen-index>
 
@@ -607,6 +606,14 @@ Position options for the camera.
 <code>'front' | 'back'</code>
 
 
+#### CameraDeviceType
+
+Available camera device types for iOS.
+Maps to AVCaptureDevice DeviceTypes in iOS.
+
+<code>'wideAngle' | 'ultraWide' | 'telephoto' | 'dual' | 'dualWide' | 'triple' | 'trueDepth'</code>
+
+
 #### FlashMode
 
 Flash mode options for the camera.
@@ -620,21 +627,5 @@ Flash mode options for the camera.
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
-
-
-### Enums
-
-
-#### CameraDeviceType
-
-| Members         | Value                    | Description                                                     |
-| --------------- | ------------------------ | --------------------------------------------------------------- |
-| **`WideAngle`** | <code>'wideAngle'</code> | builtInWideAngleCamera - standard camera                        |
-| **`UltraWide`** | <code>'ultraWide'</code> | builtInUltraWideCamera - 0.5x zoom level                        |
-| **`Telephoto`** | <code>'telephoto'</code> | builtInTelephotoCamera - 2x/3x zoom level                       |
-| **`Dual`**      | <code>'dual'</code>      | builtInDualCamera - wide + telephoto combination                |
-| **`DualWide`**  | <code>'dualWide'</code>  | builtInDualWideCamera - wide + ultraWide combination            |
-| **`Triple`**    | <code>'triple'</code>    | builtInTripleCamera - wide + ultraWide + telephoto              |
-| **`TrueDepth`** | <code>'trueDepth'</code> | builtInTrueDepthCamera - front-facing camera with depth sensing |
 
 </docgen-api>
