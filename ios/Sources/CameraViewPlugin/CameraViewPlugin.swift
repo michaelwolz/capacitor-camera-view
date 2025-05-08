@@ -171,6 +171,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             deviceInfo["id"] = device.uniqueID
             deviceInfo["name"] = device.localizedName
             deviceInfo["position"] = device.position == .front ? "front" : "back"
+            deviceInfo["deviceType"] = convertToStringCameraType(device.deviceType)
             result.append(deviceInfo)
         }
 

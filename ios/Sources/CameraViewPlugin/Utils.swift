@@ -1,7 +1,7 @@
 import AVFoundation
 
 /// Converts string camera type identifiers from JavaScript to native AVCaptureDevice.DeviceType values
-/// - Parameter stringType: The string camera type from JavaScript (matches CameraDeviceType enum values)
+/// - Parameter stringType: The string camera type from JavaScript
 /// - Returns: The corresponding AVCaptureDevice.DeviceType or nil if no match
 public func convertToNativeCameraType(_ stringType: String) -> AVCaptureDevice.DeviceType? {
     switch stringType {
@@ -19,6 +19,30 @@ public func convertToNativeCameraType(_ stringType: String) -> AVCaptureDevice.D
         return .builtInTripleCamera
     case "trueDepth":
         return .builtInTrueDepthCamera
+    default:
+        return nil
+    }
+}
+
+/// Converts AVCaptureDevice.DeviceType to JavaScript string value
+/// - Parameter deviceType: The AVCaptureDevice.DeviceType
+/// - Returns: The corresponding string or nil if no match
+public func convertToStringCameraType(_ deviceType: AVCaptureDevice.DeviceType) -> String? {
+    switch deviceType {
+    case .builtInWideAngleCamera:
+        return "wideAngle"
+    case .builtInUltraWideCamera:
+        return "ultraWide"
+    case .builtInTelephotoCamera:
+        return "telephoto"
+    case .builtInDualCamera:
+        return "dual"
+    case .builtInDualWideCamera:
+        return "dualWide"
+    case .builtInTripleCamera:
+        return "triple"
+    case .builtInTrueDepthCamera:
+        return "trueDepth"
     default:
         return nil
     }

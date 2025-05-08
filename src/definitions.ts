@@ -221,6 +221,9 @@ export interface CameraDevice {
 
   /** The position of the camera device (front or back) */
   position: CameraPosition;
+
+  /** The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only */
+  type?: CameraDeviceType;
 }
 
 /**
