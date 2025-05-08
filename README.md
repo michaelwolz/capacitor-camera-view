@@ -31,7 +31,7 @@
 - 📸 Capture photos or frames from the camera preview.
 - 🔍 **Barcode detection** support.
 - 🔄 Switch between front and back cameras.
-- 📱 **Virtual triple camera support** for devices with triple camera (iOS only).
+- 📱 **Virtual device support** for automatic lens selection based on zoom level (iOS only).
 - 🔎 Control **zoom** and **flash** modes programmatically.
 - ⚡ **High performance** with optimized native implementations.
 - 🎯 **Simple to use** with a clean and intuitive API.
@@ -144,7 +144,7 @@ This plugin supports real-time barcode detection directly from the live camera f
 
 **How it works:**
 *   **iOS:** Utilizes the native [`AVCaptureMetadataOutput`](https://developer.apple.com/documentation/avfoundation/avcapturemetadataoutput).
-*   **Android:** Utilizes Google's [**ML Kit Barcode Scanning**](https://developers.google.com/ml-kit/vision/barcode-scanning). 
+*   **Android:** Utilizes Google's [**ML Kit Barcode Scanning**](https://developers.google.com/ml-kit/vision/barcode-scanning).
 *   **Web:** Uses the [**Barcode Detection API**](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API) where available in the browser.
 
 **Enabling Barcode Detection:**
