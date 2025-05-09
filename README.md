@@ -30,8 +30,7 @@
 - 📹 Embed a **live camera feed** directly into your app.
 - 📸 Capture photos or frames from the camera preview.
 - 🔍 **Barcode detection** support.
-- 🔄 Switch between front and back cameras.
-- 📱 **Virtual device support** for automatic lens selection based on zoom level (iOS only).
+- 📱 **Virtual device support** for automatic lens selection based on zoom level and focus (iOS only).
 - 🔎 Control **zoom** and **flash** modes programmatically.
 - ⚡ **High performance** with optimized native implementations.
 - 🎯 **Simple to use** with a clean and intuitive API.
