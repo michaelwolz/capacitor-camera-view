@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./banner.png" alt="Capacitor Camera View Banner" width="100%">
+  <img src="./docs/banner.png" alt="Capacitor Camera View Banner" width="100%">
 </p>
 
 <h1 align="center">Capacitor Camera View</h1>

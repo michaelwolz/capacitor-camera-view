@@ -132,7 +132,8 @@
     ],
     "cache": {
       "enabled": false
-    }
+    },
+    "analytics": "aa414b52-7c4f-45db-8bf0-c14c75947494"
   },
   "schematics": {
     "@ionic/angular-toolkit:component": {
