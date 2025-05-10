@@ -1,5 +1,7 @@
 import AVFoundation
+import CoreImage
 import Foundation
+import UIKit
 
 extension CameraViewManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     /// Set up video data output for the capture session in case it's not configured yet
