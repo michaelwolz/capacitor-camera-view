@@ -10,16 +10,16 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/capacitor-camera-view">
-    <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm" alt="npm version">
+    <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm&style=flat-square" alt="npm version">
   </a>
   <a href="https://github.com/michaelwolz/capacitor-camera-view/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/michaelwolz/capacitor-camera-view/ci.yml?branch=main&logo=github" alt="Build Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/michaelwolz/capacitor-camera-view/ci.yml?branch=main&logo=github&style=flat-square" alt="Build Status">
   </a>
   <a href="https://capacitorjs.com/">
-    <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor" alt="Capacitor Plugin">
+    <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor&style=flat-square" alt="Capacitor Plugin">
   </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <a href="https://opensource.org/license/apache-2-0">
+    <img src="https://img.shields.io/badge/license-Apache%202.0-green?&style=flat-square" alt="License">
   </a>
 </p>
 
