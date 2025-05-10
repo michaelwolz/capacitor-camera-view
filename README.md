@@ -121,9 +121,9 @@ body.camera-running {
 }
 ```
 
-## 📸 Triple Camera Support for iOS
+## 📸 Virtual Camera Support for iOS
 
-On supported iPhone models (like the Pro series), this plugin can utilize the **virtual triple camera**. This feature combines the ultra-wide, wide, and telephoto cameras into a single virtual device.
+On supported iPhone models (like the Pro series), this plugin can utilize the [**virtual triple camera**](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtintriplecamera). This feature combines the ultra-wide, wide, and telephoto cameras into a single virtual device.
 
 **How it works:** iOS automatically switches between the physical cameras based on factors like zoom level and lighting conditions, providing seamless transitions and optimal image quality across a wider zoom range. You can enable this by setting the `useTripleCameraIfAvailable` option to `true` when calling `start()`.
 
@@ -136,6 +136,8 @@ On supported iPhone models (like the Pro series), this plugin can utilize the **
 *   Only available on specific iPhone models with triple camera systems.
 
 For more details on the underlying technology, refer to Apple's documentation on [AVCaptureDevice.builtInTripleCamera](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtintriplecamera).
+
+Alternatively, you can specify the `preferredCameraDeviceTypes` option in the <code><a href="#camerasessionconfiguration">CameraSessionConfiguration</a></code> to prioritize specific virtual cameras, such as the [dual camera system](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtindualcamera). While this provides similar functionality, the `useTripleCameraIfAvailable` option offers the advantage of a smoother transition during camera initialization and lens switching (blurred overlay).
 
 ## 🔍 Barcode Detection
 
