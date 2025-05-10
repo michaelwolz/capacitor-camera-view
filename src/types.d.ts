@@ -6,19 +6,19 @@ declare global {
    * Barcode Detection API. This list may change in the future.
    * Adapted from: https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API
    */
-  type BarcodeFormat = 'aztec' 
-      | 'code_128' 
-      | 'code_39' 
-      | 'code_93' 
-      | 'codabar' 
-      | 'data_matrix' 
-      | 'ean_13' 
-      | 'ean_8' 
-      | 'itf' 
-      | 'pdf417' 
-      | 'qr_code' 
-      | 'upc_a' 
-      | 'upc_e' 
+  type BarcodeFormat = 'aztec'
+      | 'code_128'
+      | 'code_39'
+      | 'code_93'
+      | 'codabar'
+      | 'data_matrix'
+      | 'ean_13'
+      | 'ean_8'
+      | 'itf'
+      | 'pdf417'
+      | 'qr_code'
+      | 'upc_a'
+      | 'upc_e'
       | 'unknown';
 
   /**
@@ -26,10 +26,10 @@ declare global {
    * describes a barcode that has been recognized by the API.
    */
   interface DetectedBarcode {
-      /** 
+      /**
        * A DOMRectReadOnly, which returns the dimensions of a rectangle
        * representing the extent of a detected barcode, aligned with the
-       * image 
+       * image
        */
       boundingBox: DOMRectReadOnly;
 
@@ -37,13 +37,13 @@ declare global {
        * The x and y co-ordinates of the four corner points of the detected
        * barcode relative to the image, starting with the top left and working
        * clockwise. This may not be square due to perspective distortions
-       * within the image. 
+       * within the image.
        */
-      cornerPoints: Array<{
+      cornerPoints: {
           x: number,
           y: number,
-      }>;
-      
+      }[];
+
       /**
        * The detected barcode format
        */
@@ -59,8 +59,8 @@ declare global {
    * Options for describing how a BarcodeDetector should be initialised
    */
   interface BarcodeDetectorOptions {
-      /** 
-       * Which formats the barcode detector should detect 
+      /**
+       * Which formats the barcode detector should detect
        */
       formats: BarcodeFormat[];
   }
@@ -70,18 +70,18 @@ declare global {
    * detection of linear and two dimensional barcodes in images.
    */
   class BarcodeDetector {
-      /** 
-       * Initialize a Barcode Detector instance 
+      /**
+       * Initialize a Barcode Detector instance
        */
       constructor(options?: BarcodeDetectorOptions);
 
       /**
-       * Retrieve the formats that are supported by the detector 
+       * Retrieve the formats that are supported by the detector
        */
       static getSupportedFormats(): Promise<BarcodeFormat[]>;
 
-      /** 
-       * Attempt to detect barcodes from an image source  
+      /**
+       * Attempt to detect barcodes from an image source
        */
       public detect(source: ImageBitmapSource): Promise<DetectedBarcode[]>;
   }
