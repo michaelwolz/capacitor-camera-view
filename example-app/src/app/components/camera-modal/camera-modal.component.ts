@@ -83,14 +83,14 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected readonly isCapturingPhoto = signal(false);
   protected readonly currentZoomFactor = signal(this.initialZoomFactor());
   protected readonly minZoom = signal(1.0);
-  protected readonly maxZoom = signal(10.0)
+  protected readonly maxZoom = signal(10.0);
 
   protected readonly canZoomIn = computed(() => {
-    return this.currentZoomFactor() + 0.5 <= this.maxZoom(); 
+    return this.currentZoomFactor() + 0.5 <= this.maxZoom();
   });
 
   protected readonly canZoomOut = computed(() => {
-    return this.currentZoomFactor() - 0.5 >= this.minZoom(); 
+    return this.currentZoomFactor() - 0.5 >= this.minZoom();
   });
 
   protected readonly detectedBarcode = toSignal(
@@ -108,7 +108,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   #supportedFlashModes = signal<Array<FlashMode>>(['off']);
 
   #touchStartDistance = 0;
-  #initialZoomFactorOnPinch = 1.0;;
+  #initialZoomFactorOnPinch = 1.0;
 
   constructor() {
     effect(() => {
@@ -238,14 +238,14 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   protected async zoomIn(): Promise<void> {
     if (this.canZoomIn()) {
-      this.currentZoomFactor.update(curr => curr + 0.5);
+      this.currentZoomFactor.update((curr) => curr + 0.5);
       await this.#cameraViewService.setZoom(this.currentZoomFactor(), true);
     }
   }
 
   protected async zoomOut(): Promise<void> {
     if (this.canZoomOut()) {
-      this.currentZoomFactor.update(curr => curr - 0.5);
+      this.currentZoomFactor.update((curr) => curr - 0.5);
       await this.#cameraViewService.setZoom(this.currentZoomFactor(), true);
     }
   }
