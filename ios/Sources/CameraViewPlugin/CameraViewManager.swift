@@ -151,6 +151,19 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             photoSettings.flashMode = .off
         }
 
+        // Ensure proper orientation
+        if let photoConnection = avPhotoOutput.connection(with: .video),
+        let previewConnection = videoPreviewLayer.connection {
+            if photoConnection.isVideoOrientationSupported {
+                photoConnection.videoOrientation = previewConnection.videoOrientation
+            }
+
+            // Handle mirroring for front camera
+            if photoConnection.isVideoMirroringSupported && cameraDevice.position == .front {
+                photoConnection.isVideoMirrored = true
+            }
+        }
+
         avPhotoOutput.capturePhoto(with: photoSettings, delegate: self)
         photoCaptureHandler = completion
     }
@@ -169,22 +182,25 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             return
         }
 
+        // Ensure proper orientation
+        if let photoConnection = avPhotoOutput.connection(with: .video),
+        let previewConnection = videoPreviewLayer.connection {
+            if photoConnection.isVideoOrientationSupported {
+                photoConnection.videoOrientation = previewConnection.videoOrientation
+            }
+
+            // Handle mirroring for front camera
+            if photoConnection.isVideoMirroringSupported && cameraDevice.position == .front {
+                photoConnection.isVideoMirrored = true
+            }
+        }
+
         // Create a serial queue for sample buffer processing
         let sampleBufferQueue = DispatchQueue(label: "com.michaelwolz.capacitorcameraview.snapshotQueue")
 
         // Set the delegate for a single frame capture
         snapshotCompletionHandler = completion
         avVideoDataOutput.setSampleBufferDelegate(self, queue: sampleBufferQueue)
-
-        // Ensure proper orientation
-        if let connection = avVideoDataOutput.connection(with: .video) {
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = videoPreviewLayer.connection?.videoOrientation ?? .portrait
-            }
-            if connection.isVideoMirroringSupported && cameraDevice.position == .front {
-                connection.isVideoMirrored = true
-            }
-        }
     }
 
     public func setCameraById(_ cameraId: String) throws {
@@ -572,16 +588,16 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             return
         }
 
-        let orientation = UIDevice.current.orientation
+        let interfaceOrientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
         let videoOrientation: AVCaptureVideoOrientation
 
-        switch orientation {
+        switch interfaceOrientation {
         case .portrait:
             videoOrientation = .portrait
         case .landscapeLeft:
-            videoOrientation = .landscapeRight
-        case .landscapeRight:
             videoOrientation = .landscapeLeft
+        case .landscapeRight:
+            videoOrientation = .landscapeRight
         case .portraitUpsideDown:
             videoOrientation = .portraitUpsideDown
         default:

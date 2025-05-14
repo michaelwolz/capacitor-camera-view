@@ -34,3 +34,12 @@ body.camera-running {
 .camera-modal {
   visibility: visible;
 }
+
+ion-modal {
+  --height: 100%;
+  --width: 100%;
+
+  ion-header ion-toolbar:first-of-type {
+    padding-top: env(safe-area-inset-top);
+  }
+}
