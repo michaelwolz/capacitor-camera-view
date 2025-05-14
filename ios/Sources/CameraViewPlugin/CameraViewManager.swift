@@ -552,7 +552,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
     }
 
-    /// MARK: - Orientation Observers
+    /// MARK: - Orientation Observer
 
     /// Sets up an observer for device orientation changes to update the preview layer orientation.
     private func setupOrientationObserver() {
@@ -588,6 +588,12 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         connection.videoOrientation = videoOrientation
+
+        // Update the frame of the preview layer to match the new bounds
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let view = self.webView else { return }
+            self.videoPreviewLayer.frame = view.bounds
+        }
     }
 
     /// MARK: - App Lifecycle Observers
