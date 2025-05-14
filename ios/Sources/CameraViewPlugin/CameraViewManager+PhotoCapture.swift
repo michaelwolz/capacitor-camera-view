@@ -1,7 +1,8 @@
 import AVFoundation
 import Foundation
+import UIKit
 
-extension CameraViewManager: AVCapturePhotoCaptureDelegate {    
+extension CameraViewManager: AVCapturePhotoCaptureDelegate {
     /// Set up output for the capture session in case it's not configured yet
     /// Make sure to call `captureSession.beginConfiguration` before calling this
     ///
@@ -12,17 +13,17 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
             // use outputs for taking photos here we don't need a new one
             return
         }
-        
+
         // Balanced should be a good choice for most use cases
         avPhotoOutput.maxPhotoQualityPrioritization = .balanced
-        
+
         if !captureSession.canAddOutput(avPhotoOutput) {
             throw CameraError.outputAdditionFailed
         }
-        
+
         captureSession.addOutput(avPhotoOutput)
     }
-    
+
     /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`
     ///
     /// - Parameters:
@@ -38,14 +39,14 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
             photoCaptureHandler?(nil, error)
             return
         }
-        
+
         guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
             photoCaptureHandler?(nil, CameraError.photoOutputError)
             return
         }
-        
+
         photoCaptureHandler?(image, nil)
     }
-    
+
 }
 

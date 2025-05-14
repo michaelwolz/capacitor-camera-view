@@ -381,11 +381,11 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Clean up resources when the plugin is disposed
    */
-  public async handleOnDestroy() {
+  public async handleOnDestroy(): Promise<void> {
     await this.stop();
 
     // Remove elements from DOM
-    if (this.videoElement && this.videoElement.parentNode) {
+    if (this.videoElement?.parentNode) {
       this.videoElement.parentNode.removeChild(this.videoElement);
       this.videoElement = null;
     }

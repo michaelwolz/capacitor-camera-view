@@ -90,7 +90,7 @@ export function drawVisibleAreaToCanvas(
 /**
  * Transforms barcode coordinates from the video source space to display space
  * accounting for object-fit: cover scaling and cropping.
- * 
+ *
  * @param barcodeBoundingBox The original barcode bounding box from the detector
  * @param videoElement The video element with the camera stream
  * @returns The transformed bounding box coordinates in display space
@@ -102,7 +102,7 @@ export function transformBarcodeBoundingBox(
     width: number;
     height: number;
   },
-  videoElement: HTMLVideoElement
+  videoElement: HTMLVideoElement,
 ): {
   x: number;
   y: number;
@@ -113,23 +113,23 @@ export function transformBarcodeBoundingBox(
   const videoRect = videoElement.getBoundingClientRect();
   const displayWidth = videoRect.width;
   const displayHeight = videoRect.height;
-  
+
   // Get original video dimensions
   const videoWidth = videoElement.videoWidth;
   const videoHeight = videoElement.videoHeight;
-  
+
   // Calculate scaling and positioning for object-fit: cover
   const videoAspect = videoWidth / videoHeight;
   const displayAspect = displayWidth / displayHeight;
-  
+
   let scaledX, scaledY, scaledWidth, scaledHeight;
-  
+
   if (videoAspect > displayAspect) {
     // Video is wider than display area - height matches, width is centered and cropped
     const scale = displayHeight / videoHeight;
     const scaledVideoWidth = videoWidth * scale;
     const cropX = (scaledVideoWidth - displayWidth) / 2;
-    
+
     scaledWidth = barcodeBoundingBox.width * scale;
     scaledHeight = barcodeBoundingBox.height * scale;
     scaledX = barcodeBoundingBox.x * scale - cropX;
@@ -139,17 +139,17 @@ export function transformBarcodeBoundingBox(
     const scale = displayWidth / videoWidth;
     const scaledVideoHeight = videoHeight * scale;
     const cropY = (scaledVideoHeight - displayHeight) / 2;
-    
+
     scaledWidth = barcodeBoundingBox.width * scale;
     scaledHeight = barcodeBoundingBox.height * scale;
     scaledX = barcodeBoundingBox.x * scale;
     scaledY = barcodeBoundingBox.y * scale - cropY;
   }
-  
+
   return {
     x: scaledX,
     y: scaledY,
     width: scaledWidth,
-    height: scaledHeight
+    height: scaledHeight,
   };
 }

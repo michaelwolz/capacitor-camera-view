@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./banner.png" alt="Capacitor Camera View Banner" width="100%">
+  <img src="./docs/banner.png" alt="Capacitor Camera View Banner" width="100%">
 </p>
 
 <h1 align="center">Capacitor Camera View</h1>
@@ -10,16 +10,16 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/capacitor-camera-view">
-    <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm" alt="npm version">
+    <img src="https://img.shields.io/npm/v/capacitor-camera-view?color=blue&label=npm&logo=npm&style=flat-square" alt="npm version">
   </a>
   <a href="https://github.com/michaelwolz/capacitor-camera-view/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/michaelwolz/capacitor-camera-view/ci.yml?branch=main&logo=github" alt="Build Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/michaelwolz/capacitor-camera-view/ci.yml?branch=main&logo=github&style=flat-square" alt="Build Status">
   </a>
   <a href="https://capacitorjs.com/">
-    <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor" alt="Capacitor Plugin">
+    <img src="https://img.shields.io/badge/Capacitor-Plugin-blue?logo=capacitor&style=flat-square" alt="Capacitor Plugin">
   </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <a href="https://opensource.org/license/apache-2-0">
+    <img src="https://img.shields.io/badge/license-Apache%202.0-green?&style=flat-square" alt="License">
   </a>
 </p>
 
@@ -121,9 +121,9 @@ body.camera-running {
 }
 ```
 
-## 📸 Triple Camera Support for iOS
+## 📸 Virtual Camera Support for iOS
 
-On supported iPhone models (like the Pro series), this plugin can utilize the **virtual triple camera**. This feature combines the ultra-wide, wide, and telephoto cameras into a single virtual device.
+On supported iPhone models (like the Pro series), this plugin can utilize the [**virtual triple camera**](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtintriplecamera). This feature combines the ultra-wide, wide, and telephoto cameras into a single virtual device.
 
 **How it works:** iOS automatically switches between the physical cameras based on factors like zoom level and lighting conditions, providing seamless transitions and optimal image quality across a wider zoom range. You can enable this by setting the `useTripleCameraIfAvailable` option to `true` when calling `start()`.
 
@@ -136,6 +136,8 @@ On supported iPhone models (like the Pro series), this plugin can utilize the **
 *   Only available on specific iPhone models with triple camera systems.
 
 For more details on the underlying technology, refer to Apple's documentation on [AVCaptureDevice.builtInTripleCamera](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtintriplecamera).
+
+Alternatively, you can specify the `preferredCameraDeviceTypes` option in the <code><a href="#camerasessionconfiguration">CameraSessionConfiguration</a></code> to prioritize specific virtual cameras, such as the [dual camera system](https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct/builtindualcamera). While this provides similar functionality, the `useTripleCameraIfAvailable` option offers the advantage of a smoother transition during camera initialization and lens switching (blurred overlay).
 
 ## 🔍 Barcode Detection
 
