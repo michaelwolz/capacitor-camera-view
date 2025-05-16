@@ -157,11 +157,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             if photoConnection.isVideoOrientationSupported {
                 photoConnection.videoOrientation = previewConnection.videoOrientation
             }
-
-            // Handle mirroring for front camera
-            if photoConnection.isVideoMirroringSupported && cameraDevice.position == .front {
-                photoConnection.isVideoMirrored = true
-            }
         }
 
         avPhotoOutput.capturePhoto(with: photoSettings, delegate: self)
@@ -187,11 +182,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         let previewConnection = videoPreviewLayer.connection {
             if photoConnection.isVideoOrientationSupported {
                 photoConnection.videoOrientation = previewConnection.videoOrientation
-            }
-
-            // Handle mirroring for front camera
-            if photoConnection.isVideoMirroringSupported && cameraDevice.position == .front {
-                photoConnection.isVideoMirrored = true
             }
         }
 
