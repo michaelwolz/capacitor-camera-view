@@ -518,12 +518,12 @@ Response for getting available camera devices.
 
 Represents a physical camera device on the device.
 
-| Prop           | Type                                                          | Description                                                                  |
-| -------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **`id`**       | <code>string</code>                                           | The unique identifier of the camera device                                   |
-| **`name`**     | <code>string</code>                                           | The human-readable name of the camera device                                 |
-| **`position`** | <code><a href="#cameraposition">CameraPosition</a></code>     | The position of the camera device (front or back)                            |
-| **`type`**     | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only |
+| Prop             | Type                                                          | Description                                                                  |
+| ---------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **`id`**         | <code>string</code>                                           | The unique identifier of the camera device                                   |
+| **`name`**       | <code>string</code>                                           | The human-readable name of the camera device                                 |
+| **`position`**   | <code><a href="#cameraposition">CameraPosition</a></code>     | The position of the camera device (front or back)                            |
+| **`deviceType`** | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only |
 
 
 #### GetZoomResponse

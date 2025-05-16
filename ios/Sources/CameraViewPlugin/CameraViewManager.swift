@@ -167,7 +167,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// photo via capturePhoto
     /// - Parameter completion: called with the captured UIImage or an error.
     public func captureSnapshot(completion: @escaping (UIImage?, Error?) -> Void) {
-        guard let cameraDevice = currentCameraDevice else {
+        guard currentCameraDevice != nil else {
             completion(nil, CameraError.cameraUnavailable)
             return
         }
