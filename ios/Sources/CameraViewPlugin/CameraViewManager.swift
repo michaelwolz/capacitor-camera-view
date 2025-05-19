@@ -18,7 +18,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     internal let captureSession = AVCaptureSession()
     internal let avPhotoOutput = AVCapturePhotoOutput()
     internal let avVideoDataOutput = AVCaptureVideoDataOutput()
-
     internal let videoPreviewLayer = AVCaptureVideoPreviewLayer()
 
     /// The currently active camera device.
@@ -191,15 +190,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         // Set the delegate for a single frame capture
         snapshotCompletionHandler = completion
         avVideoDataOutput.setSampleBufferDelegate(self, queue: sampleBufferQueue)
-    }
-
-    public func setCameraById(_ cameraId: String) throws {
-        let devices = getAvailableDevices()
-        guard let device = devices.first(where: { $0.uniqueID == cameraId }) else {
-            throw CameraError.cameraUnavailable
-        }
-
-        try setInput(with: device)
     }
 
     /// Flips the camera to the opposite position (front to back or back to front).
