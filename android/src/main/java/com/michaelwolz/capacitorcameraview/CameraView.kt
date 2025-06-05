@@ -15,13 +15,13 @@ import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
-import androidx.camera.view.CameraController.COORDINATE_SYSTEM_VIEW_REFERENCED
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -445,19 +445,16 @@ class CameraView(plugin: Plugin) {
         val mainExecutor = ContextCompat.getMainExecutor(previewView.context)
 
         // Calculate a possible top offset of the webView which is not applied to the previewView
-        // and
-        // might break the positioning of the bounding box of the barcode in relation to the webView
-        // This is due to capacitors required hack around the edge-to-edge behavior of web views on
-        // android
+        // and might break the positioning of the bounding box of the barcode in relation to the
+        // webView. This is due to capacitors required hack around the edge-to-edge behavior of web
+        // views on android
         val topOffset = calculateTopOffset(webView)
-
-        Log.d(TAG, "Top offset: $topOffset")
 
         controller.setImageAnalysisAnalyzer(
             mainExecutor,
             MlKitAnalyzer(
                 listOf(barcodeScanner),
-                COORDINATE_SYSTEM_VIEW_REFERENCED,
+                ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED,
                 mainExecutor
             ) { result: MlKitAnalyzer.Result? ->
                 processBarcodeResults(result, barcodeScanner, previewView, topOffset)
@@ -480,12 +477,6 @@ class CameraView(plugin: Plugin) {
         if (barcodes.isEmpty()) return
 
         val barcode = barcodes.firstOrNull() ?: return
-
-        // Debugging: Log bounding box and dimensions
-        Log.d(TAG, "BoundingBox: ${barcode.boundingBox}")
-        Log.d(TAG, "PreviewView dimensions: ${previewView.width}x${previewView.height}")
-        Log.d(TAG, "WebView dimensions: ${webView.width}x${webView.height}")
-        Log.d(TAG, "Top offset: $topOffset")
 
         // Adjust bounding box to webView coordinates
         val webBoundingRect =
