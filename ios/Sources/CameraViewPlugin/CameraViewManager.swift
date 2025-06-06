@@ -177,10 +177,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         // Ensure proper orientation
-        if let photoConnection = avPhotoOutput.connection(with: .video),
+        if let videoConnection = avVideoDataOutput.connection(with: .video),
         let previewConnection = videoPreviewLayer.connection {
-            if photoConnection.isVideoOrientationSupported {
-                photoConnection.videoOrientation = previewConnection.videoOrientation
+            if videoConnection.isVideoOrientationSupported {
+                videoConnection.videoOrientation = previewConnection.videoOrientation
             }
         }
 
