@@ -1,0 +1,108 @@
+name: 🐛 Bug Report
+description: File a bug report for Capacitor Camera View
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! The more information you provide, the better we can help.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      description: Please confirm these before submitting your issue.
+      options:
+        - label: I have searched for similar issues before creating this one
+          required: true
+        - label: I am using the latest version of Capacitor Camera View
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Current behavior
+      description: Describe the bug or issue you're encountering in detail.
+      placeholder: When I try to take a photo with front camera, the app crashes...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen when using the plugin.
+      placeholder: The front camera should open and allow me to take a photo.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Clear steps to reproduce the issue.
+      placeholder: |
+        1. Install plugin version X.X.X
+        2. Call `start()` with these options: {...}
+        3. Switch to front camera
+        4. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Platforms affected
+      description: Select all platforms where you're experiencing the issue.
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Web
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Capacitor doctor
+      description: Run `npx cap doctor` in a terminal and paste the output below.
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Is this a regression?
+      description: Did this work in a previous version?
+      options:
+        - Yes (worked in a previous version)
+        - No (never worked)
+        - Not sure
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: Reproduction repository
+      description: If possible, please provide a link to a minimal repository that reproduces the issue.
+      placeholder: https://github.com/username/repo
+
+  - type: textarea
+    attributes:
+      label: Code snippet
+      description: |
+        If applicable, add a minimal code snippet that demonstrates the problem.
+      render: typescript
+      placeholder: |
+        import { CameraViewPlugin } from 'capacitor-camera-view';
+
+        const { photo } = await this.#cameraView.capture({
+          quality: 90,
+        });
+
+  - type: textarea
+    attributes:
+      label: Screenshots or videos
+      description: If applicable, add screenshots or videos to help explain your problem.
+      placeholder: You can upload files by dragging & dropping them into this text area.
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here.
