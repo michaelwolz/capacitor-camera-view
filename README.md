@@ -173,6 +173,25 @@ See the [`BarcodeDetectionData`](#barcodedetectiondata) interface for details on
 
 To see the plugin in action, check out the example app in the `example-app` folder. The app demonstrates how to integrate and use the Capacitor Camera View plugin in an Ionic Angular project.
 
+## Semantic Release
+
+This project uses [semantic-release](https://github.com/semantic-release/semantic-release) for automated versioning and changelog generation based on conventional commits.
+
+## Conventional Commits
+
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for your commit messages. Example:
+
+```
+feat(camera): add autofocus support
+fix(android): resolve crash on startup
+chore: update dependencies
+```
+
+## Resources
+- [semantic-release documentation](https://semantic-release.gitbook.io/semantic-release/)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+
+
 ## API
 
 <docgen-index>
