@@ -16,7 +16,7 @@
     "CapacitorCameraView.podspec"
   ],
   "author": "michaelwolz",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/michaelwolz/capacitor-camera-view.git"
