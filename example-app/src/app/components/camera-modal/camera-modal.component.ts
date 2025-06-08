@@ -81,7 +81,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   protected readonly flashMode = signal<FlashMode>('auto');
   protected readonly isCapturingPhoto = signal(false);
-  protected readonly currentZoomFactor = signal(this.initialZoomFactor());
+  protected readonly currentZoomFactor = signal(1.0);
   protected readonly minZoom = signal(1.0);
   protected readonly maxZoom = signal(10.0);
 
@@ -167,6 +167,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       this.#initializeZoomLimits(),
       this.#initializeFlashModes(),
     ]);
+
+    this.currentZoomFactor.set(this.initialZoomFactor());
   }
 
   protected async stopCamera(): Promise<void> {
