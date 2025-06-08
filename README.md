@@ -38,6 +38,10 @@
 
 ---
 
+## 🪧 Demo
+
+<img src="https://github.com/user-attachments/assets/77fc4689-ac8b-4572-8f35-09826671683b" alt="Capacitor Camera View Demo" height="500">
+
 ## 📦 Installation
 
 Install the plugin using npm:
