@@ -73,7 +73,7 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun capture(call: PluginCall) {
-        val quality = call.getInt("quality", 90)
+        val quality = call.getInt("quality") ?: 90
 
         if (quality !in 0..100) {
             call.reject("Quality must be between 0 and 100")
