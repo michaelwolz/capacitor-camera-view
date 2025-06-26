@@ -3,8 +3,6 @@ package com.michaelwolz.capacitorcameraview
 import android.content.Context
 import android.content.Context.CAMERA_SERVICE
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.util.Base64
@@ -18,13 +16,13 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
@@ -36,6 +34,8 @@ import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -124,32 +124,30 @@ class CameraView(plugin: Plugin) {
     }
 
     /** Capture a photo with the current camera configuration */
-    fun capturePhoto(quality: Int?, callback: (String?, Exception?) -> Unit) {
-        val controller =
-            this.cameraController
-                ?: run {
-                    callback(null, Exception("Camera controller not initialized"))
-                    return
-                }
+    fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
+        val controller = this.cameraController
+            ?: run {
+                callback(null, Exception("Camera controller not initialized"))
+                return
+            }
 
         mainHandler.post {
             try {
+                // Create temporary file for the captured image
+                val tempFile =
+                    File.createTempFile(UUID.randomUUID().toString(), ".jpg", context.cacheDir)
+                val outputOptions = ImageCapture.OutputFileOptions.Builder(tempFile).build()
+
                 controller.takePicture(
+                    outputOptions,
                     cameraExecutor,
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            try {
-                                val base64String = imageProxyToBase64(image, quality)
-                                callback(base64String, null)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error processing captured image", e)
-                                callback(null, e)
-                            } finally {
-                                image.close()
-                            }
+                    object : ImageCapture.OnImageSavedCallback {
+                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                            handleImageSaved(tempFile, quality, callback)
                         }
 
                         override fun onError(exception: ImageCaptureException) {
+                            tempFile.delete()
                             Log.e(TAG, "Error capturing image", exception)
                             callback(null, exception)
                         }
@@ -159,6 +157,61 @@ class CameraView(plugin: Plugin) {
                 Log.e(TAG, "Error setting up image capture", e)
                 callback(null, e)
             }
+        }
+    }
+
+    /**
+     * Handles the image saved callback, re-encodes the JPEG if quality is specified
+     * and returns the Base64 encoded string as the callback result.
+     */
+    private fun handleImageSaved(
+        tempFile: File,
+        quality: Int,
+        callback: (String?, Exception?) -> Unit
+    ) {
+        val startTime = System.currentTimeMillis()
+        try {
+            val jpegBytes = tempFile.readBytes()
+            val base64String = if (quality == 100) {
+                // If quality is 100, return the original JPEG without re-encoding
+                Log.d(TAG, "Encoding original JPEG (quality 100)")
+                Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
+            } else {
+                // Otherwise, re-encode the JPEG with the specified quality
+                // which is a little bit more expensive
+                Log.d(TAG, "Re-encoding JPEG with quality $quality")
+                val originalExif = ExifInterface(tempFile.absolutePath)
+                val orientation = originalExif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_UNDEFINED
+                )
+
+                val bitmap =
+                    android.graphics.BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+                val compressedFile =
+                    File.createTempFile(UUID.randomUUID().toString(), ".jpg", context.cacheDir)
+                val outputStream = compressedFile.outputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                outputStream.close()
+
+                val newExif = ExifInterface(compressedFile.absolutePath)
+                newExif.setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString())
+                newExif.saveAttributes()
+
+                val compressedBytes = compressedFile.readBytes()
+                compressedFile.delete()
+                Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
+            }
+            val endTime = System.currentTimeMillis()
+            Log.d(
+                TAG,
+                "Image processing took ${endTime - startTime} ms (quality: ${quality ?: 100})"
+            )
+            tempFile.delete()
+            callback(base64String, null)
+        } catch (e: Exception) {
+            tempFile.delete()
+            callback(null, e)
         }
     }
 
@@ -492,36 +545,6 @@ class CameraView(plugin: Plugin) {
 
         notifyBarcodeDetected(barcodeResult)
         lastBarcodeDetectionTime = now
-    }
-
-    /** Converts an ImageProxy to a Base64 encoded string */
-    private fun imageProxyToBase64(image: ImageProxy, quality: Int?): String {
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-
-        var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
-        try {
-            // Apply rotation if needed
-            if (image.imageInfo.rotationDegrees != 0) {
-                val matrix = Matrix()
-                matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
-                val rotatedBitmap =
-                    Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                // Recycle the original bitmap to prevent memory leaks
-                bitmap.recycle()
-                bitmap = rotatedBitmap
-            }
-
-            val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
-            val byteArray = outputStream.toByteArray()
-            return Base64.encodeToString(byteArray, Base64.NO_WRAP)
-        } finally {
-            // Ensure bitmap is always recycled
-            bitmap.recycle()
-        }
     }
 
     private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
