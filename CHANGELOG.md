@@ -1,3 +1,7 @@
+## <small>1.0.2 (2025-06-27)</small>
+
+* fix(android): set image capture to minimize latency ([2ad728a](https://github.com/michaelwolz/capacitor-camera-view/commit/2ad728a))
+
 ## <small>1.0.1 (2025-06-26)</small>
 
 * Merge pull request #2 from michaelwolz/perf/android/improve-image-processing ([a9897a6](https://github.com/michaelwolz/capacitor-camera-view/commit/a9897a6)), closes [#2](https://github.com/michaelwolz/capacitor-camera-view/issues/2)
