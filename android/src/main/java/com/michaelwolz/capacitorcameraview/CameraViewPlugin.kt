@@ -1,6 +1,7 @@
 package com.michaelwolz.capacitorcameraview
 
 import android.Manifest
+import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -73,6 +74,7 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun capture(call: PluginCall) {
+        val timeStart = System.currentTimeMillis();
         val quality = call.getInt("quality") ?: 90
 
         if (quality !in 0..100) {
@@ -86,12 +88,14 @@ class CameraViewPlugin : Plugin() {
                 photo == null -> call.reject("No image data")
                 else -> call.resolve(JSObject().apply { put("photo", photo) })
             }
+            Log.d(TAG, "capture took ${System.currentTimeMillis() - timeStart}ms")
         }
     }
 
     @PluginMethod
     fun captureSample(call: PluginCall) {
-        val quality = call.getInt("quality", 90)
+        val timeStart = System.currentTimeMillis();
+        val quality = call.getInt("quality") ?: 90
 
         if (quality !in 0..100) {
             call.reject("Quality must be between 0 and 100")
@@ -104,6 +108,7 @@ class CameraViewPlugin : Plugin() {
                 photo == null -> call.reject("No frame data")
                 else -> call.resolve(JSObject().apply { put("photo", photo) })
             }
+            Log.d(TAG, "captureSample took ${System.currentTimeMillis() - timeStart}ms")
         }
     }
 
@@ -223,5 +228,9 @@ class CameraViewPlugin : Plugin() {
     override fun handleOnDestroy() {
         implementation.cleanup()
         super.handleOnDestroy()
+    }
+
+    companion object {
+        private const val TAG = "CameraViewPlugin"
     }
 }

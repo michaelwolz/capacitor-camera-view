@@ -19,6 +19,7 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
+import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -125,6 +126,7 @@ class CameraView(plugin: Plugin) {
 
     /** Capture a photo with the current camera configuration */
     fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
+        val timeStart = System.currentTimeMillis()
         val controller = this.cameraController
             ?: run {
                 callback(null, Exception("Camera controller not initialized"))
@@ -143,6 +145,10 @@ class CameraView(plugin: Plugin) {
                     cameraExecutor,
                     object : ImageCapture.OnImageSavedCallback {
                         override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                            Log.d(
+                                TAG,
+                                "Image stored to temp file in ${System.currentTimeMillis() - timeStart} ms"
+                            )
                             handleImageSaved(tempFile, quality, callback)
                         }
 
@@ -172,9 +178,10 @@ class CameraView(plugin: Plugin) {
         val startTime = System.currentTimeMillis()
         try {
             val jpegBytes = tempFile.readBytes()
+            Log.d(TAG, "Image size : ${jpegBytes.size} bytes")
             val base64String = if (quality == 100) {
                 // If quality is 100, return the original JPEG without re-encoding
-                Log.d(TAG, "Encoding original JPEG (quality 100)")
+                Log.d(TAG, "Encoding original JPEG with quality 100")
                 Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
             } else {
                 // Otherwise, re-encode the JPEG with the specified quality
@@ -200,12 +207,12 @@ class CameraView(plugin: Plugin) {
 
                 val compressedBytes = compressedFile.readBytes()
                 compressedFile.delete()
+                Log.d(TAG, "Re-encoded image size: ${compressedBytes.size} bytes")
                 Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
             }
-            val endTime = System.currentTimeMillis()
             Log.d(
                 TAG,
-                "Image processing took ${endTime - startTime} ms (quality: ${quality ?: 100})"
+                "Image processing took ${System.currentTimeMillis() - startTime} ms (quality: $quality)"
             )
             tempFile.delete()
             callback(base64String, null)
@@ -219,7 +226,7 @@ class CameraView(plugin: Plugin) {
      * Capture a frame directly from the preview without using the full photo pipeline which is
      * faster but has lower quality.
      */
-    fun captureSampleFromPreview(quality: Int?, callback: (String?, Exception?) -> Unit) {
+    fun captureSampleFromPreview(quality: Int, callback: (String?, Exception?) -> Unit) {
         val previewView =
             this.previewView
                 ?: run {
@@ -238,7 +245,7 @@ class CameraView(plugin: Plugin) {
                         }
 
                 // Convert bitmap to Base64
-                bitmap.compress(Bitmap.CompressFormat.JPEG, quality ?: 90, outputStream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
                 val byteArray = outputStream.toByteArray()
                 val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
 
@@ -464,10 +471,11 @@ class CameraView(plugin: Plugin) {
         // Initialize camera controller
         val controller = LifecycleCameraController(context).apply {
             cameraSelector = currentCameraSelector
+            imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
             imageCaptureResolutionSelector = ResolutionSelector.Builder()
-                .setAspectRatioStrategy(
-                    AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
-                )
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
                 .build()
         }
 
