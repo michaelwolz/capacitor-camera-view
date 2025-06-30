@@ -1,3 +1,7 @@
+## <small>1.0.3 (2025-06-30)</small>
+
+* fix(android): calculate image orientation based on display orientation ([756eb4c](https://github.com/michaelwolz/capacitor-camera-view/commit/756eb4c))
+
 ## <small>1.0.2 (2025-06-27)</small>
 
 * fix(android): set image capture to minimize latency ([2ad728a](https://github.com/michaelwolz/capacitor-camera-view/commit/2ad728a))
