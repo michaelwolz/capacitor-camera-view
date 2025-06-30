@@ -7,23 +7,24 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.util.Base64
 import android.util.Log
+import android.view.Surface
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalZeroShutterLag
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
-import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
@@ -35,8 +36,6 @@ import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import java.io.ByteArrayOutputStream
-import java.io.File
-import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -52,9 +51,6 @@ class CameraView(plugin: Plugin) {
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
-
-    // Camera use cases
-    private var imageCapture: ImageCapture? = null
 
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
@@ -95,8 +91,6 @@ class CameraView(plugin: Plugin) {
             cameraController?.unbind()
 
             try {
-                imageCapture = null
-
                 previewView?.let { view ->
                     try {
                         (webView.parent as? ViewGroup)?.removeView(view)
@@ -125,35 +119,46 @@ class CameraView(plugin: Plugin) {
     }
 
     /** Capture a photo with the current camera configuration */
+    @OptIn(ExperimentalZeroShutterLag::class)
     fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
-        val timeStart = System.currentTimeMillis()
-        val controller = this.cameraController
+        val startTime = System.currentTimeMillis()
+        val controller =
+            this.cameraController
+                ?: run {
+                    callback(null, Exception("Camera controller not initialized"))
+                    return
+                }
+
+        val preview = previewView
             ?: run {
-                callback(null, Exception("Camera controller not initialized"))
+                callback(null, Exception("Camera preview not initialized"))
                 return
             }
 
         mainHandler.post {
-            try {
-                // Create temporary file for the captured image
-                val tempFile =
-                    File.createTempFile(UUID.randomUUID().toString(), ".jpg", context.cacheDir)
-                val outputOptions = ImageCapture.OutputFileOptions.Builder(tempFile).build()
+            val cameraInfo = controller.cameraInfo
+            val isFrontFacing = controller.cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA
+            val sensorRotationDegrees = cameraInfo?.sensorRotationDegrees ?: 0
+            val displayRotationDegrees = preview.display?.rotation ?: Surface.ROTATION_0
+            val imageRotationDegrees = calculateImageRotationBasedOnDisplayRotation(
+                displayRotationDegrees,
+                sensorRotationDegrees,
+                isFrontFacing
+            )
 
+            try {
                 controller.takePicture(
-                    outputOptions,
                     cameraExecutor,
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    object : ImageCapture.OnImageCapturedCallback() {
+                        override fun onCaptureSuccess(image: ImageProxy) {
                             Log.d(
                                 TAG,
-                                "Image stored to temp file in ${System.currentTimeMillis() - timeStart} ms"
+                                "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
                             )
-                            handleImageSaved(tempFile, quality, callback)
+                            handleCaptureSuccess(image, quality, imageRotationDegrees, callback)
                         }
 
                         override fun onError(exception: ImageCaptureException) {
-                            tempFile.delete()
                             Log.e(TAG, "Error capturing image", exception)
                             callback(null, exception)
                         }
@@ -167,58 +172,25 @@ class CameraView(plugin: Plugin) {
     }
 
     /**
-     * Handles the image saved callback, re-encodes the JPEG if quality is specified
-     * and returns the Base64 encoded string as the callback result.
+     * Handles the successful capture of an image, converting it to a Base64 string
      */
-    private fun handleImageSaved(
-        tempFile: File,
+    fun handleCaptureSuccess(
+        image: ImageProxy,
         quality: Int,
+        rotationDegrees: Int,
         callback: (String?, Exception?) -> Unit
     ) {
         val startTime = System.currentTimeMillis()
         try {
-            val jpegBytes = tempFile.readBytes()
-            Log.d(TAG, "Image size : ${jpegBytes.size} bytes")
-            val base64String = if (quality == 100) {
-                // If quality is 100, return the original JPEG without re-encoding
-                Log.d(TAG, "Encoding original JPEG with quality 100")
-                Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
-            } else {
-                // Otherwise, re-encode the JPEG with the specified quality
-                // which is a little bit more expensive
-                Log.d(TAG, "Re-encoding JPEG with quality $quality")
-                val originalExif = ExifInterface(tempFile.absolutePath)
-                val orientation = originalExif.getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION,
-                    ExifInterface.ORIENTATION_UNDEFINED
-                )
-
-                val bitmap =
-                    android.graphics.BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-                val compressedFile =
-                    File.createTempFile(UUID.randomUUID().toString(), ".jpg", context.cacheDir)
-                val outputStream = compressedFile.outputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-                outputStream.close()
-
-                val newExif = ExifInterface(compressedFile.absolutePath)
-                newExif.setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString())
-                newExif.saveAttributes()
-
-                val compressedBytes = compressedFile.readBytes()
-                compressedFile.delete()
-                Log.d(TAG, "Re-encoded image size: ${compressedBytes.size} bytes")
-                Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
-            }
-            Log.d(
-                TAG,
-                "Image processing took ${System.currentTimeMillis() - startTime} ms (quality: $quality)"
-            )
-            tempFile.delete()
+            // Turn the image into a Base64 encoded string and apply rotation if necessary
+            val base64String = imageProxyToBase64(image, quality, rotationDegrees)
+            Log.d(TAG, "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms")
             callback(base64String, null)
         } catch (e: Exception) {
-            tempFile.delete()
+            Log.e(TAG, "Error processing captured image", e)
             callback(null, e)
+        } finally {
+            image.close()
         }
     }
 
@@ -262,9 +234,9 @@ class CameraView(plugin: Plugin) {
     /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
         currentCameraSelector = when (currentCameraSelector) {
-            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
-            else -> CameraSelector.DEFAULT_FRONT_CAMERA
-        }
+                CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
+                else -> CameraSelector.DEFAULT_FRONT_CAMERA
+            }
 
         val controller =
             this.cameraController
@@ -409,7 +381,6 @@ class CameraView(plugin: Plugin) {
 
                 // Clear references
                 lifecycleOwner = null
-                imageCapture = null
 
                 // Shutdown executor
                 if (!cameraExecutor.isShutdown) {
@@ -441,7 +412,7 @@ class CameraView(plugin: Plugin) {
         (webView.parent as? ViewGroup)?.addView(previewView, 0)
     }
 
-    @OptIn(ExperimentalCamera2Interop::class)
+    @OptIn(ExperimentalCamera2Interop::class, ExperimentalZeroShutterLag::class)
     private fun initializeCamera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
@@ -451,33 +422,35 @@ class CameraView(plugin: Plugin) {
         setupPreviewView(context)
 
         currentCameraSelector = if (config.position == "front") {
-            CameraSelector.DEFAULT_FRONT_CAMERA
-        } else {
-            CameraSelector.DEFAULT_BACK_CAMERA
-        }
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            } else {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            }
 
         if (config.deviceId != null) {
             // Prefer specific device id over position
             currentCameraSelector = CameraSelector.Builder()
-                .addCameraFilter { cameraInfos ->
-                    cameraInfos.filter { info ->
-                        val cameraId = Camera2CameraInfo.from(info).cameraId
-                        cameraId == config.deviceId
+                    .addCameraFilter { cameraInfos ->
+                        cameraInfos.filter { info ->
+                            val cameraId = Camera2CameraInfo.from(info).cameraId
+                            cameraId == config.deviceId
+                        }
                     }
-                }
-                .build()
+                    .build()
         }
 
         // Initialize camera controller
-        val controller = LifecycleCameraController(context).apply {
-            cameraSelector = currentCameraSelector
-            imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .build()
-            imageCaptureResolutionSelector = ResolutionSelector.Builder()
-                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-                .build()
-        }
+        val controller =
+            LifecycleCameraController(context).apply {
+                cameraSelector = currentCameraSelector
+                imageCaptureMode = ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
+                imageCaptureResolutionSelector =
+                    ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(
+                            AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+                        )
+                        .build()
+            }
 
         cameraController = controller
         previewView?.controller = controller

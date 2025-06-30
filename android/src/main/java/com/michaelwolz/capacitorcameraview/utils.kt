@@ -1,13 +1,20 @@
 package com.michaelwolz.capacitorcameraview
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.Rect
+import android.util.Base64
+import android.view.Surface
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
+import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
 import com.getcapacitor.PluginCall
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
+import java.io.ByteArrayOutputStream
 
 /** Converts a barcode format code to a readable string. */
 fun getBarcodeFormatString(format: Int): String {
@@ -83,4 +90,75 @@ fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
         position = call.getString("position") ?: "back",
         zoomFactor = call.getFloat("zoomFactor") ?: 1.0f
     )
+}
+
+/**
+ * Calculates the image orientation based on the display rotation and sensor rotation degrees.
+ *
+ * This is because CameraController will set the image orientation based on the device's
+ * motion sensor, which may not match the display rotation and in this case not what we actually
+ * want.
+ *
+ * @param displayRotation The current display rotation (0, 1, 2, or 3).
+ * @param sensorRotationDegrees The rotation of the camera sensor in degrees (0, 90, 180, or 270).
+ * @param isFrontFacing Whether the camera is front-facing or back-facing.
+ * @return The calculated image orientation in degrees.
+ */
+fun calculateImageRotationBasedOnDisplayRotation(
+    displayRotation: Int,
+    sensorRotationDegrees: Int,
+    isFrontFacing: Boolean
+): Int {
+    val surfaceRotationDegrees = when (displayRotation) {
+        Surface.ROTATION_0 -> 0
+        Surface.ROTATION_90 -> 90
+        Surface.ROTATION_180 -> 180
+        Surface.ROTATION_270 -> 270
+        else -> 0
+    }
+
+    return if (isFrontFacing) {
+        (sensorRotationDegrees + surfaceRotationDegrees) % 360
+    } else {
+        (sensorRotationDegrees - surfaceRotationDegrees + 360) % 360
+    }
+}
+
+/**
+ * Converts an ImageProxy to a Base64 encoded string and applies rotation if necessary.
+ *
+ * @param image The ImageProxy to convert.
+ * @param quality The JPEG compression quality (0-100).
+ * @param rotationDegrees The degrees to rotate the image (0, 90, 180, 270).
+ */
+fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): String {
+    val buffer = image.planes[0].buffer
+    val bytes = ByteArray(buffer.remaining())
+    buffer.get(bytes)
+
+    var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        ?: throw IllegalArgumentException("Failed to decode image")
+
+    try {
+        // Apply rotation if needed
+        if (rotationDegrees != 0) {
+            val matrix = Matrix().apply {
+                postRotate(rotationDegrees.toFloat())
+            }
+            val rotatedBitmap =
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            // Recycle the original bitmap to prevent memory leaks
+            bitmap.recycle()
+            bitmap = rotatedBitmap
+        }
+
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+        val byteArray = outputStream.toByteArray()
+
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    } finally {
+        // Ensure bitmap is always recycled
+        bitmap.recycle()
+    }
 }
