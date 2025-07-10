@@ -119,7 +119,6 @@ class CameraView(plugin: Plugin) {
     }
 
     /** Capture a photo with the current camera configuration */
-    @OptIn(ExperimentalZeroShutterLag::class)
     fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
         val startTime = System.currentTimeMillis()
         val controller =
@@ -412,7 +411,7 @@ class CameraView(plugin: Plugin) {
         (webView.parent as? ViewGroup)?.addView(previewView, 0)
     }
 
-    @OptIn(ExperimentalCamera2Interop::class, ExperimentalZeroShutterLag::class)
+    @OptIn(ExperimentalCamera2Interop::class)
     private fun initializeCamera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
@@ -443,7 +442,7 @@ class CameraView(plugin: Plugin) {
         val controller =
             LifecycleCameraController(context).apply {
                 cameraSelector = currentCameraSelector
-                imageCaptureMode = ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG
+                imageCaptureMode = ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
                 imageCaptureResolutionSelector =
                     ResolutionSelector.Builder()
                         .setAspectRatioStrategy(
