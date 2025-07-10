@@ -1,3 +1,7 @@
+## <small>1.0.4 (2025-07-10)</small>
+
+* fix(android): remove experimental zero shutter lag capture mode ([08f5391](https://github.com/michaelwolz/capacitor-camera-view/commit/08f5391))
+
 ## <small>1.0.3 (2025-06-30)</small>
 
 * fix(android): calculate image orientation based on display orientation ([756eb4c](https://github.com/michaelwolz/capacitor-camera-view/commit/756eb4c))
