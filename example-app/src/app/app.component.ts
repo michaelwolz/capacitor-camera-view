@@ -18,6 +18,7 @@ import {
   searchOutline,
   sunny,
   sunnyOutline,
+  trashOutline,
 } from 'ionicons/icons';
 
 @Component({
@@ -44,6 +45,7 @@ export class AppComponent {
       searchOutline,
       sunny,
       sunnyOutline,
+      trashOutline,
     });
   }
 }

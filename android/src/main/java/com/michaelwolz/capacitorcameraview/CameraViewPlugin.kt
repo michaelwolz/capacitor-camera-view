@@ -76,17 +76,18 @@ class CameraViewPlugin : Plugin() {
     fun capture(call: PluginCall) {
         val timeStart = System.currentTimeMillis();
         val quality = call.getInt("quality") ?: 90
+        val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
             call.reject("Quality must be between 0 and 100")
             return
         }
 
-        implementation.capturePhoto(quality) { photo, error ->
+        implementation.capturePhoto(quality, saveToFile) { result, error ->
             when {
                 error != null -> call.reject("Failed to capture image: ${error.message}", error)
-                photo == null -> call.reject("No image data")
-                else -> call.resolve(JSObject().apply { put("photo", photo) })
+                result == null -> call.reject("No image data")
+                else -> call.resolve(result)
             }
             Log.d(TAG, "capture took ${System.currentTimeMillis() - timeStart}ms")
         }
@@ -96,17 +97,18 @@ class CameraViewPlugin : Plugin() {
     fun captureSample(call: PluginCall) {
         val timeStart = System.currentTimeMillis();
         val quality = call.getInt("quality") ?: 90
+        val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
             call.reject("Quality must be between 0 and 100")
             return
         }
 
-        implementation.captureSampleFromPreview(quality) { photo, error ->
+        implementation.captureSampleFromPreview(quality, saveToFile) { result, error ->
             when {
                 error != null -> call.reject("Failed to capture frame: ${error.message}", error)
-                photo == null -> call.reject("No frame data")
-                else -> call.resolve(JSObject().apply { put("photo", photo) })
+                result == null -> call.reject("No frame data")
+                else -> call.resolve(result)
             }
             Log.d(TAG, "captureSample took ${System.currentTimeMillis() - timeStart}ms")
         }

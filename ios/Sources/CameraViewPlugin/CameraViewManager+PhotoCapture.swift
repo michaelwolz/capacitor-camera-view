@@ -49,4 +49,3 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
     }
 
 }
-

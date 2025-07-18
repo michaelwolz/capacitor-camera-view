@@ -54,3 +54,11 @@ public func convertToStringCameraType(_ deviceType: AVCaptureDevice.DeviceType) 
 public func convertToNativeCameraTypes(_ stringTypes: [String]) -> [AVCaptureDevice.DeviceType] {
     return stringTypes.compactMap { convertToNativeCameraType($0) }
 }
+
+/// Creates a temporary file URL for storing captured images
+public func createTempImageFile() throws -> URL {
+    let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+    let fileName = "camera_capture_\(timestamp).jpg"
+    let tempDir = FileManager.default.temporaryDirectory
+    return tempDir.appendingPathComponent(fileName)
+}

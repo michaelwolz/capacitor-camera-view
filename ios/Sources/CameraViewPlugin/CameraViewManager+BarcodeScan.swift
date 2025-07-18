@@ -36,7 +36,7 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
             .pdf417,
             .aztec,
             .dataMatrix,
-            .upce,
+            .upce
         ]
     }
 
@@ -67,15 +67,15 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
         // Which in our case should always equal to the device's screen
         // This way we can simply use pixel coordinates to get the bounding box of the detected barcode and easily show it in the webview
         guard let transformedMetadataObject = videoPreviewLayer.transformedMetadataObject(for: metadataObject)
-        else { 
-            return 
+        else {
+            return
         }
 
         let boundingRect: [String: Double] = [
             "x": Double(transformedMetadataObject.bounds.origin.x),
             "y": Double(transformedMetadataObject.bounds.origin.y),
             "width": Double(transformedMetadataObject.bounds.width),
-            "height": Double(transformedMetadataObject.bounds.height),
+            "height": Double(transformedMetadataObject.bounds.height)
         ]
 
         NotificationCenter.default.post(
@@ -84,7 +84,7 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
             userInfo: [
                 "value": barcodeValue,
                 "type": barcodeType,
-                "boundingRect": boundingRect,
+                "boundingRect": boundingRect
             ]
         )
     }

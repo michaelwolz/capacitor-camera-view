@@ -5,6 +5,7 @@ import android.content.Context.CAMERA_SERVICE
 import android.graphics.Bitmap
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import android.view.Surface
@@ -25,6 +26,8 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.getcapacitor.FileUtils
+import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
@@ -35,6 +38,8 @@ import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -118,7 +123,11 @@ class CameraView(plugin: Plugin) {
     }
 
     /** Capture a photo with the current camera configuration */
-    fun capturePhoto(quality: Int, callback: (String?, Exception?) -> Unit) {
+    fun capturePhoto(
+        quality: Int,
+        saveToFile: Boolean = false,
+        callback: (JSObject?, Exception?) -> Unit
+    ) {
         val startTime = System.currentTimeMillis()
         val controller =
             this.cameraController
@@ -145,23 +154,58 @@ class CameraView(plugin: Plugin) {
             )
 
             try {
-                controller.takePicture(
-                    cameraExecutor,
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            Log.d(
-                                TAG,
-                                "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
-                            )
-                            handleCaptureSuccess(image, quality, imageRotationDegrees, callback)
-                        }
+                if (saveToFile) {
+                    // Direct file capture - much more efficient!
+                    val tempFile =
+                        File.createTempFile("camera_capture_photo", ".jpg", context.cacheDir)
+                    val outputFileOptions = ImageCapture.OutputFileOptions.Builder(tempFile).build()
 
-                        override fun onError(exception: ImageCaptureException) {
-                            Log.e(TAG, "Error capturing image", exception)
-                            callback(null, exception)
+                    controller.takePicture(
+                        outputFileOptions,
+                        cameraExecutor,
+                        object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                val processingTime = System.currentTimeMillis() - startTime
+                                Log.d(TAG, "Image saved directly to file in ${processingTime}ms")
+
+                                val result = JSObject().apply {
+                                    val capacitorFilePath = FileUtils.getPortablePath(
+                                        context,
+                                        pluginDelegate.bridge.localUrl,
+                                        Uri.fromFile(tempFile)
+                                    )
+
+                                    put("webPath", capacitorFilePath)
+                                }
+                                callback(result, null)
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
+                                Log.e(TAG, "Error saving image to file", exception)
+                                callback(null, exception)
+                            }
                         }
-                    }
-                )
+                    )
+                } else {
+                    // Base64 capture using ImageProxy
+                    controller.takePicture(
+                        cameraExecutor,
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(image: ImageProxy) {
+                                Log.d(
+                                    TAG,
+                                    "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
+                                )
+                                handleCaptureSuccess(image, quality, imageRotationDegrees, callback)
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
+                                Log.e(TAG, "Error capturing image", exception)
+                                callback(null, exception)
+                            }
+                        }
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting up image capture", e)
                 callback(null, e)
@@ -170,20 +214,22 @@ class CameraView(plugin: Plugin) {
     }
 
     /**
-     * Handles the successful capture of an image, converting it to a Base64 string
+     * Handles the successful capture of an image for base64 conversion
      */
     fun handleCaptureSuccess(
         image: ImageProxy,
         quality: Int,
         rotationDegrees: Int,
-        callback: (String?, Exception?) -> Unit
+        callback: (JSObject?, Exception?) -> Unit
     ) {
         val startTime = System.currentTimeMillis()
         try {
-            // Turn the image into a Base64 encoded string and apply rotation if necessary
             val base64String = imageProxyToBase64(image, quality, rotationDegrees)
+            val result = JSObject().apply {
+                put("photo", base64String)
+            }
             Log.d(TAG, "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms")
-            callback(base64String, null)
+            callback(result, null)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing captured image", e)
             callback(null, e)
@@ -196,7 +242,11 @@ class CameraView(plugin: Plugin) {
      * Capture a frame directly from the preview without using the full photo pipeline which is
      * faster but has lower quality.
      */
-    fun captureSampleFromPreview(quality: Int, callback: (String?, Exception?) -> Unit) {
+    fun captureSampleFromPreview(
+        quality: Int,
+        saveToFile: Boolean = false,
+        callback: (JSObject?, Exception?) -> Unit
+    ) {
         val previewView =
             this.previewView
                 ?: run {
@@ -205,7 +255,6 @@ class CameraView(plugin: Plugin) {
                 }
 
         mainHandler.post {
-            val outputStream = ByteArrayOutputStream()
             try {
                 val bitmap =
                     previewView.bitmap
@@ -214,17 +263,38 @@ class CameraView(plugin: Plugin) {
                             return@post
                         }
 
-                // Convert bitmap to Base64
-                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-                val byteArray = outputStream.toByteArray()
-                val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+                val result = JSObject()
 
-                callback(base64String, null)
+                if (saveToFile) {
+                    val tempFile =
+                        File.createTempFile("camera_capture_sample", ".jpg", context.cacheDir)
+
+                    FileOutputStream(tempFile).use { outputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                    }
+
+                    val capacitorFilePath = FileUtils.getPortablePath(
+                        context,
+                        pluginDelegate.bridge.localUrl,
+                        Uri.fromFile(tempFile)
+                    )
+
+                    result.put("webPath", capacitorFilePath)
+                } else {
+                    // Convert bitmap to Base64
+                    val outputStream = ByteArrayOutputStream()
+                    outputStream.use { outputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                        val byteArray = outputStream.toByteArray()
+                        val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+                        result.put("photo", base64String)
+                    }
+                }
+
+                callback(result, null)
             } catch (e: Exception) {
                 Log.e(TAG, "Error capturing preview frame", e)
                 callback(null, e)
-            } finally {
-                outputStream.close()
             }
         }
     }
@@ -232,9 +302,9 @@ class CameraView(plugin: Plugin) {
     /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
         currentCameraSelector = when (currentCameraSelector) {
-                CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
-                else -> CameraSelector.DEFAULT_FRONT_CAMERA
-            }
+            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
+            else -> CameraSelector.DEFAULT_FRONT_CAMERA
+        }
 
         val controller =
             this.cameraController
@@ -420,21 +490,21 @@ class CameraView(plugin: Plugin) {
         setupPreviewView(context)
 
         currentCameraSelector = if (config.position == "front") {
-                CameraSelector.DEFAULT_FRONT_CAMERA
-            } else {
-                CameraSelector.DEFAULT_BACK_CAMERA
-            }
+            CameraSelector.DEFAULT_FRONT_CAMERA
+        } else {
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }
 
         if (config.deviceId != null) {
             // Prefer specific device id over position
             currentCameraSelector = CameraSelector.Builder()
-                    .addCameraFilter { cameraInfos ->
-                        cameraInfos.filter { info ->
-                            val cameraId = Camera2CameraInfo.from(info).cameraId
-                            cameraId == config.deviceId
-                        }
+                .addCameraFilter { cameraInfos ->
+                    cameraInfos.filter { info ->
+                        val cameraId = Camera2CameraInfo.from(info).cameraId
+                        cameraId == config.deviceId
                     }
-                    .build()
+                }
+                .build()
         }
 
         // Initialize camera controller

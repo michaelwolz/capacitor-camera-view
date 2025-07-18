@@ -11,6 +11,7 @@ import type {
   PermissionStatus,
   CaptureResponse,
   FlashMode,
+  CaptureOptions,
 } from './definitions';
 import { calculateVisibleArea, canvasToBase64, drawVisibleAreaToCanvas, transformBarcodeBoundingBox } from './utils';
 
@@ -134,7 +135,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
    * Capture a photo using the camera and return it as a base64-encoded JPEG image.
    * Preserves what the user actually sees in the UI, including cropping from object-fit: cover.
    */
-  async capture(options: { quality: number }): Promise<CaptureResponse> {
+  async capture<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>> {
     const videoElement = this.videoElement;
 
     if (!this.#isRunning || !videoElement) {
@@ -148,9 +149,29 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       drawVisibleAreaToCanvas(canvas, videoElement, visibleArea);
 
       const quality = Math.min(1.0, Math.max(0.1, options.quality / 100));
-      const base64Data = canvasToBase64(canvas, quality);
 
-      return { photo: base64Data };
+      if (options.saveToFile) {
+        // Create a blob from canvas and return a blob URL
+        return new Promise((resolve, reject) => {
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to create blob from canvas'));
+                return;
+              }
+
+              const url = URL.createObjectURL(blob);
+              resolve({ webPath: url } as CaptureResponse<T>);
+            },
+            'image/jpeg',
+            quality,
+          );
+        });
+      } else {
+        // Return base64 data
+        const base64Data = canvasToBase64(canvas, quality);
+        return { photo: base64Data } as CaptureResponse<T>;
+      }
     } catch (err) {
       throw new Error(`Failed to capture photo: ${this.formatError(err)}`);
     }
@@ -159,7 +180,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   /**
    * Web implementation already uses images from the video stream, so this is the same as `capture()`
    */
-  async captureSample(options: { quality: number }): Promise<CaptureResponse> {
+  async captureSample<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>> {
     return this.capture(options);
   }
 

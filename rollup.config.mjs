@@ -1,5 +1,9 @@
 export default {
   input: 'dist/esm/index.js',
+  onwarn(warning, warn) {
+    if (warning.code === 'THIS_IS_UNDEFINED') return;
+    warn(warning);
+  },
   output: [
     {
       file: 'dist/plugin.js',
