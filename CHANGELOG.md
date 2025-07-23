@@ -1,3 +1,10 @@
+## 1.1.0 (2025-07-23)
+
+* Merge pull request #3 from michaelwolz/feat/add-save-to-file-option-for-image-capturing ([b0bff7f](https://github.com/michaelwolz/capacitor-camera-view/commit/b0bff7f)), closes [#3](https://github.com/michaelwolz/capacitor-camera-view/issues/3)
+* refactor(android): fix name shadowing warning ([22066f6](https://github.com/michaelwolz/capacitor-camera-view/commit/22066f6))
+* feat(*): add saveToFile option for photo capture ([1a3de95](https://github.com/michaelwolz/capacitor-camera-view/commit/1a3de95))
+* chore: remove unused import ([71ce30b](https://github.com/michaelwolz/capacitor-camera-view/commit/71ce30b))
+
 ## <small>1.0.4 (2025-07-10)</small>
 
 * fix(android): remove experimental zero shutter lag capture mode ([08f5391](https://github.com/michaelwolz/capacitor-camera-view/commit/08f5391))
