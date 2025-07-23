@@ -272,16 +272,16 @@ Check if the camera view is currently running.
 ### capture(...)
 
 ```typescript
-capture(options: { quality: number; }) => Promise<CaptureResponse>
+capture<T extends CaptureOptions>(options: T) => Promise<CaptureResponse<T>>
 ```
 
 Capture a photo using the current camera configuration.
 
-| Param         | Type                              | Description                     |
-| ------------- | --------------------------------- | ------------------------------- |
-| **`options`** | <code>{ quality: number; }</code> | - Capture configuration options |
+| Param         | Type           | Description                     |
+| ------------- | -------------- | ------------------------------- |
+| **`options`** | <code>T</code> | - Capture configuration options |
 
-**Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&gt;</code>
+**Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&lt;T&gt;&gt;</code>
 
 **Since:** 1.0.0
 
@@ -291,7 +291,7 @@ Capture a photo using the current camera configuration.
 ### captureSample(...)
 
 ```typescript
-captureSample(options: { quality: number; }) => Promise<CaptureResponse>
+captureSample<T extends CaptureOptions>(options: T) => Promise<CaptureResponse<T>>
 ```
 
 Captures a frame from the current camera preview without using the full camera capture pipeline.
@@ -304,11 +304,11 @@ On web this method does exactly the same as `capture()` as it only captures a fr
 because unfortunately [ImageCapture API](https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture) is
 not yet well supported on the web.
 
-| Param         | Type                              | Description                     |
-| ------------- | --------------------------------- | ------------------------------- |
-| **`options`** | <code>{ quality: number; }</code> | - Capture configuration options |
+| Param         | Type           | Description                     |
+| ------------- | -------------- | ------------------------------- |
+| **`options`** | <code>T</code> | - Capture configuration options |
 
-**Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&gt;</code>
+**Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&lt;T&gt;&gt;</code>
 
 **Since:** 1.0.0
 
@@ -517,13 +517,14 @@ Response for checking if the camera view is running.
 | **`isRunning`** | <code>boolean</code> | Indicates if the camera view is currently active and running |
 
 
-#### CaptureResponse
+#### CaptureOptions
 
-Response for capturing a photo.
+Configuration options for capturing photos and samples.
 
-| Prop        | Type                | Description                                     |
-| ----------- | ------------------- | ----------------------------------------------- |
-| **`photo`** | <code>string</code> | The base64 encoded string of the captured photo |
+| Prop             | Type                 | Description                                                                                                                                                                                                                                                                                                                | Default            | Since |
+| ---------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----- |
+| **`quality`**    | <code>number</code>  | The JPEG quality of the captured photo/sample on a scale of 0-100                                                                                                                                                                                                                                                          |                    | 1.1.0 |
+| **`saveToFile`** | <code>boolean</code> | If true, saves to a temporary file and returns the web path instead of base64. The web path can be used to set the src attribute of an image for efficient loading and rendering. This reduces the data that needs to be transferred over the bridge, which can improve performance especially for high-resolution images. | <code>false</code> | 1.1.0 |
 
 
 #### GetAvailableDevicesResponse
@@ -635,6 +636,15 @@ Available camera device types for iOS.
 Maps to AVCaptureDevice DeviceTypes in iOS.
 
 <code>'wideAngle' | 'ultraWide' | 'telephoto' | 'dual' | 'dualWide' | 'triple' | 'trueDepth'</code>
+
+
+#### CaptureResponse
+
+Response for capturing a photo
+This will contain either a base64 encoded string or a web path to the captured photo,
+depending on the `saveToFile` option in the <a href="#captureoptions">CaptureOptions</a>.
+
+<code>T['saveToFile'] extends true ? { /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */ webPath: string; } : { /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */ photo: string; }</code>
 
 
 #### FlashMode

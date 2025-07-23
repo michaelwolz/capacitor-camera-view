@@ -58,6 +58,7 @@ export class CameraSettingsPage implements OnInit {
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
+  protected saveToFile = model<boolean>(false);
 
   protected barcodeValue = signal<string | undefined>(undefined);
 
@@ -80,18 +81,22 @@ export class CameraSettingsPage implements OnInit {
         quality: this.quality(),
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
         initialZoomFactor: this.initialZoomFactor(),
+        saveToFile: this.saveToFile(),
       },
     });
 
     await cameraModal.present();
 
     const { data } = await cameraModal.onDidDismiss<{
-      photo: string;
-      barcode: BarcodeDetectionData;
+      photo?: string;
+      webPath?: string;
+      barcode?: BarcodeDetectionData;
     }>();
 
     if (data?.photo) {
-      this.#galleryService.addPhoto(data?.photo);
+      this.#galleryService.addPhoto(data.photo);
+    } else if (data?.webPath) {
+      this.#galleryService.addPhotoFromFile(data.webPath);
     }
 
     if (data?.barcode) {

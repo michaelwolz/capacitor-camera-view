@@ -86,6 +86,16 @@
         Enable Barcode Detection
       </ion-checkbox>
     </ion-item>
+
+    <ion-item>
+      <ion-checkbox
+        [(ngModel)]="saveToFile"
+        color="primary"
+        justify="space-between"
+      >
+        Save to File
+      </ion-checkbox>
+    </ion-item>
   </ion-list>
 
   <ion-button (click)="startCamera()" expand="block">

@@ -18,7 +18,7 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
     let enableBarcodeDetection = call.getBool("enableBarcodeDetection", false)
     let position: AVCaptureDevice.Position = call.getString("position") == "front" ? .front : .back
     let preferredCameraDeviceTypes = call.getArray("preferredCameraDeviceTypes") as? [String]
-    let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable",  false)
+    let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable", false)
     let zoomFactor = call.getDouble("zoomFactor").map { CGFloat($0) }
 
     return CameraSessionConfiguration(

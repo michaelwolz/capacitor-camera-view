@@ -10,7 +10,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     .builtInDualCamera,
     .builtInDualWideCamera,
     .builtInTripleCamera,
-    .builtInTrueDepthCamera,
+    .builtInTrueDepthCamera
 ]
 
 /// A camera implementation that handles camera session management and photo capture.
@@ -41,7 +41,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Callback for when snapshot capture completes.
     internal var snapshotCompletionHandler: ((UIImage?, Error?) -> Void)?
 
-    public override init() {
+    override public init() {
         super.init()
         setupOrientationObserver()
         setupAppLifecycleObservers()
@@ -52,7 +52,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         NotificationCenter.default.removeObserver(self)
     }
 
-    /// MARK: - Plugin API
+    // MARK: - Plugin API
 
     /// Starts capture session for the specified camera position.
     /// This will reuse the existing capture session if it is already running.
@@ -152,7 +152,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let photoConnection = avPhotoOutput.connection(with: .video),
-        let previewConnection = videoPreviewLayer.connection {
+           let previewConnection = videoPreviewLayer.connection {
             if photoConnection.isVideoOrientationSupported {
                 photoConnection.videoOrientation = previewConnection.videoOrientation
             }
@@ -178,7 +178,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let videoConnection = avVideoDataOutput.connection(with: .video),
-        let previewConnection = videoPreviewLayer.connection {
+           let previewConnection = videoPreviewLayer.connection {
             if videoConnection.isVideoOrientationSupported {
                 videoConnection.videoOrientation = previewConnection.videoOrientation
             }
@@ -371,7 +371,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Returns a list of available camera devices based on the preferences by the user
     ///
     /// - Returns: a list of camera devices based on the preferredCameraDeviceTypes
-    private func getPreferredCameraDevices()  -> [AVCaptureDevice]  {
+    private func getPreferredCameraDevices() -> [AVCaptureDevice] {
         return AVCaptureDevice.DiscoverySession(
             deviceTypes: self.preferredCameraDeviceTypes,
             mediaType: .video,
@@ -387,8 +387,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - position: The position of the camera device to get
     /// - Returns: The camera device for the specified position
     /// - Throws: An error if no camera device is found.
-    private func getCameraDevice(for position: AVCaptureDevice.Position?) throws -> AVCaptureDevice
-    {
+    private func getCameraDevice(for position: AVCaptureDevice.Position?) throws -> AVCaptureDevice {
         let preferredDevices = getPreferredCameraDevices()
 
         // First try to get the best match based on the users preferred camera device types
@@ -430,7 +429,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         return device
     }
 
-    /// MARK: - UI Preview Layer
+    // MARK: - UI Preview Layer
 
     /// Sets up the preview layer for the capture session which will
     /// display the camera feed in the view.
@@ -465,7 +464,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
     }
 
-    /// MARK: - Triple Camera
+    // MARK: - Triple Camera
 
     /// Upgrades the camera to the triple camera if available.
     /// Initializing the triple camera is an expensive operation and takes some time.
@@ -549,7 +548,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
     }
 
-    /// MARK: - Orientation Observer
+    // MARK: - Orientation Observer
 
     /// Sets up an observer for device orientation changes to update the preview layer orientation.
     private func setupOrientationObserver() {
@@ -593,7 +592,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
     }
 
-    /// MARK: - App Lifecycle Observers
+    // MARK: - App Lifecycle Observers
 
     /// Sets up observers for app lifecycle events to pause and resume the camera session.
     private func setupAppLifecycleObservers() {

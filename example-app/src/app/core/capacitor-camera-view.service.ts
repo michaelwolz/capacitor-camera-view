@@ -6,6 +6,8 @@ import {
   CameraSessionConfiguration,
   CameraView,
   CameraViewPlugin,
+  CaptureOptions,
+  CaptureResponse,
   FlashMode,
 } from 'capacitor-camera-view';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -66,20 +68,22 @@ export class CapacitorCameraViewService {
 
   /**
    * Capture a photo from the camera view
-   * @param quality The quality of the photo (0-100)
-   * @returns A base64 encoded string of the captured photo
+   * @returns Object containing either photo (base64) or path (file URL)
    */
-  async capture(quality: number = 90): Promise<string> {
-    return (await this.#cameraView.capture({ quality })).photo;
+  async capture<T extends CaptureOptions>(
+    options: T,
+  ): Promise<CaptureResponse<T>> {
+    return await this.#cameraView.capture(options);
   }
 
   /**
    * Capture a sample from the camera view
-   * @param quality The quality of the sample (0-100)
-   * @returns A base64 encoded string of the captured sample
+   * @returns Object containing either photo (base64) or path (file URL)
    */
-  async captureSample(quality: number = 90): Promise<string> {
-    return (await this.#cameraView.captureSample({ quality })).photo;
+  async captureSample<T extends CaptureOptions>(
+    options: T,
+  ): Promise<CaptureResponse<T>> {
+    return await this.#cameraView.captureSample(options);
   }
 
   /**

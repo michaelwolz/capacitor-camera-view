@@ -38,12 +38,11 @@ export interface CameraViewPlugin {
    * Capture a photo using the current camera configuration.
    *
    * @param options - Capture configuration options
-   * @param options.quality - The JPEG quality of the captured photo on a scale of 0-100
-   * @returns A promise that resolves with an object containing a base64 encoded string of the captured photo
+   * @returns A promise that resolves with an object containing either a base64 encoded string or file path of the captured photo
    *
    * @since 1.0.0
    */
-  capture(options: { quality: number }): Promise<CaptureResponse>;
+  capture<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>>;
 
   /**
    * Captures a frame from the current camera preview without using the full camera capture pipeline.
@@ -57,12 +56,11 @@ export interface CameraViewPlugin {
    * not yet well supported on the web.
    *
    * @param options - Capture configuration options
-   * @param options.quality - The JPEG quality of the captured sample on a scale of 0-100
-   * @returns A promise that resolves with an object containing a base64 encoded string of the captured sample
+   * @returns A promise that resolves with an object containing either a base64 encoded string or file path of the captured sample
    *
    * @since 1.0.0
    */
-  captureSample(options: { quality: number }): Promise<CaptureResponse>;
+  captureSample<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>>;
 
   /**
    * Switch between front and back camera.
@@ -307,6 +305,29 @@ export interface CameraSessionConfiguration {
   containerElementId?: string;
 }
 
+/**
+ * Configuration options for capturing photos and samples.
+ *
+ * @since 1.1.0
+ */
+export interface CaptureOptions {
+  /**
+   * The JPEG quality of the captured photo/sample on a scale of 0-100
+   * @since 1.1.0
+   */
+  quality: number;
+
+  /**
+   * If true, saves to a temporary file and returns the web path instead of base64.
+   * The web path can be used to set the src attribute of an image for efficient loading and rendering.
+   * This reduces the data that needs to be transferred over the bridge, which can improve performance
+   * especially for high-resolution images.
+   * @default false
+   * @since 1.1.0
+   */
+  saveToFile?: boolean;
+}
+
 // ------------------------------------------------------------------------------
 // Response Interfaces
 // ------------------------------------------------------------------------------
@@ -322,14 +343,20 @@ export interface IsRunningResponse {
 }
 
 /**
- * Response for capturing a photo.
- *
+ * Response for capturing a photo
+ * This will contain either a base64 encoded string or a web path to the captured photo,
+ * depending on the `saveToFile` option in the CaptureOptions.
  * @since 1.0.0
  */
-export interface CaptureResponse {
-  /** The base64 encoded string of the captured photo */
-  photo: string;
-}
+export type CaptureResponse<T extends CaptureOptions = CaptureOptions> = T['saveToFile'] extends true
+  ? {
+      /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */
+      webPath: string;
+    }
+  : {
+      /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */
+      photo: string;
+    };
 
 /**
  * Response for getting available camera devices.

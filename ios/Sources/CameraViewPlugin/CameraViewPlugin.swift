@@ -13,14 +13,14 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     private let strToFlashModeMap: [String: AVCaptureDevice.FlashMode] = [
         "off": .off,
         "on": .on,
-        "auto": .auto,
+        "auto": .auto
     ]
 
     /// Maps AVCaptureDevice.FlashMode enum values to string values.
     private let flashModeToStrMap: [AVCaptureDevice.FlashMode: String] = [
         .off: "off",
         .on: "on",
-        .auto: "auto",
+        .auto: "auto"
     ]
 
     public let pluginMethods: [CAPPluginMethod] = [
@@ -37,7 +37,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise)
     ]
 
     private let implementation = CameraViewManager()
@@ -104,6 +104,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func capture(_ call: CAPPluginCall) {
         let quality = call.getDouble("quality", 90.0)
+        let saveToFile = call.getBool("saveToFile", false)
 
         guard quality >= 0.0 && quality <= 100.0 else {
             call.reject("Quality must be between 0 and 100")
@@ -117,48 +118,85 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             guard let image = image else {
-                call.reject("No image data", nil, nil)
+                call.reject("No image data")
                 return
             }
 
             guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
-                call.reject("Failed to compress image", nil, nil)
+                call.reject("Failed to compress image")
                 return
             }
 
-            call.resolve([
-                "photo": imageData.base64EncodedString()
-            ])
+            if saveToFile {
+                do {
+                    let tempFileURL = try createTempImageFile()
+                    try imageData.write(to: tempFileURL)
+
+                    // Convert file URL to webView-accessible path using Capacitor bridge
+                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                        call.reject("Failed to create web-accessible path")
+                        return
+                    }
+
+                    call.resolve(["webPath": webPath])
+                } catch {
+                    call.reject("Failed to save image to file", nil, error)
+                }
+            } else {
+                // Return as base64
+                call.resolve([
+                    "photo": imageData.base64EncodedString()
+                ])
+            }
         })
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
         let quality = call.getDouble("quality", 90.0)
+        let saveToFile = call.getBool("saveToFile", false)
 
         guard quality >= 0.0 && quality <= 100.0 else {
             call.reject("Quality must be between 0 and 100")
             return
         }
 
-        implementation.captureSnapshot() { (image, error) in
+        implementation.captureSnapshot { (image, error) in
             if let error = error {
                 call.reject("Failed to capture frame", nil, error)
                 return
             }
 
             guard let image = image else {
-                call.reject("No frame data", nil, nil)
+                call.reject("No frame data")
                 return
             }
 
             guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
-                call.reject("Failed to compress image", nil, nil)
+                call.reject("Failed to compress image")
                 return
             }
 
-            call.resolve([
-                "photo": imageData.base64EncodedString()
-            ])
+            if saveToFile {
+                do {
+                    let tempFileURL = try createTempImageFile()
+                    try imageData.write(to: tempFileURL)
+
+                    // Convert file URL to webView-accessible path using Capacitor bridge
+                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                        call.reject("Failed to create web-accessible path")
+                        return
+                    }
+
+                    call.resolve(["webPath": webPath])
+                } catch {
+                    call.reject("Failed to save sample to file", nil, error)
+                }
+            } else {
+                // Return as base64
+                call.resolve([
+                    "photo": imageData.base64EncodedString()
+                ])
+            }
         }
     }
 
@@ -196,7 +234,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve([
             "min": zoom.min,
             "max": zoom.max,
-            "current": zoom.current,
+            "current": zoom.current
         ])
     }
 

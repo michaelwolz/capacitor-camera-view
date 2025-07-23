@@ -10,4 +10,12 @@ export class GalleryService {
   public addPhoto(photo: string) {
     this.#photos.update((curr) => [...curr, `data:image/jpeg;base64,${photo}`]);
   }
+
+  public addPhotoFromFile(filePath: string) {
+    this.#photos.update((curr) => [...curr, filePath]);
+  }
+
+  public clearGallery() {
+    this.#photos.set([]);
+  }
 }

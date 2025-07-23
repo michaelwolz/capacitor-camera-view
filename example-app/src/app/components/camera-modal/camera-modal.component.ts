@@ -71,6 +71,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly quality = input<number>(85);
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
   public readonly initialZoomFactor = input<number>(1.0);
+  public readonly saveToFile = input<boolean>(false);
 
   protected readonly cameraStarted = toSignal(
     this.#cameraViewService.cameraStarted,
@@ -189,8 +190,27 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected async capturePhoto(): Promise<void> {
     this.isCapturingPhoto.set(true);
     try {
-      const photo = await this.#cameraViewService.capture(this.quality());
-      this.#modalController.dismiss({ photo });
+      const saveToFile = this.saveToFile();
+
+      if (saveToFile) {
+        const result = await this.#cameraViewService.capture({
+          quality: this.quality(),
+          saveToFile: true,
+        });
+        this.#modalController.dismiss({
+          photo: undefined,
+          webPath: result.webPath,
+        });
+      } else {
+        const result = await this.#cameraViewService.capture({
+          quality: this.quality(),
+          saveToFile: false,
+        });
+        this.#modalController.dismiss({
+          photo: result.photo,
+          webPath: undefined,
+        });
+      }
     } catch (error) {
       console.error('Failed to capture photo', error);
       this.#modalController.dismiss();
@@ -206,8 +226,27 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected async captureSample(): Promise<void> {
     this.isCapturingPhoto.set(true);
     try {
-      const photo = await this.#cameraViewService.captureSample();
-      this.#modalController.dismiss({ photo });
+      const saveToFile = this.saveToFile();
+
+      if (saveToFile) {
+        const result = await this.#cameraViewService.captureSample({
+          quality: this.quality(),
+          saveToFile: true,
+        });
+        this.#modalController.dismiss({
+          photo: undefined,
+          webPath: result.webPath,
+        });
+      } else {
+        const result = await this.#cameraViewService.captureSample({
+          quality: this.quality(),
+          saveToFile: false,
+        });
+        this.#modalController.dismiss({
+          photo: result.photo,
+          webPath: undefined,
+        });
+      }
     } catch (error) {
       console.error('Failed to capture sample', error);
       this.#modalController.dismiss();
