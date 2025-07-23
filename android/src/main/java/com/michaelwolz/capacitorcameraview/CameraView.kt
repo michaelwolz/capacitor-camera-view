@@ -283,9 +283,9 @@ class CameraView(plugin: Plugin) {
                 } else {
                     // Convert bitmap to Base64
                     val outputStream = ByteArrayOutputStream()
-                    outputStream.use { outputStream ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-                        val byteArray = outputStream.toByteArray()
+                    outputStream.use { stream ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+                        val byteArray = stream.toByteArray()
                         val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
                         result.put("photo", base64String)
                     }
