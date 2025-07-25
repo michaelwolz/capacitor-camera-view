@@ -1,3 +1,8 @@
+## <small>1.1.1 (2025-07-25)</small>
+
+* fix(ios): remove metadata output in case barcoded detection is disabled ([d6ef90d](https://github.com/michaelwolz/capacitor-camera-view/commit/d6ef90d))
+* chore(ci): only consider feat / fix commits in changelog generator [skip-ci] ([de062e8](https://github.com/michaelwolz/capacitor-camera-view/commit/de062e8))
+
 ## 1.1.0 (2025-07-23)
 
 * feat(*): add saveToFile option for photo capture ([1a3de95](https://github.com/michaelwolz/capacitor-camera-view/commit/1a3de95))
