@@ -318,6 +318,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         // Setup metadata output for QR code scanning if enabled
         if configuration.enableBarcodeDetection {
             try setupMetadataOutput()
+        } else {
+            // Remove the metadata output in case it already existed for the
+            // capture session
+            removeMetadataOutput()
         }
 
         // Set the initial zoom factor if specified

@@ -40,6 +40,15 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
         ]
     }
 
+    /// Remove the metadata output if in case it is already configured, e.g. because
+    /// the camera is restarted with a diffrent setting where barcode detection was disabled
+    /// again
+    internal func removeMetadataOutput() {
+        if let metadataOutput = captureSession.outputs.first(where: { $0 is AVCaptureMetadataOutput }) {
+            captureSession.removeOutput(metadataOutput)
+        }
+    }
+
     /// Delegate method called when metadata objects are detected in the camera feed
     ///
     /// This method processes barcode data detected in the camera stream. When a barcode is detected,
