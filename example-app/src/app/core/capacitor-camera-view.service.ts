@@ -142,6 +142,32 @@ export class CapacitorCameraViewService {
   }
 
   /**
+   * Check if torch is available on the device
+   * @returns True if torch is available, false otherwise
+   */
+  async isTorchAvailable(): Promise<boolean> {
+    return (await this.#cameraView.isTorchAvailable()).available;
+  }
+
+  /**
+   * Get the current torch mode and level
+   * @returns The current torch state
+   */
+  async getTorchMode(): Promise<{ enabled: boolean; level: number }> {
+    const result = await this.#cameraView.getTorchMode();
+    return { enabled: result.enabled, level: result.level };
+  }
+
+  /**
+   * Set the torch mode and level
+   * @param enabled Whether to enable the torch
+   * @param level The torch intensity level (0.0 to 1.0, iOS only)
+   */
+  async setTorchMode(enabled: boolean, level: number = 1.0): Promise<void> {
+    return this.#cameraView.setTorchMode({ enabled, level });
+  }
+
+  /**
    * Check camera permission status
    * @returns The current permission status
    */

@@ -29,6 +29,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Currently selected flash mode.
     private var flashMode: AVCaptureDevice.FlashMode = .auto
 
+    /// Currently selected torch mode and level.
+    private var torchEnabled: Bool = false
+    private var torchLevel: Float = 1.0
+
     /// Reference to the blur overlay view that is shown when switching to the triple camera in order to have a smooth transition
     private var blurOverlayView: UIVisualEffectView?
 
@@ -230,6 +234,48 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         return [.off]
+    }
+
+    /// Checks if torch is available on the current camera device.
+    ///
+    /// - Returns: True if torch is available, false otherwise
+    public func isTorchAvailable() -> Bool {
+        guard let camera = currentCameraDevice else { return false }
+        return camera.hasTorch
+    }
+
+    /// Gets the current torch mode and level.
+    ///
+    /// - Returns: A tuple containing the torch enabled state and level
+    public func getTorchMode() -> (enabled: Bool, level: Float) {
+        return (torchEnabled, torchLevel)
+    }
+
+    /// Sets the torch mode and level for the currently active camera device.
+    ///
+    /// - Parameters:
+    ///   - enabled: Whether to enable or disable the torch
+    ///   - level: The torch intensity level (0.0 to 1.0)
+    /// - Throws: An error if the torch mode cannot be set or is not supported.
+    public func setTorchMode(enabled: Bool, level: Float = 1.0) throws {
+        guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard camera.hasTorch else { throw CameraError.torchUnavailable }
+
+        do {
+            try camera.lockForConfiguration()
+            defer { camera.unlockForConfiguration() }
+
+            if enabled && level > 0.0 {
+                try camera.setTorchModeOn(level: level)
+            } else {
+                camera.torchMode = .off
+            }
+
+            torchEnabled = enabled && level > 0.0
+            torchLevel = level
+        } catch {
+            throw CameraError.configurationFailed(error)
+        }
     }
 
     /// Gets the minimum, maximum, and current zoom factors supported by the current camera device.

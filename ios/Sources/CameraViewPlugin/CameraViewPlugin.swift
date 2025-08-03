@@ -36,6 +36,9 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getFlashMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isTorchAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getTorchMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setTorchMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise)
     ]
@@ -259,7 +262,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         let flashMode = implementation.getFlashMode()
 
         call.resolve([
-            "flashMode": flashMode
+            "flashMode": flashModeToStrMap[flashMode] ?? "off"
         ])
     }
 
@@ -288,6 +291,42 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve()
         } catch {
             call.reject("Failed to set flash mode", nil, error)
+        }
+    }
+
+    @objc func isTorchAvailable(_ call: CAPPluginCall) {
+        let available = implementation.isTorchAvailable()
+        call.resolve([
+            "available": available
+        ])
+    }
+
+    @objc func getTorchMode(_ call: CAPPluginCall) {
+        let torchState = implementation.getTorchMode()
+        call.resolve([
+            "enabled": torchState.enabled,
+            "level": torchState.level
+        ])
+    }
+
+    @objc func setTorchMode(_ call: CAPPluginCall) {
+        guard let enabled = call.getBool("enabled") else {
+            call.reject("Enabled parameter is required")
+            return
+        }
+
+        let level = call.getFloat("level") ?? 1.0
+        
+        guard level >= 0.0 && level <= 1.0 else {
+            call.reject("Level must be between 0.0 and 1.0")
+            return
+        }
+
+        do {
+            try implementation.setTorchMode(enabled: enabled, level: level)
+            call.resolve()
+        } catch {
+            call.reject("Failed to set torch mode", nil, error)
         }
     }
 

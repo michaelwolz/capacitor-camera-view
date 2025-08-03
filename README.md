@@ -31,7 +31,7 @@
 - 📸 Capture photos or frames from the camera preview.
 - 🔍 **Barcode detection** support.
 - 📱 **Virtual device support** for automatic lens selection based on zoom level and focus (iOS only).
-- 🔎 Control **zoom** and **flash** modes programmatically.
+- 🔦 Control **zoom**, **flash** and **torch** modes programmatically.
 - ⚡ **High performance** with optimized native implementations.
 - 🎯 **Simple to use** with a clean and intuitive API.
 - 🌐 Works seamlessly on **iOS**, **Android**, and **Web**.
@@ -210,6 +210,9 @@ chore: update dependencies
 * [`getFlashMode()`](#getflashmode)
 * [`getSupportedFlashModes()`](#getsupportedflashmodes)
 * [`setFlashMode(...)`](#setflashmode)
+* [`isTorchAvailable()`](#istorchavailable)
+* [`getTorchMode()`](#gettorchmode)
+* [`setTorchMode(...)`](#settorchmode)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
 * [`addListener('barcodeDetected', ...)`](#addlistenerbarcodedetected-)
@@ -422,6 +425,53 @@ Set the camera flash mode.
 --------------------
 
 
+### isTorchAvailable()
+
+```typescript
+isTorchAvailable() => Promise<IsTorchAvailableResponse>
+```
+
+Check if the device supports torch (flashlight) functionality.
+
+**Returns:** <code>Promise&lt;<a href="#istorchavailableresponse">IsTorchAvailableResponse</a>&gt;</code>
+
+**Since:** 1.2.0
+
+--------------------
+
+
+### getTorchMode()
+
+```typescript
+getTorchMode() => Promise<GetTorchModeResponse>
+```
+
+Get the current torch (flashlight) state.
+
+**Returns:** <code>Promise&lt;<a href="#gettorchmoderesponse">GetTorchModeResponse</a>&gt;</code>
+
+**Since:** 1.2.0
+
+--------------------
+
+
+### setTorchMode(...)
+
+```typescript
+setTorchMode(options: { enabled: boolean; level?: number; }) => Promise<void>
+```
+
+Set the torch (flashlight) mode and intensity.
+
+| Param         | Type                                               | Description                   |
+| ------------- | -------------------------------------------------- | ----------------------------- |
+| **`options`** | <code>{ enabled: boolean; level?: number; }</code> | - Torch configuration options |
+
+**Since:** 1.2.0
+
+--------------------
+
+
 ### checkPermissions()
 
 ```typescript
@@ -575,6 +625,25 @@ Response for getting supported flash modes.
 | Prop             | Type                     | Description                                             |
 | ---------------- | ------------------------ | ------------------------------------------------------- |
 | **`flashModes`** | <code>FlashMode[]</code> | An array of flash modes supported by the current camera |
+
+
+#### IsTorchAvailableResponse
+
+Response for checking torch availability.
+
+| Prop            | Type                 | Description                                                       |
+| --------------- | -------------------- | ----------------------------------------------------------------- |
+| **`available`** | <code>boolean</code> | Indicates if the device supports torch (flashlight) functionality |
+
+
+#### GetTorchModeResponse
+
+Response for getting the current torch mode.
+
+| Prop          | Type                 | Description                                                                                  |
+| ------------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| **`enabled`** | <code>boolean</code> | Indicates if the torch is currently enabled                                                  |
+| **`level`**   | <code>number</code>  | The current torch intensity level (0.0 to 1.0, iOS only). Always 1.0 on Android when enabled |
 
 
 #### PermissionStatus

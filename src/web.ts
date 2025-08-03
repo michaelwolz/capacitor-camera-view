@@ -6,7 +6,9 @@ import type {
   GetAvailableDevicesResponse,
   GetFlashModeResponse,
   GetSupportedFlashModesResponse,
+  GetTorchModeResponse,
   GetZoomResponse,
+  IsTorchAvailableResponse,
   IsRunningResponse,
   PermissionStatus,
   CaptureResponse,
@@ -290,6 +292,30 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   public async setFlashMode(options: { mode: FlashMode }): Promise<void> {
     this.currentFlashMode = options.mode;
     console.warn('Flash mode control is not fully supported in the web implementation');
+  }
+
+  /**
+   * Check if torch is available (not supported in web)
+   */
+  public async isTorchAvailable(): Promise<IsTorchAvailableResponse> {
+    // Torch is not supported in web implementation
+    return { available: false };
+  }
+
+  /**
+   * Get torch mode (not supported in web)
+   */
+  public async getTorchMode(): Promise<GetTorchModeResponse> {
+    // Torch is not supported in web implementation
+    return { enabled: false, level: 0.0 };
+  }
+
+  /**
+   * Set torch mode (not supported in web)
+   */
+  public async setTorchMode(): Promise<void> {
+    // Torch is not supported in web implementation
+    throw this.unimplemented('Torch control is not supported in web implementation.');
   }
 
   /**
