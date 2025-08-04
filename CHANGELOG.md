@@ -1,3 +1,7 @@
+## 1.2.0 (2025-08-04)
+
+* feat(*): add torch support ([9dafbf2](https://github.com/michaelwolz/capacitor-camera-view/commit/9dafbf2))
+
 ## <small>1.1.1 (2025-07-25)</small>
 
 * fix(ios): remove metadata output in case barcoded detection is disabled ([d6ef90d](https://github.com/michaelwolz/capacitor-camera-view/commit/d6ef90d))
