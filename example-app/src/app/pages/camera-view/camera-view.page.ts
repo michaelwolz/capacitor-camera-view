@@ -1,5 +1,6 @@
 import { Component, inject, model, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Capacitor } from '@capacitor/core';
 import {
   IonButton,
   IonCheckbox,
@@ -61,6 +62,8 @@ export class CameraSettingsPage implements OnInit {
   protected saveToFile = model<boolean>(false);
 
   protected barcodeValue = signal<string | undefined>(undefined);
+
+  protected readonly isIos = Capacitor.getPlatform() === 'ios';
 
   ngOnInit() {
     setTimeout(() => {

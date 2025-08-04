@@ -1,1 +1,5 @@
-example-app
+example-app/node_modules
+example-app/dist
+example-app/www
+example-app/android
+example-app/ios

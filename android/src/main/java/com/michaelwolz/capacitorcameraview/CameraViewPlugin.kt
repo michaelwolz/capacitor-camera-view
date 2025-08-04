@@ -211,13 +211,10 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun isTorchAvailable(call: PluginCall) {
-        try {
-            val available = implementation.isTorchAvailable()
+        implementation.isTorchAvailable { available ->
             call.resolve(JSObject().apply {
                 put("available", available)
             })
-        } catch (e: Exception) {
-            call.reject("Failed to check torch availability: ${e.localizedMessage}", e)
         }
     }
 
@@ -246,11 +243,12 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        try {
-            implementation.setTorchMode(enabled)
-            call.resolve()
-        } catch (e: Exception) {
-            call.reject("Failed to set torch mode: ${e.localizedMessage}", e)
+        implementation.setTorchMode(enabled) { error ->
+            if (error != null) {
+                call.reject("Failed to set torch mode: ${error.localizedMessage}", error)
+            } else {
+                call.resolve()
+            }
         }
     }
 

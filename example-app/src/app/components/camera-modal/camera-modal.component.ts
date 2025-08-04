@@ -267,8 +267,18 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   protected async flipCamera(): Promise<void> {
-    await this.#cameraViewService.flipCamera();
-    await this.#initializeZoomLimits();
+    debugger;
+    try {
+      await this.#cameraViewService.flipCamera();
+
+      await Promise.all([
+        this.#initializeZoomLimits(),
+        this.#initializeFlashModes(),
+        this.#initializeTorchAvailability(),
+      ]);
+    } catch (error) {
+      console.error('Failed to flip camera', error);
+    }
   }
 
   protected async nextFlashMode(): Promise<void> {
@@ -332,14 +342,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   async #initializeTorchAvailability(): Promise<void> {
     try {
-      const available = await this.#cameraViewService.isTorchAvailable();
-      this.torchAvailable.set(available);
-
-      if (available) {
-        const torchState = await this.#cameraViewService.getTorchMode();
-        this.torchEnabled.set(torchState.enabled);
-        this.torchLevel.set(torchState.level);
-      }
+      this.torchAvailable.set(await this.#cameraViewService.isTorchAvailable());
     } catch (error) {
       console.warn('Failed to check torch availability', error);
       this.torchAvailable.set(false);
@@ -437,8 +440,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   async #toggleTorchAndroid(): Promise<void> {
-    const currentEnabled = this.torchEnabled();
-    await this.#cameraViewService.setTorchMode(!currentEnabled);
-    this.torchEnabled.set(!currentEnabled);
+    const enabled = !this.torchEnabled();
+
+    await this.#cameraViewService.setTorchMode(enabled);
+    this.torchEnabled.set(enabled);
+    // Android: 100% when on, 0% when off
+    this.torchLevel.set(enabled ? 1.0 : 0.0);
   }
 }

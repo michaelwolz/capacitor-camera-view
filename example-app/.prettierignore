@@ -1,0 +1,10 @@
+node_modules
+dist
+www
+android/build
+android/app/build
+android/.gradle
+ios/DerivedData
+ios/build
+.angular
+coverage
