@@ -67,15 +67,17 @@
       </ion-range>
     </ion-item>
 
-    <ion-item>
-      <ion-checkbox
-        [(ngModel)]="useTripleCameraIfAvailable"
-        color="primary"
-        justify="space-between"
-      >
-        Use Triple Camera (iPhone Pro only)
-      </ion-checkbox>
-    </ion-item>
+    @if (isIos) {
+      <ion-item>
+        <ion-checkbox
+          [(ngModel)]="useTripleCameraIfAvailable"
+          color="primary"
+          justify="space-between"
+        >
+          Use Triple Camera (iPhone Pro only)
+        </ion-checkbox>
+      </ion-item>
+    }
 
     <ion-item>
       <ion-checkbox

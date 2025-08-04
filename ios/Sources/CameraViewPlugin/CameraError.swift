@@ -10,6 +10,7 @@ enum CameraError: Error, LocalizedError {
     case photoOutputNotConfigured
     case sessionNotRunning
     case unsupportedFlashMode
+    case torchUnavailable
     case zoomFactorOutOfRange
 
     var errorDescription: String? {
@@ -32,6 +33,8 @@ enum CameraError: Error, LocalizedError {
             return "The capture session is not currently running."
         case .unsupportedFlashMode:
             return "The requested flash mode is not supported by the current camera."
+        case .torchUnavailable:
+            return "Torch is not available on this device."
         case .zoomFactorOutOfRange:
             return "The requested zoom factor is out of range."
         }

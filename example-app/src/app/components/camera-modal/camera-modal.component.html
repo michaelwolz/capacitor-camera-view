@@ -40,6 +40,23 @@
         }
       </ion-fab-button>
 
+      <ion-fab-button
+        (click)="toggleTorch()"
+        size="small"
+        [disabled]="!torchAvailable()"
+      >
+        @if (torchEnabled() && torchAvailable()) {
+          <div style="line-height: 0.5; margin-top: -5px">
+            <ion-icon name="flashlight-outline" size="small"></ion-icon><br />
+            <span style="font-size: 0.5rem">
+              {{ (torchLevel() * 100).toFixed(0) }}%
+            </span>
+          </div>
+        } @else {
+          <ion-icon name="flashlight-outline" size="small"></ion-icon>
+        }
+      </ion-fab-button>
+
       <ion-fab-button size="small" (click)="flipCamera()">
         <ion-icon name="camera-reverse"></ion-icon>
       </ion-fab-button>

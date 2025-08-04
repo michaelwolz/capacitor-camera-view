@@ -139,6 +139,52 @@ export interface CameraViewPlugin {
   setFlashMode(options: { mode: FlashMode }): Promise<void>;
 
   /**
+   * Check if the device supports torch (flashlight) functionality.
+   *
+   * @remarks
+   * **Important**: You must call this method and verify torch availability before using
+   * `setTorchMode()` or `getTorchMode()`. Calling torch methods on devices without
+   * torch support will throw an exception.
+   *
+   * @returns A promise that resolves with an object containing torch availability status
+   *
+   * @since 1.2.0
+   */
+  isTorchAvailable(): Promise<IsTorchAvailableResponse>;
+
+  /**
+   * Get the current torch (flashlight) state.
+   *
+   * @remarks
+   * **Important**: Call `isTorchAvailable()` first to ensure the device supports torch
+   * functionality. This method will throw an exception if torch is not supported.
+   *
+   * @returns A promise that resolves with an object containing the current torch state
+   *
+   * @since 1.2.0
+   */
+  getTorchMode(): Promise<GetTorchModeResponse>;
+
+  /**
+   * Set the torch (flashlight) mode and intensity.
+   *
+   * @remarks
+   * **Important**: Call `isTorchAvailable()` first to ensure the device supports torch
+   * functionality. This method will throw an exception if torch is not supported.
+   *
+   * The torch provides continuous illumination, unlike flash which only activates during photo capture.
+   * On iOS, you can control the torch intensity level. On Android, the torch is either on or off.
+   *
+   * @param options - Torch configuration options
+   * @param options.enabled - Whether to enable or disable the torch
+   * @param options.level - The torch intensity level (0.0 to 1.0, iOS only). Defaults to 1.0 when enabled
+   * @returns A promise that resolves when the torch mode has been set
+   *
+   * @since 1.2.0
+   */
+  setTorchMode(options: { enabled: boolean; level?: number }): Promise<void>;
+
+  /**
    * Check camera permission status without requesting permissions.
    *
    * @returns A promise that resolves with an object containing the camera permission status
@@ -402,6 +448,28 @@ export interface GetFlashModeResponse {
 export interface GetSupportedFlashModesResponse {
   /** An array of flash modes supported by the current camera */
   flashModes: FlashMode[];
+}
+
+/**
+ * Response for checking torch availability.
+ *
+ * @since 1.2.0
+ */
+export interface IsTorchAvailableResponse {
+  /** Indicates if the device supports torch (flashlight) functionality */
+  available: boolean;
+}
+
+/**
+ * Response for getting the current torch mode.
+ *
+ * @since 1.2.0
+ */
+export interface GetTorchModeResponse {
+  /** Indicates if the torch is currently enabled */
+  enabled: boolean;
+  /** The current torch intensity level (0.0 to 1.0, iOS only). Always 1.0 on Android when enabled */
+  level: number;
 }
 
 /**

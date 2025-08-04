@@ -209,6 +209,49 @@ class CameraViewPlugin : Plugin() {
         }
     }
 
+    @PluginMethod
+    fun isTorchAvailable(call: PluginCall) {
+        implementation.isTorchAvailable { available ->
+            call.resolve(JSObject().apply {
+                put("available", available)
+            })
+        }
+    }
+
+    @PluginMethod
+    fun getTorchMode(call: PluginCall) {
+        try {
+            val enabled = implementation.getTorchMode()
+            call.resolve(JSObject().apply {
+                put("enabled", enabled)
+                put(
+                    "level",
+                    // Android always uses full intensity when enabled
+                    if (enabled) 1.0f else 0.0f
+                )
+            })
+        } catch (e: Exception) {
+            call.reject("Failed to get torch mode: ${e.localizedMessage}", e)
+        }
+    }
+
+    @PluginMethod
+    fun setTorchMode(call: PluginCall) {
+        val enabled = call.getBoolean("enabled")
+        if (enabled == null) {
+            call.reject("Enabled parameter is required")
+            return
+        }
+
+        implementation.setTorchMode(enabled) { error ->
+            if (error != null) {
+                call.reject("Failed to set torch mode: ${error.localizedMessage}", error)
+            } else {
+                call.resolve()
+            }
+        }
+    }
+
     /**
      * Called by the CameraView when a barcode is detected.
      */

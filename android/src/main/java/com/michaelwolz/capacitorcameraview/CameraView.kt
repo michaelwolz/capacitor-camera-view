@@ -55,6 +55,7 @@ class CameraView(plugin: Plugin) {
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
+    private var isTorchEnabled: Boolean = false
 
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
@@ -71,7 +72,7 @@ class CameraView(plugin: Plugin) {
         val lifecycleOwner =
             context as? LifecycleOwner
                 ?: run {
-                    callback(Exception("WebView context must be a LifecycleOwner"))
+                    callback(CameraError.LifecycleOwnerMissing())
                     return
                 }
 
@@ -129,16 +130,15 @@ class CameraView(plugin: Plugin) {
         callback: (JSObject?, Exception?) -> Unit
     ) {
         val startTime = System.currentTimeMillis()
-        val controller =
-            this.cameraController
-                ?: run {
-                    callback(null, Exception("Camera controller not initialized"))
-                    return
-                }
+        val controller = cameraController
+            ?: run {
+                callback(null, CameraError.CameraNotInitialized())
+                return
+            }
 
         val preview = previewView
             ?: run {
-                callback(null, Exception("Camera preview not initialized"))
+                callback(null, CameraError.PreviewNotInitialized())
                 return
             }
 
@@ -250,7 +250,7 @@ class CameraView(plugin: Plugin) {
         val previewView =
             this.previewView
                 ?: run {
-                    callback(null, Exception("Camera preview not initialized"))
+                    callback(null, CameraError.PreviewNotInitialized())
                     return
                 }
 
@@ -306,14 +306,16 @@ class CameraView(plugin: Plugin) {
             else -> CameraSelector.DEFAULT_FRONT_CAMERA
         }
 
-        val controller =
-            this.cameraController
-                ?: run {
-                    callback(Exception("Camera controller not initialized"))
-                    return
-                }
+        val controller = cameraController
+            ?: run {
+                callback(CameraError.CameraNotInitialized())
+                return
+            }
 
-        mainHandler.post { controller.cameraSelector = currentCameraSelector }
+        mainHandler.post {
+            controller.cameraSelector = currentCameraSelector
+            callback(null)
+        }
     }
 
     /** Get the min, max, and current zoom values */
@@ -324,17 +326,16 @@ class CameraView(plugin: Plugin) {
     /** Set the zoom factor for the camera */
     fun setZoomFactor(zoomFactor: Float, callback: (((Exception?) -> Unit)?) = null) {
         mainHandler.post {
-            val cameraControl =
-                cameraController?.cameraControl
-                    ?: run {
-                        callback?.invoke(Exception("Camera controller not initialized"))
-                        return@post
-                    }
+            val cameraControl = cameraController?.cameraControl
+                ?: run {
+                    callback?.invoke(CameraError.CameraNotInitialized())
+                    return@post
+                }
 
             val availableZoomFactors = getZoomFactorsInternal()
 
             if (zoomFactor !in availableZoomFactors.min..availableZoomFactors.max) {
-                callback?.invoke(Exception("The requested zoom factor is out of range."))
+                callback?.invoke(CameraError.ZoomFactorOutOfRange())
                 return@post
             }
 
@@ -369,12 +370,11 @@ class CameraView(plugin: Plugin) {
     /** Get supported flash modes */
     fun getSupportedFlashModes(callback: (supportedFlashModes: List<String>) -> Unit) {
         mainHandler.post {
-            val cameraInfo =
-                cameraController?.cameraInfo
-                    ?: run {
-                        callback(listOf("off"))
-                        return@post
-                    }
+            val cameraInfo = cameraController?.cameraInfo
+                ?: run {
+                    callback(listOf("off"))
+                    return@post
+                }
 
             callback(
                 if (cameraInfo.hasFlashUnit()) {
@@ -400,6 +400,49 @@ class CameraView(plugin: Plugin) {
             }
 
         mainHandler.post { controller.imageCaptureFlashMode = currentFlashMode }
+    }
+
+    /** Check if torch is available */
+    fun isTorchAvailable(callback: (Boolean) -> Unit) {
+        mainHandler.post {
+            val cameraInfo = cameraController?.cameraInfo
+                ?: run {
+                    callback(false)
+                    return@post
+                }
+
+            callback(cameraInfo.hasFlashUnit())
+        }
+    }
+
+    /** Get the current torch mode */
+    fun getTorchMode(): Boolean {
+        return isTorchEnabled
+    }
+
+    /** Set the torch mode */
+    fun setTorchMode(enabled: Boolean, callback: ((Exception?) -> Unit)? = null) {
+        mainHandler.post {
+            try {
+                val controller = cameraController
+                    ?: run {
+                        callback?.invoke(CameraError.CameraNotInitialized())
+                        return@post
+                    }
+
+                val cameraInfo = controller.cameraInfo
+                if (cameraInfo?.hasFlashUnit() != true) {
+                    callback?.invoke(CameraError.TorchUnavailable())
+                    return@post
+                }
+
+                controller.cameraControl?.enableTorch(enabled)
+                isTorchEnabled = enabled
+                callback?.invoke(null)
+            } catch (e: Exception) {
+                callback?.invoke(e)
+            }
+        }
     }
 
     /** Get a list of available camera devices */

@@ -36,6 +36,8 @@ function getDistance(touch1: Touch, touch2: Touch): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+const IOS_TORCH_LEVELS = [0.2, 0.5, 0.8, 1.0];
+
 @Component({
   selector: 'app-camera-modal',
   templateUrl: './camera-modal.component.html',
@@ -81,6 +83,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   );
 
   protected readonly flashMode = signal<FlashMode>('auto');
+  protected readonly torchAvailable = signal<boolean>(false);
+  protected readonly torchEnabled = signal<boolean>(false);
+  protected readonly torchLevel = signal<number>(1.0);
+
   protected readonly isCapturingPhoto = signal(false);
   protected readonly currentZoomFactor = signal(1.0);
   protected readonly minZoom = signal(1.0);
@@ -167,6 +173,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     await Promise.all([
       this.#initializeZoomLimits(),
       this.#initializeFlashModes(),
+      this.#initializeTorchAvailability(),
     ]);
 
     this.currentZoomFactor.set(this.initialZoomFactor());
@@ -260,8 +267,18 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   protected async flipCamera(): Promise<void> {
-    await this.#cameraViewService.flipCamera();
-    await this.#initializeZoomLimits();
+    debugger;
+    try {
+      await this.#cameraViewService.flipCamera();
+
+      await Promise.all([
+        this.#initializeZoomLimits(),
+        this.#initializeFlashModes(),
+        this.#initializeTorchAvailability(),
+      ]);
+    } catch (error) {
+      console.error('Failed to flip camera', error);
+    }
   }
 
   protected async nextFlashMode(): Promise<void> {
@@ -323,6 +340,15 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     }
   }
 
+  async #initializeTorchAvailability(): Promise<void> {
+    try {
+      this.torchAvailable.set(await this.#cameraViewService.isTorchAvailable());
+    } catch (error) {
+      console.warn('Failed to check torch availability', error);
+      this.torchAvailable.set(false);
+    }
+  }
+
   #initializeEventListeners(): void {
     this.#elementRef.nativeElement.addEventListener(
       'touchstart',
@@ -366,5 +392,59 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
     this.#setZoom(newZoomFactor);
     event.preventDefault(); // Prevent scrolling
+  }
+
+  async toggleTorch(): Promise<void> {
+    if (!this.torchAvailable()) {
+      return;
+    }
+
+    try {
+      if (Capacitor.getPlatform() === 'ios') {
+        await this.#toggleTorchIos();
+      } else {
+        await this.#toggleTorchAndroid();
+      }
+    } catch (error) {
+      console.error('Failed to toggle torch', error);
+    }
+  }
+
+  async #toggleTorchIos(): Promise<void> {
+    const enabled = this.torchEnabled();
+    const level = this.torchLevel();
+
+    if (!enabled) {
+      // Turn on torch with first level
+      const newLevel = IOS_TORCH_LEVELS[0];
+      await this.#cameraViewService.setTorchMode(true, newLevel);
+      this.torchEnabled.set(true);
+      this.torchLevel.set(newLevel);
+      return;
+    } else {
+      const currentLevelIndex = IOS_TORCH_LEVELS.indexOf(level);
+      if (
+        currentLevelIndex !== -1 &&
+        currentLevelIndex < IOS_TORCH_LEVELS.length - 1
+      ) {
+        // Cycle to next level on iOS
+        const nextLevel = IOS_TORCH_LEVELS[currentLevelIndex + 1];
+        await this.#cameraViewService.setTorchMode(true, nextLevel);
+        this.torchLevel.set(nextLevel);
+      } else {
+        await this.#cameraViewService.setTorchMode(false);
+        this.torchEnabled.set(false);
+        this.torchLevel.set(1.0);
+      }
+    }
+  }
+
+  async #toggleTorchAndroid(): Promise<void> {
+    const enabled = !this.torchEnabled();
+
+    await this.#cameraViewService.setTorchMode(enabled);
+    this.torchEnabled.set(enabled);
+    // Android: 100% when on, 0% when off
+    this.torchLevel.set(enabled ? 1.0 : 0.0);
   }
 }
