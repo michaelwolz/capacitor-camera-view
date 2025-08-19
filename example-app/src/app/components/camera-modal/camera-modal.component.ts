@@ -177,6 +177,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     ]);
 
     this.currentZoomFactor.set(this.initialZoomFactor());
+    await this.#debugCurrentTorchState();
   }
 
   protected async stopCamera(): Promise<void> {
@@ -185,6 +186,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Failed to stop camera', error);
     }
+
+    await this.#debugCurrentTorchState();
   }
 
   protected async close(): Promise<void> {
@@ -267,7 +270,6 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   protected async flipCamera(): Promise<void> {
-    debugger;
     try {
       await this.#cameraViewService.flipCamera();
 
@@ -408,6 +410,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Failed to toggle torch', error);
     }
+
+    await this.#debugCurrentTorchState();
   }
 
   async #toggleTorchIos(): Promise<void> {
@@ -446,5 +450,13 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     this.torchEnabled.set(enabled);
     // Android: 100% when on, 0% when off
     this.torchLevel.set(enabled ? 1.0 : 0.0);
+  }
+
+  /**
+   * Helper method for checking current torch state
+   */
+  async #debugCurrentTorchState(): Promise<void> {
+    const currentState = await this.#cameraViewService.getTorchMode();
+    console.debug('Current torch state:', currentState);
   }
 }

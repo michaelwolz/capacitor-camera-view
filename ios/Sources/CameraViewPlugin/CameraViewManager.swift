@@ -29,10 +29,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Currently selected flash mode.
     private var flashMode: AVCaptureDevice.FlashMode = .auto
 
-    /// Currently selected torch mode and level.
-    private var torchEnabled: Bool = false
-    private var torchLevel: Float = 1.0
-
     /// Reference to the blur overlay view that is shown when switching to the triple camera in order to have a smooth transition
     private var blurOverlayView: UIVisualEffectView?
 
@@ -248,7 +244,12 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///
     /// - Returns: A tuple containing the torch enabled state and level
     public func getTorchMode() -> (enabled: Bool, level: Float) {
-        return (torchEnabled, torchLevel)
+        guard let camera = currentCameraDevice else { return (false, 0.0) }
+
+        let isEnabled = camera.torchMode == .on
+        let level = camera.torchLevel
+
+        return (isEnabled, level)
     }
 
     /// Sets the torch mode and level for the currently active camera device.
@@ -270,9 +271,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             } else {
                 camera.torchMode = .off
             }
-
-            torchEnabled = enabled && level > 0.0
-            torchLevel = level
         } catch {
             throw CameraError.configurationFailed(error)
         }

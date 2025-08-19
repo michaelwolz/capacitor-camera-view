@@ -220,8 +220,7 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getTorchMode(call: PluginCall) {
-        try {
-            val enabled = implementation.getTorchMode()
+        implementation.getTorchMode { enabled ->
             call.resolve(JSObject().apply {
                 put("enabled", enabled)
                 put(
@@ -230,8 +229,6 @@ class CameraViewPlugin : Plugin() {
                     if (enabled) 1.0f else 0.0f
                 )
             })
-        } catch (e: Exception) {
-            call.reject("Failed to get torch mode: ${e.localizedMessage}", e)
         }
     }
 
