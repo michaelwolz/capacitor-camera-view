@@ -19,6 +19,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.TorchState
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
@@ -55,7 +56,6 @@ class CameraView(plugin: Plugin) {
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
-    private var isTorchEnabled: Boolean = false
 
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
@@ -416,8 +416,16 @@ class CameraView(plugin: Plugin) {
     }
 
     /** Get the current torch mode */
-    fun getTorchMode(): Boolean {
-        return isTorchEnabled
+    fun getTorchMode(callback: (Boolean) -> Unit) {
+        mainHandler.post {
+            val cameraInfo = cameraController?.cameraInfo
+                ?: run {
+                    callback(false)
+                    return@post
+                }
+
+            callback(cameraInfo.torchState.value == TorchState.ON)
+        }
     }
 
     /** Set the torch mode */
@@ -437,7 +445,6 @@ class CameraView(plugin: Plugin) {
                 }
 
                 controller.cameraControl?.enableTorch(enabled)
-                isTorchEnabled = enabled
                 callback?.invoke(null)
             } catch (e: Exception) {
                 callback?.invoke(e)
