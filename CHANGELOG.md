@@ -1,3 +1,7 @@
+## <small>1.2.1 (2025-08-19)</small>
+
+* fix(ios): reflect correct torch state ([cee6000](https://github.com/michaelwolz/capacitor-camera-view/commit/cee6000))
+
 ## 1.2.0 (2025-08-04)
 
 * feat(*): add torch support ([9dafbf2](https://github.com/michaelwolz/capacitor-camera-view/commit/9dafbf2))

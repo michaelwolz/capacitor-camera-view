@@ -1,6 +1,6 @@
 {
   "name": "capacitor-camera-view",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A Capacitor plugin for embedding a live camera feed directly into your app.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
