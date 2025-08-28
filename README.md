@@ -150,6 +150,9 @@ This plugin supports real-time barcode detection directly from the live camera f
 *   **Android:** Utilizes Google's [**ML Kit Barcode Scanning**](https://developers.google.com/ml-kit/vision/barcode-scanning).
 *   **Web:** Uses the [**Barcode Detection API**](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API) where available in the browser.
 
+> [!NOTE]
+> **Web Support:** The Barcode Detection API is not supported in all browsers (e.g., Windows browsers). For full browser compatibility, consider using a polyfill such as [`@undecaf/barcode-detector-polyfill`](https://www.npmjs.com/package/@undecaf/barcode-detector-polyfill) or [`barcode-detector`](https://www.npmjs.com/package/barcode-detector).
+
 **Enabling Barcode Detection:**
 To enable this feature, set the `enableBarcodeDetection` option to `true` when calling the `start()` method:
 
