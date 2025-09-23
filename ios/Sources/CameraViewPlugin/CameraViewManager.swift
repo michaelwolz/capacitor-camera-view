@@ -90,10 +90,20 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                 completion: { error in
                     if error != nil { completion(error) }
 
+                    // Handle barcode detection after session is running
+                    if configuration.enableBarcodeDetection {
+                        do {
+                            try self.enableBarcodeDetection()
+                        } catch {
+                            completion(error)
+                            return
+                        }
+                    }
+
                     // Complete already because the camera is ready to be used
-                    // We might asynchronously upgrade to a triple camera in the background if available and configured
                     completion(nil)
 
+                    // We might asynchronously upgrade to a triple camera in the background if available and configured
                     if configuration.useTripleCameraIfAvailable {
                         Task {
                             await self.upgradeToTripleCameraIfAvailable()
@@ -359,10 +369,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         // Set up the video data output for snapshots
         try setupVideoDataOutput()
 
-        // Setup metadata output for QR code scanning if enabled
-        if configuration.enableBarcodeDetection {
-            try setupMetadataOutput()
-        } else {
+        if !configuration.enableBarcodeDetection {
             // Remove the metadata output in case it already existed for the
             // capture session
             removeMetadataOutput()
@@ -403,6 +410,26 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                 throw CameraError.inputAdditionFailed
             }
         }
+    }
+
+
+    /// Enables barcode detection by adding metadata output to the running session.
+    /// Somehow adding the metadata output with the session not being started yet
+    /// caused issues on some devices (iPad 7th Gen) where the session would just
+    /// not start at all without an error being thrown. I haven't been able to
+    /// figure out the root cause of this but it might generally be a good idea
+    /// to only add the metadata output when the session is already running.
+    ///
+    /// - Throws: An error if the metadata output cannot be added.
+    private func enableBarcodeDetection() throws {
+        guard captureSession.isRunning else {
+            throw CameraError.sessionNotRunning
+        }
+
+        captureSession.beginConfiguration()
+        defer { captureSession.commitConfiguration() }
+
+        try setupMetadataOutput()
     }
 
     /// Retrieve a list of a available camera devices
