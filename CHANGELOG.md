@@ -1,8 +1,6 @@
 ## <small>1.2.2 (2025-09-23)</small>
 
 * fix(ios): only initialize metadata output after session is running ([48a4648](https://github.com/michaelwolz/capacitor-camera-view/commit/48a4648))
-* fix(ios): only initialize metadata output after session is running (#9) ([521864a](https://github.com/michaelwolz/capacitor-camera-view/commit/521864a)), closes [#9](https://github.com/michaelwolz/capacitor-camera-view/issues/9)
-* docs(readme): add note about BarcodeDetection API [skip-ci] ([863f196](https://github.com/michaelwolz/capacitor-camera-view/commit/863f196))
 
 ## <small>1.2.1 (2025-08-19)</small>
 
@@ -15,7 +13,6 @@
 ## <small>1.1.1 (2025-07-25)</small>
 
 * fix(ios): remove metadata output in case barcoded detection is disabled ([d6ef90d](https://github.com/michaelwolz/capacitor-camera-view/commit/d6ef90d))
-* chore(ci): only consider feat / fix commits in changelog generator [skip-ci] ([de062e8](https://github.com/michaelwolz/capacitor-camera-view/commit/de062e8))
 
 ## 1.1.0 (2025-07-23)
 
