@@ -1,3 +1,9 @@
+## <small>1.2.2 (2025-09-23)</small>
+
+* fix(ios): only initialize metadata output after session is running ([48a4648](https://github.com/michaelwolz/capacitor-camera-view/commit/48a4648))
+* fix(ios): only initialize metadata output after session is running (#9) ([521864a](https://github.com/michaelwolz/capacitor-camera-view/commit/521864a)), closes [#9](https://github.com/michaelwolz/capacitor-camera-view/issues/9)
+* docs(readme): add note about BarcodeDetection API [skip-ci] ([863f196](https://github.com/michaelwolz/capacitor-camera-view/commit/863f196))
+
 ## <small>1.2.1 (2025-08-19)</small>
 
 * fix(ios): reflect correct torch state ([cee6000](https://github.com/michaelwolz/capacitor-camera-view/commit/cee6000))
