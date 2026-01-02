@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import UIKit
+import WebKit
 
 /// Supported camera device types for the capture session.
 internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
@@ -528,7 +529,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             guard let self = self else { return }
             view.isOpaque = false
             view.backgroundColor = UIColor.clear
-            view.scrollView.backgroundColor = UIColor.clear
+            (view as? WKWebView)?.scrollView.backgroundColor = UIColor.clear
 
             self.videoPreviewLayer.frame = view.bounds
             view.layer.insertSublayer(self.videoPreviewLayer, at: 0)
