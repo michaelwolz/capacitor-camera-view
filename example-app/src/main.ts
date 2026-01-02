@@ -10,6 +10,7 @@ import {
   provideIonicAngular,
 } from '@ionic/angular/standalone';
 
+import { provideZoneChangeDetection } from '@angular/core';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
 
@@ -19,6 +20,7 @@ bootstrapApplication(AppComponent, {
     provideIonicAngular({
       useSetInputAPI: true,
     }),
+    provideZoneChangeDetection(),
     provideRouter(routes, withPreloading(PreloadAllModules)),
   ],
 });
