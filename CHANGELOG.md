@@ -1,3 +1,18 @@
+# [2.0.0](https://github.com/michaelwolz/capacitor-camera-view/compare/v1.2.2...2.0.0) (2026-01-02)
+
+
+* feat!: update to Capacitor 8 ([b05be94](https://github.com/michaelwolz/capacitor-camera-view/commit/b05be94aa3234442d677eadb0dfa80f7c40fecbd))
+
+
+### Bug Fixes
+
+* **ios:** remove deprecated code ([3ce847f](https://github.com/michaelwolz/capacitor-camera-view/commit/3ce847f088f62d604a197f3777790ac6fc1265a3))
+
+
+### BREAKING CHANGES
+
+* This plugin now supports only Capacitor 8.
+
 ## <small>1.2.2 (2025-09-23)</small>
 
 * fix(ios): only initialize metadata output after session is running ([48a4648](https://github.com/michaelwolz/capacitor-camera-view/commit/48a4648))
