@@ -22,7 +22,8 @@
       "es2018",
       "dom"
     ],
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "skipLibCheck": true // Temporary until Ionic 9 is out (https://github.com/ionic-team/ionic-framework/issues/30650)
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
