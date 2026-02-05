@@ -37,6 +37,43 @@ fun getBarcodeFormatString(format: Int): String {
 }
 
 /**
+ * Converts a string barcode type from JavaScript to ML Kit Barcode format constant.
+ *
+ * @param stringType The string barcode type from JavaScript.
+ * @return The corresponding ML Kit Barcode format constant, or null if not recognized.
+ */
+fun convertToNativeBarcodeFormat(stringType: String): Int? {
+    return when (stringType) {
+        "qr" -> Barcode.FORMAT_QR_CODE
+        "aztec" -> Barcode.FORMAT_AZTEC
+        "codabar" -> Barcode.FORMAT_CODABAR
+        "code39" -> Barcode.FORMAT_CODE_39
+        "code39Mod43" -> Barcode.FORMAT_CODE_39 // ML Kit doesn't distinguish Mod43
+        "code93" -> Barcode.FORMAT_CODE_93
+        "code128" -> Barcode.FORMAT_CODE_128
+        "dataMatrix" -> Barcode.FORMAT_DATA_MATRIX
+        "ean8" -> Barcode.FORMAT_EAN_8
+        "ean13" -> Barcode.FORMAT_EAN_13
+        "interleaved2of5" -> Barcode.FORMAT_ITF
+        "itf14" -> Barcode.FORMAT_ITF
+        "pdf417" -> Barcode.FORMAT_PDF417
+        "upcA" -> Barcode.FORMAT_UPC_A
+        "upce" -> Barcode.FORMAT_UPC_E
+        else -> null
+    }
+}
+
+/**
+ * Converts an array of string barcode types to ML Kit Barcode format constants.
+ *
+ * @param stringTypes List of string barcode types from JavaScript.
+ * @return List of ML Kit Barcode format constants (invalid types are filtered out).
+ */
+fun convertToNativeBarcodeFormats(stringTypes: List<String>): List<Int> {
+    return stringTypes.mapNotNull { convertToNativeBarcodeFormat(it) }.distinct()
+}
+
+/**
  * Converts the bounding box of a barcode detection result to a [WebBoundingRect]
  * suitable for use in the web view via regular CSS pixels.
  *
@@ -84,9 +121,20 @@ fun calculateTopOffset(webView: View): Int {
 
 /** Maps a Capacitor plugin call to a [CameraSessionConfiguration]. */
 fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
+    // Parse barcode types if provided
+    val barcodeTypes: List<Int>? = call.getArray("barcodeTypes")?.let { jsonArray ->
+        val stringTypes = mutableListOf<String>()
+        for (i in 0 until jsonArray.length()) {
+            jsonArray.optString(i)?.let { stringTypes.add(it) }
+        }
+        val converted = convertToNativeBarcodeFormats(stringTypes)
+        if (converted.isNotEmpty()) converted else null
+    }
+
     return CameraSessionConfiguration(
         deviceId = call.getString("deviceId"),
         enableBarcodeDetection = call.getBoolean("enableBarcodeDetection") ?: false,
+        barcodeTypes = barcodeTypes,
         position = call.getString("position") ?: "back",
         zoomFactor = call.getFloat("zoomFactor") ?: 1.0f
     )

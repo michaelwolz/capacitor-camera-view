@@ -295,6 +295,41 @@ export type CameraDeviceType =
   | 'trueDepth';
 
 /**
+ * Supported barcode types for detection.
+ * Specifying only the barcode types you need can improve performance
+ * and reduce battery consumption.
+ *
+ * @since 2.1.0
+ */
+export type BarcodeType =
+  /** QR Code */
+  | 'qr'
+  /** Code 128 barcode */
+  | 'code128'
+  /** Code 39 barcode */
+  | 'code39'
+  /** Code 39 Mod 43 barcode */
+  | 'code39Mod43'
+  /** Code 93 barcode */
+  | 'code93'
+  /** EAN-8 barcode */
+  | 'ean8'
+  /** EAN-13 barcode */
+  | 'ean13'
+  /** Interleaved 2 of 5 barcode */
+  | 'interleaved2of5'
+  /** ITF-14 barcode */
+  | 'itf14'
+  /** PDF417 barcode */
+  | 'pdf417'
+  /** Aztec code */
+  | 'aztec'
+  /** Data Matrix code */
+  | 'dataMatrix'
+  /** UPC-E barcode */
+  | 'upce';
+
+/**
  * Configuration options for starting a camera session.
  *
  * @since 1.0.0
@@ -305,6 +340,17 @@ export interface CameraSessionConfiguration {
    * @default false
    */
   enableBarcodeDetection?: boolean;
+
+  /**
+   * Specific barcode types to detect. If not provided, all supported types are detected.
+   * Specifying only the types you need can significantly improve performance and reduce
+   * battery consumption, especially on mobile devices.
+   *
+   * @example ['qr', 'code128'] // Only detect QR codes and Code 128 barcodes
+   * @default undefined - all supported types are detected
+   * @since 2.1.0
+   */
+  barcodeTypes?: BarcodeType[];
 
   /**
    * Position of the camera to use

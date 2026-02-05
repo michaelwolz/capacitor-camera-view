@@ -114,29 +114,43 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        implementation.capturePhoto(completion: { (image, error) in
+        // Use optimized Data-based capture to avoid double JPEG encoding
+        implementation.capturePhotoData(completion: { [weak self] (data, error) in
             if let error = error {
                 call.reject("Failed to capture image", nil, error)
                 return
             }
 
-            guard let image = image else {
+            guard let originalData = data else {
                 call.reject("No image data")
                 return
             }
 
-            guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
-                call.reject("Failed to compress image")
-                return
+            // Determine final image data based on quality setting
+            // For quality >= 90%, use original camera JPEG data to avoid re-encoding
+            // For lower quality, re-encode to reduce file size
+            let imageData: Data
+            if quality >= 90.0 {
+                // Use original JPEG data from camera (avoids quality loss and CPU overhead)
+                imageData = originalData
+            } else {
+                // Re-encode at lower quality for smaller file size
+                guard let image = UIImage(data: originalData),
+                      let compressedData = image.jpegData(compressionQuality: quality / 100.0) else {
+                    call.reject("Failed to compress image")
+                    return
+                }
+                imageData = compressedData
             }
 
             if saveToFile {
+                // Use TempFileManager for tracked temp files with automatic cleanup
+                let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
-                    let tempFileURL = try createTempImageFile()
                     try imageData.write(to: tempFileURL)
 
                     // Convert file URL to webView-accessible path using Capacitor bridge
-                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                    guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
                         call.reject("Failed to create web-accessible path")
                         return
                     }
@@ -163,7 +177,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        implementation.captureSnapshot { (image, error) in
+        implementation.captureSnapshot { [weak self] (image, error) in
             if let error = error {
                 call.reject("Failed to capture frame", nil, error)
                 return
@@ -180,12 +194,13 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             if saveToFile {
+                // Use TempFileManager for tracked temp files with automatic cleanup
+                let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
-                    let tempFileURL = try createTempImageFile()
                     try imageData.write(to: tempFileURL)
 
                     // Convert file URL to webView-accessible path using Capacitor bridge
-                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                    guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
                         call.reject("Failed to create web-accessible path")
                         return
                     }

@@ -575,7 +575,7 @@ class CameraView(plugin: Plugin) {
 
         // Setup barcode scanning if needed
         if (config.enableBarcodeDetection) {
-            setupBarcodeScanner(controller)
+            setupBarcodeScanner(controller, config.barcodeTypes)
         }
 
         // Bind to lifecycle
@@ -585,13 +585,33 @@ class CameraView(plugin: Plugin) {
         this.setZoomFactor(config.zoomFactor, null)
     }
 
-    private fun setupBarcodeScanner(controller: LifecycleCameraController) {
+    /**
+     * Sets up the barcode scanner with the specified formats.
+     *
+     * @param controller The camera controller to attach the scanner to.
+     * @param barcodeTypes Optional list of specific barcode format codes to detect.
+     *                     If null, all supported formats are detected (backwards compatible).
+     */
+    private fun setupBarcodeScanner(
+        controller: LifecycleCameraController,
+        barcodeTypes: List<Int>? = null
+    ) {
         val previewView = this.previewView ?: return
 
-        val options =
+        // Build scanner options with specified formats or all formats
+        val options = if (barcodeTypes != null && barcodeTypes.isNotEmpty()) {
+            // Use specific formats - setBarcodeFormats takes first format + vararg rest
+            val firstFormat = barcodeTypes.first()
+            val restFormats = barcodeTypes.drop(1).toIntArray()
+            BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(firstFormat, *restFormats)
+                .build()
+        } else {
+            // Default to all formats for backwards compatibility
             BarcodeScannerOptions.Builder()
                 .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
                 .build()
+        }
 
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(previewView.context)

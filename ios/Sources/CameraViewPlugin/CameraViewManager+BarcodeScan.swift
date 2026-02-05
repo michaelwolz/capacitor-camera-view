@@ -5,8 +5,10 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
     /// Set up metadata output for the capture session in case it's not configured yet
     /// Make sure to call `captureSession.beginConfiguration` before calling this
     ///
+    /// - Parameter barcodeTypes: Optional array of specific barcode types to detect.
+    ///                          If nil, all supported types are detected (backwards compatible).
     /// - Throws: An error if the output cannot be set.
-    internal func setupMetadataOutput() throws {
+    internal func setupMetadataOutput(barcodeTypes: [AVMetadataObject.ObjectType]? = nil) throws {
         let metadataOutput = AVCaptureMetadataOutput()
 
         if (captureSession.outputs.contains { $0 is AVCaptureMetadataOutput }) {
@@ -22,22 +24,9 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
 
         metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
 
-        // Set all available barcode types
-        metadataOutput.metadataObjectTypes = [
-            .qr,
-            .code128,
-            .code39,
-            .code39Mod43,
-            .code93,
-            .ean8,
-            .ean13,
-            .interleaved2of5,
-            .itf14,
-            .pdf417,
-            .aztec,
-            .dataMatrix,
-            .upce
-        ]
+        // Use provided barcode types or fall back to all supported types
+        // This maintains backwards compatibility while allowing optimization
+        metadataOutput.metadataObjectTypes = barcodeTypes ?? ALL_SUPPORTED_BARCODE_TYPES
     }
 
     /// Remove the metadata output if in case it is already configured, e.g. because
