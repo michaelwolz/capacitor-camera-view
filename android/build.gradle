@@ -40,7 +40,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    lintOptions {
+    lint {
         abortOnError = false
     }
     compileOptions {
@@ -81,4 +81,7 @@ dependencies {
 
     // ML Kit for barcode scanning
     implementation "com.google.mlkit:barcode-scanning:17.3.0"
+
+    // Kotlin coroutines for modern async handling
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }

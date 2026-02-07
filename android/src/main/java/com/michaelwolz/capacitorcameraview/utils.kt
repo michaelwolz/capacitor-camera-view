@@ -16,6 +16,49 @@ import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
 import java.io.ByteArrayOutputStream
 
+/**
+ * Memory-efficient Base64 encoding utilities.
+ * Uses ThreadLocal ByteArrayOutputStream pool to reduce allocation churn.
+ */
+object StreamingBase64Encoder {
+    // Reusable ByteArrayOutputStream to reduce allocation churn (per-thread)
+    private val outputStreamPool = object : ThreadLocal<ByteArrayOutputStream>() {
+        override fun initialValue(): ByteArrayOutputStream {
+            return ByteArrayOutputStream(256 * 1024) // 256KB initial capacity
+        }
+    }
+
+    /**
+     * Encodes a bitmap to Base64 with memory optimization.
+     * Reuses ByteArrayOutputStream to reduce allocations.
+     *
+     * @param bitmap The bitmap to encode
+     * @param quality JPEG compression quality (0-100)
+     * @param format Compression format (default JPEG)
+     * @return Base64 encoded string
+     */
+    fun encodeToBase64(
+        bitmap: Bitmap,
+        quality: Int,
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG
+    ): String {
+        val outputStream = outputStreamPool.get()!!
+        outputStream.reset() // Clear previous data
+
+        bitmap.compress(format, quality, outputStream)
+        val byteArray = outputStream.toByteArray()
+
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+
+    /**
+     * Encodes raw byte array to Base64.
+     */
+    fun encodeToBase64(bytes: ByteArray): String {
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+}
+
 /** Converts a barcode format code to a readable string. */
 fun getBarcodeFormatString(format: Int): String {
     return when (format) {
@@ -174,6 +217,7 @@ fun calculateImageRotationBasedOnDisplayRotation(
 
 /**
  * Converts an ImageProxy to a Base64 encoded string and applies rotation if necessary.
+ * Uses StreamingBase64Encoder for memory-efficient encoding.
  *
  * @param image The ImageProxy to convert.
  * @param quality The JPEG compression quality (0-100).
@@ -200,11 +244,8 @@ fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): S
             bitmap = rotatedBitmap
         }
 
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-        val byteArray = outputStream.toByteArray()
-
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        // Use streaming encoder for memory efficiency
+        return StreamingBase64Encoder.encodeToBase64(bitmap, quality)
     } finally {
         // Ensure bitmap is always recycled
         bitmap.recycle()
