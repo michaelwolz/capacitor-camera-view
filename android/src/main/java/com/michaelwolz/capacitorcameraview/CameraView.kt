@@ -100,7 +100,7 @@ class CameraView(plugin: Plugin) {
     )
     val barcodeEvents: SharedFlow<BarcodeDetectionResult> = _barcodeEvents.asSharedFlow()
 
-    /** Starts a camera session with the provided configuration (suspend version). */
+    /** Starts a camera session with the provided configuration. */
     suspend fun startSessionAsync(config: CameraSessionConfiguration): CameraResult<Unit> =
         withContext(Dispatchers.Main) {
             val lifecycleOwner = context as? LifecycleOwner
@@ -127,7 +127,7 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Stop the camera session and release resources (suspend version). */
+    /** Stop the camera session and release resources. */
     suspend fun stopSessionAsync(): CameraResult<Unit> = withContext(Dispatchers.Main) {
         try {
             cameraController?.unbind()
@@ -168,7 +168,7 @@ class CameraView(plugin: Plugin) {
         return cameraController != null
     }
 
-    /** Capture a photo with the current camera configuration (suspend version). */
+    /** Capture a photo with the current camera configuration. */
     suspend fun capturePhotoAsync(
         quality: Int,
         saveToFile: Boolean = false
@@ -285,7 +285,7 @@ class CameraView(plugin: Plugin) {
     }
 
     /**
-     * Capture a frame directly from the preview without using the full photo pipeline (suspend version).
+     * Capture a frame directly from the preview without using the full photo pipeline.
      * Faster but has lower quality than full photo capture.
      */
     suspend fun captureSampleFromPreviewAsync(
