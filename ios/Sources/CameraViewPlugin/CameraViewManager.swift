@@ -76,6 +76,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Callback for when snapshot capture completes.
     internal var snapshotCompletionHandler: ((UIImage?, Error?) -> Void)?
 
+    /// Emits typed camera events to the delegate and NotificationCenter.
+    internal let eventEmitter = CameraEventEmitter()
+
     override public init() {
         super.init()
         setupOrientationObserver()
@@ -123,7 +126,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             self.displayPreview(
                 on: webView,
                 completion: { error in
-                    if error != nil { completion(error) }
+                    if error != nil { completion(error); return }
 
                     // Handle barcode detection after session is running
                     if configuration.enableBarcodeDetection {

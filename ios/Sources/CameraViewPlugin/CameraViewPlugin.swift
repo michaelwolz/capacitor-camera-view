@@ -5,7 +5,7 @@ import Foundation
 /// Please read the Capacitor iOS Plugin Development Guide
 /// here: https://capacitorjs.com/docs/plugins/ios
 @objc(CameraViewPlugin)
-public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
+public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate {
     public let identifier = "CameraViewPlugin"
     public let jsName = "CameraView"
 
@@ -44,29 +44,13 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private let implementation = CameraViewManager()
-    private var notificationObserver: NSObjectProtocol?
 
     override public func load() {
-        // Add observer for barcode detection events
-        notificationObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("barcodeDetected"),
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self = self,
-                  let barcodeData = notification.userInfo as? [String: Any] else {
-                return
-            }
-
-            // Emit event to JS
-            self.notifyListeners("barcodeDetected", data: barcodeData)
-        }
+        implementation.eventEmitter.delegate = self
     }
 
-    deinit {
-        if let observer = notificationObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
+    public func cameraDidDetectBarcode(_ event: BarcodeDetectedEvent) {
+        notifyListeners("barcodeDetected", data: event.toDictionary())
     }
 
     @objc func start(_ call: CAPPluginCall) {

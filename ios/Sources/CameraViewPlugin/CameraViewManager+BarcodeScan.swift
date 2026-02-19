@@ -69,21 +69,15 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
             return
         }
 
-        let boundingRect: [String: Double] = [
-            "x": Double(transformedMetadataObject.bounds.origin.x),
-            "y": Double(transformedMetadataObject.bounds.origin.y),
-            "width": Double(transformedMetadataObject.bounds.width),
-            "height": Double(transformedMetadataObject.bounds.height)
-        ]
+        let boundingRect = BarcodeDetectedEvent.BoundingRect(
+            x: Double(transformedMetadataObject.bounds.origin.x),
+            y: Double(transformedMetadataObject.bounds.origin.y),
+            width: Double(transformedMetadataObject.bounds.width),
+            height: Double(transformedMetadataObject.bounds.height)
+        )
 
-        NotificationCenter.default.post(
-            name: Notification.Name("barcodeDetected"),
-            object: nil,
-            userInfo: [
-                "value": barcodeValue,
-                "type": barcodeType,
-                "boundingRect": boundingRect
-            ]
+        eventEmitter.emitBarcodeDetected(
+            BarcodeDetectedEvent(value: barcodeValue, type: barcodeType, boundingRect: boundingRect)
         )
     }
 }
