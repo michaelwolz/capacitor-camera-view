@@ -95,8 +95,9 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        implementation.stopSession()
-        call.resolve()
+        implementation.stopSession {
+            call.resolve()
+        }
     }
 
     @objc func isRunning(_ call: CAPPluginCall) {
@@ -316,7 +317,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         let level = call.getFloat("level") ?? 1.0
-        
+
         guard level >= 0.0 && level <= 1.0 else {
             call.reject("Level must be between 0.0 and 1.0")
             return
