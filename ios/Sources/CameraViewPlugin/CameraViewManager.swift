@@ -115,8 +115,11 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     }
 
     /// Stops the current capture session.
-    public func stopSession() {
-        guard captureSession.isRunning else { return }
+    public func stopSession(completion: (() -> Void)? = nil) {
+        guard captureSession.isRunning else {
+            completion?()
+            return
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession.stopRunning()
@@ -133,6 +136,8 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                 blurOverlayView.removeFromSuperview()
                 self.blurOverlayView = nil
             }
+
+            completion?()
         }
     }
 
