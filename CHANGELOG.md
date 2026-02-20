@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/michaelwolz/capacitor-camera-view/compare/2.0.0...2.0.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* **ios:** wait for stop session method to complete ([179d4a2](https://github.com/michaelwolz/capacitor-camera-view/commit/179d4a278ccb51f7ffacec3ed3d80fda90bb5430))
+
 # [2.0.0](https://github.com/michaelwolz/capacitor-camera-view/compare/v1.2.2...2.0.0) (2026-01-02)
 
 
