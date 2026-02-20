@@ -79,8 +79,9 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        implementation.stopSession()
-        call.resolve()
+        implementation.stopSession {
+            call.resolve()
+        }
     }
 
     @objc func isRunning(_ call: CAPPluginCall) {

@@ -152,26 +152,34 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     }
 
     /// Stops the current capture session and cleans up temporary files.
-    public func stopSession() {
-        guard captureSession.isRunning else { return }
+    public func stopSession(completion: (() -> Void)? = nil) {
+        guard captureSession.isRunning else {
+            completion?()
+            return
+        }
 
         sessionQueue.async { [weak self] in
             self?.captureSession.stopRunning()
-        }
 
-        // Clean up temporary files created during this session
-        TempFileManager.shared.cleanupSessionFiles()
+            // Clean up temporary files created during this session
+            TempFileManager.shared.cleanupSessionFiles()
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.videoPreviewLayer.removeFromSuperlayer()
-            self.webView?.isOpaque = true
-            self.webView?.backgroundColor = nil
-            self.webView = nil
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else {
+                    completion?()
+                    return
+                }
+                self.videoPreviewLayer.removeFromSuperlayer()
+                self.webView?.isOpaque = true
+                self.webView?.backgroundColor = nil
+                self.webView = nil
 
-            if let blurOverlayView = self.blurOverlayView {
-                blurOverlayView.removeFromSuperview()
-                self.blurOverlayView = nil
+                if let blurOverlayView = self.blurOverlayView {
+                    blurOverlayView.removeFromSuperview()
+                    self.blurOverlayView = nil
+                }
+
+                completion?()
             }
         }
     }
