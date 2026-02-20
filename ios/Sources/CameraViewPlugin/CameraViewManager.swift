@@ -11,7 +11,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     .builtInDualCamera,
     .builtInDualWideCamera,
     .builtInTripleCamera,
-    .builtInTrueDepthCamera
+    .builtInTrueDepthCamera,
 ]
 
 /// A camera implementation that handles camera session management and photo capture.
@@ -66,8 +66,12 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         webView: UIView,
         completion: @escaping (Error?) -> Void
     ) {
-        if let preferredCameraDeviceTypes = configuration.preferredCameraDeviceTypes {
-            self.preferredCameraDeviceTypes = convertToNativeCameraTypes(preferredCameraDeviceTypes)
+        if let preferredCameraDeviceTypes = configuration
+            .preferredCameraDeviceTypes
+        {
+            self.preferredCameraDeviceTypes = convertToNativeCameraTypes(
+                preferredCameraDeviceTypes
+            )
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -110,7 +114,8 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                             await self.upgradeToTripleCameraIfAvailable()
                         }
                     }
-                })
+                }
+            )
         }
     }
 
@@ -123,18 +128,18 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession.stopRunning()
-        }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.videoPreviewLayer.removeFromSuperlayer()
-            self.webView?.isOpaque = true
-            self.webView?.backgroundColor = nil
-            self.webView = nil
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.videoPreviewLayer.removeFromSuperlayer()
+                self.webView?.isOpaque = true
+                self.webView?.backgroundColor = nil
+                self.webView = nil
 
-            if let blurOverlayView = self.blurOverlayView {
-                blurOverlayView.removeFromSuperview()
-                self.blurOverlayView = nil
+                if let blurOverlayView = self.blurOverlayView {
+                    blurOverlayView.removeFromSuperview()
+                    self.blurOverlayView = nil
+                }
             }
 
             completion?()
@@ -168,9 +173,11 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let photoConnection = avPhotoOutput.connection(with: .video),
-           let previewConnection = videoPreviewLayer.connection {
+            let previewConnection = videoPreviewLayer.connection
+        {
             if photoConnection.isVideoOrientationSupported {
-                photoConnection.videoOrientation = previewConnection.videoOrientation
+                photoConnection.videoOrientation =
+                    previewConnection.videoOrientation
             }
         }
 
@@ -181,7 +188,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Capture a snapshot of the current camera view. This is faster than actually processing a
     /// photo via capturePhoto
     /// - Parameter completion: called with the captured UIImage or an error.
-    public func captureSnapshot(completion: @escaping (UIImage?, Error?) -> Void) {
+    public func captureSnapshot(
+        completion: @escaping (UIImage?, Error?) -> Void
+    ) {
         guard currentCameraDevice != nil else {
             completion(nil, CameraError.cameraUnavailable)
             return
@@ -194,24 +203,33 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let videoConnection = avVideoDataOutput.connection(with: .video),
-           let previewConnection = videoPreviewLayer.connection {
+            let previewConnection = videoPreviewLayer.connection
+        {
             if videoConnection.isVideoOrientationSupported {
-                videoConnection.videoOrientation = previewConnection.videoOrientation
+                videoConnection.videoOrientation =
+                    previewConnection.videoOrientation
             }
         }
 
         // Create a serial queue for sample buffer processing
-        let sampleBufferQueue = DispatchQueue(label: "com.michaelwolz.capacitorcameraview.snapshotQueue")
+        let sampleBufferQueue = DispatchQueue(
+            label: "com.michaelwolz.capacitorcameraview.snapshotQueue"
+        )
 
         // Set the delegate for a single frame capture
         snapshotCompletionHandler = completion
-        avVideoDataOutput.setSampleBufferDelegate(self, queue: sampleBufferQueue)
+        avVideoDataOutput.setSampleBufferDelegate(
+            self,
+            queue: sampleBufferQueue
+        )
     }
 
     /// Flips the camera to the opposite position (front to back or back to front).
     public func flipCamera() throws {
-        let currentPosition: AVCaptureDevice.Position = currentCameraDevice?.position ?? .back
-        let newPosition: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
+        let currentPosition: AVCaptureDevice.Position =
+            currentCameraDevice?.position ?? .back
+        let newPosition: AVCaptureDevice.Position =
+            currentPosition == .back ? .front : .back
 
         let newCamera = try getCameraDevice(for: newPosition)
         try setInput(with: newCamera)
@@ -222,7 +240,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// - Parameter mode: The desired flash mode (.on, .of, or .auto).
     /// - Throws: An error if the flash mode cannot be set or is not supported.
     public func setFlashMode(_ mode: AVCaptureDevice.FlashMode) throws {
-        guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard let camera = currentCameraDevice else {
+            throw CameraError.cameraUnavailable
+        }
         guard camera.hasFlash else { throw CameraError.unsupportedFlashMode }
         guard avPhotoOutput.supportedFlashModes.contains(mode)
         else {
@@ -275,7 +295,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - level: The torch intensity level (0.0 to 1.0)
     /// - Throws: An error if the torch mode cannot be set or is not supported.
     public func setTorchMode(enabled: Bool, level: Float = 1.0) throws {
-        guard let camera = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard let camera = currentCameraDevice else {
+            throw CameraError.cameraUnavailable
+        }
         guard camera.hasTorch else { throw CameraError.torchUnavailable }
 
         do {
@@ -297,7 +319,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// because some devices report very high zoom factors that aren't useful.
     ///
     /// - Returns: A tuple containing the minimum, maximum, and current zoom factors.
-    public func getSupportedZoomFactors() -> (min: CGFloat, max: CGFloat, current: CGFloat) {
+    public func getSupportedZoomFactors() -> (
+        min: CGFloat, max: CGFloat, current: CGFloat
+    ) {
         guard let currentDevice = currentCameraDevice else {
             return (
                 min: 1.0,
@@ -307,7 +331,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         let minZoomFactor = currentDevice.minAvailableVideoZoomFactor
-        let maxZoomFactor = min(currentDevice.activeFormat.videoMaxZoomFactor, 10.0)
+        let maxZoomFactor = min(
+            currentDevice.activeFormat.videoMaxZoomFactor,
+            10.0
+        )
         let currentZoomFactor = currentDevice.videoZoomFactor
 
         return (
@@ -324,10 +351,15 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - ramp: If enabled the zoom will be applied via ramp
     /// - Throws: An error if the zoom factor cannot be set.
     public func setZoomFactor(_ factor: CGFloat, ramp: Bool = true) throws {
-        guard let device = currentCameraDevice else { throw CameraError.cameraUnavailable }
+        guard let device = currentCameraDevice else {
+            throw CameraError.cameraUnavailable
+        }
 
         let supportedZoomFactors = getSupportedZoomFactors()
-        guard factor >= supportedZoomFactors.min && factor <= supportedZoomFactors.max else {
+        guard
+            factor >= supportedZoomFactors.min
+                && factor <= supportedZoomFactors.max
+        else {
             throw CameraError.zoomFactorOutOfRange
         }
 
@@ -349,7 +381,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///
     /// - Parameters:
     ///   - configuration: The configuration object for the camera session.
-    private func initiateCaptureSession(configuration: CameraSessionConfiguration) throws {
+    private func initiateCaptureSession(
+        configuration: CameraSessionConfiguration
+    ) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
@@ -418,7 +452,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
     }
 
-
     /// Enables barcode detection by adding metadata output to the running session.
     /// Somehow adding the metadata output with the session not being started yet
     /// caused issues on some devices (iPad 7th Gen) where the session would just
@@ -468,19 +501,26 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - position: The position of the camera device to get
     /// - Returns: The camera device for the specified position
     /// - Throws: An error if no camera device is found.
-    private func getCameraDevice(for position: AVCaptureDevice.Position?) throws -> AVCaptureDevice {
+    private func getCameraDevice(for position: AVCaptureDevice.Position?) throws
+        -> AVCaptureDevice
+    {
         let preferredDevices = getPreferredCameraDevices()
 
         // First try to get the best match based on the users preferred camera device types
-        if let match = preferredDevices.first(where: { $0.position == position }) {
+        if let match = preferredDevices.first(where: { $0.position == position }
+        ) {
             return match
         }
 
         // If we haven't found one we try to get a best match for the position by iterating all supported device types
         // Only doing this when preferredCameraDeviceTypes size differs from SUPPORTED_CAMERA_DEVICE_TYPES, otherwise
         // we don't have to initialize a new discovery session
-        if preferredCameraDeviceTypes.count < SUPPORTED_CAMERA_DEVICE_TYPES.count,
-           let match = getAvailableDevices().first(where: { $0.position == position }) {
+        if preferredCameraDeviceTypes.count
+            < SUPPORTED_CAMERA_DEVICE_TYPES.count,
+            let match = getAvailableDevices().first(where: {
+                $0.position == position
+            })
+        {
             return match
         }
 
@@ -490,8 +530,12 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         // Log when we're falling back to a device with different position than requested
-        if let requestedPosition = position, device.position != requestedPosition {
-            print("Warning: Falling back to camera at position \(device.position) when \(requestedPosition) was requested")
+        if let requestedPosition = position,
+            device.position != requestedPosition
+        {
+            print(
+                "Warning: Falling back to camera at position \(device.position) when \(requestedPosition) was requested"
+            )
         }
 
         return device
@@ -503,8 +547,14 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - deviceId: The unique identifier of the camera device to get
     /// - Returns: The camera device for the specified position
     /// - Throws: An error if no camera device is found.
-    private func getCameraDeviceById(_ deviceId: String) throws -> AVCaptureDevice {
-        guard let device = getAvailableDevices().first(where: { $0.uniqueID == deviceId }) else {
+    private func getCameraDeviceById(_ deviceId: String) throws
+        -> AVCaptureDevice
+    {
+        guard
+            let device = getAvailableDevices().first(where: {
+                $0.uniqueID == deviceId
+            })
+        else {
             throw CameraError.cameraUnavailable
         }
         return device
@@ -519,7 +569,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     ///   - view: The view that will display the camera preview.
     ///   - completion: The completion handler after successfully adding the previewLayer to the provided view
     /// - Throws: An error if the preview layer cannot be set up.
-    private func displayPreview(on view: UIView, completion: @escaping (Error?) -> Void) {
+    private func displayPreview(
+        on view: UIView,
+        completion: @escaping (Error?) -> Void
+    ) {
         guard captureSession.isRunning else {
             completion(CameraError.sessionNotRunning)
             return
@@ -580,7 +633,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                 try self.setZoomFactor(2.0, ramp: false)
             } catch {
                 // Fail silently if we can't upgrade to the triple camera
-                print("Failed to upgrade to triple camera: \(error.localizedDescription)")
+                print(
+                    "Failed to upgrade to triple camera: \(error.localizedDescription)"
+                )
             }
 
             self.captureSession.commitConfiguration()
@@ -612,7 +667,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Removes the blur overlay with a fade out animation to have a smooth transition
     /// - Parameter duration: The duration of the fade out animation
     @MainActor
-    private func removeBlurOverlayWithAnimation(duration: TimeInterval = 0.3) async {
+    private func removeBlurOverlayWithAnimation(duration: TimeInterval = 0.3)
+        async
+    {
         guard let blurEffectView = blurOverlayView else { return }
 
         await withCheckedContinuation { continuation in
@@ -625,7 +682,8 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                     blurEffectView.removeFromSuperview()
                     self.blurOverlayView = nil
                     continuation.resume()
-                })
+                }
+            )
         }
     }
 
@@ -644,11 +702,15 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
     /// Updates the preview layer orientation based on the current device orientation.
     private func updatePreviewOrientation() {
-        guard let connection = self.videoPreviewLayer.connection, connection.isVideoOrientationSupported else {
+        guard let connection = self.videoPreviewLayer.connection,
+            connection.isVideoOrientationSupported
+        else {
             return
         }
 
-        let interfaceOrientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
+        let interfaceOrientation =
+            UIApplication.shared.windows.first?.windowScene?
+            .interfaceOrientation ?? .portrait
         let videoOrientation: AVCaptureVideoOrientation
 
         switch interfaceOrientation {
@@ -688,7 +750,8 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
             self,
             selector: #selector(handleAppDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification,
-            object: nil)
+            object: nil
+        )
     }
 
     /// Handles the app going to background by pausing the camera session.
