@@ -24,7 +24,12 @@ import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.view.LifecycleCameraController
+import androidx.camera.view.CameraController
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.camera.view.video.AudioConfig
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.getcapacitor.FileUtils
@@ -81,6 +86,15 @@ class CameraView(plugin: Plugin) {
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
 
+    // Active video recording
+    private var activeRecording: Recording? = null
+
+    // Continuation callback for stop recording result
+    private var pendingStopCallback: ((CameraResult<JSObject>) -> Unit)? = null
+
+    // Track the output file for the current recording
+    private var currentRecordingFile: File? = null
+
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
     private var pluginDelegate: Plugin = plugin
@@ -130,6 +144,12 @@ class CameraView(plugin: Plugin) {
     /** Stop the camera session and release resources. */
     suspend fun stopSessionAsync(): CameraResult<Unit> = withContext(Dispatchers.Main) {
         try {
+            // Stop any active recording before unbinding
+            activeRecording?.stop()
+            activeRecording = null
+            pendingStopCallback = null
+            currentRecordingFile = null
+
             cameraController?.unbind()
 
             previewView?.let { view ->
@@ -346,7 +366,131 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Flip between front and back cameras */
+    /**
+     * Starts video recording to a temporary file.
+     */
+    suspend fun startRecordingAsync(
+        enableAudio: Boolean,
+    ): CameraResult<Unit> = suspendCancellableCoroutine { continuation ->
+        mainHandler.post {
+            val controller = cameraController
+            if (controller == null) {
+                continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
+                return@post
+            }
+
+            if (activeRecording != null) {
+                continuation.resume(CameraResult.Error(Exception("Recording is already in progress")))
+                return@post
+            }
+
+            try {
+                // Enable VIDEO_CAPTURE use case alongside IMAGE_CAPTURE
+                controller.setEnabledUseCases(
+                    CameraController.IMAGE_CAPTURE or CameraController.VIDEO_CAPTURE
+                )
+
+                val tempFile = File.createTempFile(
+                    "camera_recording_",
+                    ".mp4",
+                    context.cacheDir
+                )
+                currentRecordingFile = tempFile
+
+                val outputOptions = FileOutputOptions.Builder(tempFile).build()
+                val audioConfig = if (enableAudio) AudioConfig.create(true) else AudioConfig.AUDIO_DISABLED
+
+                var startResumed = false
+
+                activeRecording = controller.startRecording(
+                    outputOptions,
+                    audioConfig,
+                    cameraExecutor
+                ) { event ->
+                    when (event) {
+                        is VideoRecordEvent.Start -> {
+                            Log.d(TAG, "Video recording started")
+                            if (!startResumed && continuation.isActive) {
+                                startResumed = true
+                                continuation.resume(CameraResult.Success(Unit))
+                            }
+                        }
+                        is VideoRecordEvent.Finalize -> {
+                            // If recording finalized before Start was emitted, resume the
+                            // startRecording continuation with an error
+                            if (!startResumed && continuation.isActive) {
+                                startResumed = true
+                                continuation.resume(CameraResult.Error(
+                                    Exception("Recording failed to start: error code ${event.error}")
+                                ))
+                            }
+
+                            mainHandler.post {
+                                // CameraX requires use case changes on the main thread.
+                                cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+
+                                val callback = pendingStopCallback
+                                pendingStopCallback = null
+                                // Always clean up recording state
+                                activeRecording = null
+
+                                if (event.hasError()) {
+                                    Log.e(TAG, "Recording error: ${event.error}")
+                                    val file = currentRecordingFile
+                                    currentRecordingFile = null
+                                    callback?.invoke(CameraResult.Error(Exception("Recording failed with error code: ${event.error}")))
+                                } else {
+                                    val file = currentRecordingFile
+                                    currentRecordingFile = null
+                                    if (file != null) {
+                                        val capacitorFilePath = FileUtils.getPortablePath(
+                                            context,
+                                            pluginDelegate.bridge.localUrl,
+                                            Uri.fromFile(file)
+                                        )
+                                        val result = JSObject().apply {
+                                            put("webPath", capacitorFilePath)
+                                        }
+                                        callback?.invoke(CameraResult.Success(result))
+                                    } else {
+                                        callback?.invoke(CameraResult.Error(Exception("Recording file not found")))
+                                    }
+                                }
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting recording", e)
+                // Restore normal use cases on error
+                cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+                continuation.resume(CameraResult.Error(e))
+            }
+        }
+    }
+
+    /**
+     * Stops the current video recording and returns the file path.
+     */
+    suspend fun stopRecordingAsync(): CameraResult<JSObject> = suspendCancellableCoroutine { continuation ->
+        mainHandler.post {
+            val recording = activeRecording
+            if (recording == null) {
+                continuation.resume(CameraResult.Error(Exception("No recording is in progress")))
+                return@post
+            }
+
+            pendingStopCallback = { result ->
+                continuation.resume(result)
+            }
+
+            activeRecording = null
+            recording.stop()
+        }
+    }
+
+        /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
         currentCameraSelector = when (currentCameraSelector) {
             CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
@@ -533,6 +677,12 @@ class CameraView(plugin: Plugin) {
 
         mainHandler.post {
             try {
+                // Stop any active recording before cleanup
+                activeRecording?.stop()
+                activeRecording = null
+                pendingStopCallback = null
+                currentRecordingFile = null
+
                 // Stop camera session
                 cameraController?.unbind()
                 cameraController = null
