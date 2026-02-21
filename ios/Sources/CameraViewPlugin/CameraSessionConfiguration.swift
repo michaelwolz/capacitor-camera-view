@@ -6,23 +6,23 @@ import Capacitor
 public struct CameraSessionConfiguration: Sendable {
     /// Specific device ID to use. Takes precedence over position.
     let deviceId: String?
-    
+
     /// Whether to enable barcode detection.
     let enableBarcodeDetection: Bool
-    
+
     /// Optional array of specific barcode types to detect.
     /// If nil, all supported types are detected (for backwards compatibility).
     let barcodeTypes: [AVMetadataObject.ObjectType]?
-    
+
     /// Camera position to use (front or back).
     let position: AVCaptureDevice.Position
-    
+
     /// Preferred camera device types in order of preference.
     let preferredCameraDeviceTypes: [String]?
-    
+
     /// Whether to upgrade to triple camera if available (Pro models).
     let useTripleCameraIfAvailable: Bool
-    
+
     /// Initial zoom factor.
     let zoomFactor: CGFloat?
 }
@@ -37,7 +37,7 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
     let preferredCameraDeviceTypes = call.getArray("preferredCameraDeviceTypes") as? [String]
     let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable", false)
     let zoomFactor = call.getDouble("zoomFactor").map { CGFloat($0) }
-    
+
     // Parse barcode types if provided
     let barcodeTypes: [AVMetadataObject.ObjectType]?
     if let barcodeTypeStrings = call.getArray("barcodeTypes") as? [String] {
@@ -46,7 +46,7 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
     } else {
         barcodeTypes = nil
     }
-    
+
     return CameraSessionConfiguration(
         deviceId: deviceId,
         enableBarcodeDetection: enableBarcodeDetection,

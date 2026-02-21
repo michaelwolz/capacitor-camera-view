@@ -29,6 +29,8 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         CAPPluginMethod(name: "isRunning", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "captureSample", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getAvailableDevices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "flipCamera", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getZoom", returnType: CAPPluginReturnPromise),
@@ -203,6 +205,53 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         }
     }
     
+    @objc func startRecording(_ call: CAPPluginCall) {
+        let enableAudio = call.getBool("enableAudio") ?? false
+        
+        if enableAudio {
+            maybeRequestMicrophoneAccess { [weak self] granted in
+                guard granted else {
+                    call.reject("Microphone access denied")
+                    return
+                }
+                self?.doStartRecording(call: call, enableAudio: true)
+            }
+        } else {
+            doStartRecording(call: call, enableAudio: false)
+        }
+    }
+    
+    private func doStartRecording(call: CAPPluginCall, enableAudio: Bool) {
+        implementation.startRecording(enableAudio: enableAudio) { error in
+            if let error = error {
+                call.reject("Failed to start recording", nil, error)
+                return
+            }
+            call.resolve()
+        }
+    }
+    
+    @objc func stopRecording(_ call: CAPPluginCall) {
+        implementation.stopRecording { [weak self] (outputURL, error) in
+            if let error = error {
+                call.reject("Failed to stop recording", nil, error)
+                return
+            }
+            
+            guard let outputURL = outputURL else {
+                call.reject("No output file URL")
+                return
+            }
+            
+            guard let webPath = self?.bridge?.portablePath(fromLocalURL: outputURL)?.absoluteString else {
+                call.reject("Failed to create web-accessible path")
+                return
+            }
+            
+            call.resolve(["webPath": webPath])
+        }
+    }
+    
     @objc func getAvailableDevices(_ call: CAPPluginCall) {
         let devices = implementation.getAvailableDevices()
         
@@ -331,27 +380,52 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     }
     
     @objc override public func checkPermissions(_ call: CAPPluginCall) {
-        let cameraState: String
-        
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .notDetermined:
-            cameraState = "prompt"
-        case .restricted, .denied:
-            cameraState = "denied"
-        case .authorized:
-            cameraState = "granted"
-        @unknown default:
-            cameraState = "prompt"
-        }
-        
         call.resolve([
-            "camera": cameraState
+            "camera": authorizationStateString(for: .video),
+            "microphone": authorizationStateString(for: .audio)
         ])
     }
     
     @objc override public func requestPermissions(_ call: CAPPluginCall) {
-        AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
+        let permissionsList = call.getArray("permissions", String.self) ?? ["camera"]
+        
+        let requestCamera = permissionsList.contains("camera")
+        let requestMicrophone = permissionsList.contains("microphone")
+        
+        let completionHandler: () -> Void = { [weak self] in
             self?.checkPermissions(call)
+        }
+        
+        if requestCamera {
+            AVCaptureDevice.requestAccess(for: .video) { _ in
+                if requestMicrophone {
+                    AVCaptureDevice.requestAccess(for: .audio) { _ in
+                        completionHandler()
+                    }
+                } else {
+                    completionHandler()
+                }
+            }
+        } else if requestMicrophone {
+            AVCaptureDevice.requestAccess(for: .audio) { _ in
+                completionHandler()
+            }
+        } else {
+            completionHandler()
+        }
+    }
+    
+    /// Maps AVFoundation authorization status to the Capacitor permission state string.
+    private func authorizationStateString(for mediaType: AVMediaType) -> String {
+        switch AVCaptureDevice.authorizationStatus(for: mediaType) {
+        case .notDetermined:
+            return "prompt"
+        case .restricted, .denied:
+            return "denied"
+        case .authorized:
+            return "granted"
+        @unknown default:
+            return "prompt"
         }
     }
     
@@ -361,6 +435,21 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
             completion(true)
         } else if status == .notDetermined {
             AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    completion(granted)
+                }
+            }
+        } else {
+            completion(false)
+        }
+    }
+    
+    private func maybeRequestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        if status == .authorized {
+            completion(true)
+        } else if status == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
                 DispatchQueue.main.async {
                     completion(granted)
                 }

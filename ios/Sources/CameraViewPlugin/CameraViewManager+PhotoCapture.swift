@@ -13,17 +13,17 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
             // use outputs for taking photos here we don't need a new one
             return
         }
-        
+
         // Balanced should be a good choice for most use cases
         avPhotoOutput.maxPhotoQualityPrioritization = .balanced
-        
+
         if !captureSession.canAddOutput(avPhotoOutput) {
             throw CameraError.outputAdditionFailed
         }
-        
+
         captureSession.addOutput(avPhotoOutput)
     }
-    
+
     /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`
     ///
     /// This method handles both the legacy UIImage-based callback and the optimized Data-based
@@ -41,43 +41,42 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
         // Handle optimized Data-based callback first (avoids double encoding)
         if let dataHandler = photoDataCaptureHandler {
             photoDataCaptureHandler = nil
-            
+
             if let error = error {
                 dataHandler(nil, error)
                 return
             }
-            
+
             guard let data = photo.fileDataRepresentation() else {
                 dataHandler(nil, CameraError.photoOutputError)
                 return
             }
-            
+
             dataHandler(data, nil)
             return
         }
-        
+
         // Handle legacy UIImage-based callback
         if let imageHandler = photoCaptureHandler {
             photoCaptureHandler = nil
-            
+
             if let error = error {
                 imageHandler(nil, error)
                 return
             }
-            
+
             guard let data = photo.fileDataRepresentation() else {
                 imageHandler(nil, CameraError.photoOutputError)
                 return
             }
-            
+
             guard let image = UIImage(data: data) else {
                 imageHandler(nil, CameraError.photoOutputError)
                 return
             }
-            
+
             imageHandler(image, nil)
         }
     }
-    
-}
 
+}
