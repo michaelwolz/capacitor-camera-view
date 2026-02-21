@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.0.2...2.1.0) (2026-02-21)
+
+
+### Features
+
+* **camera-view:** add configurable barcode types and optimize capture performance ([0951c4b](https://github.com/michaelwolz/capacitor-camera-view/commit/0951c4bf17a4882b29e3bc27976cafc4e8cabb6e))
+
 ## [2.0.2](https://github.com/michaelwolz/capacitor-camera-view/compare/2.0.1...2.0.2) (2026-02-20)
 
 
