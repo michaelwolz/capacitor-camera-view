@@ -170,9 +170,6 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         sessionQueue.async { [weak self] in
             self?.captureSession.stopRunning()
 
-            // Clean up temporary files created during this session
-            TempFileManager.shared.cleanupSessionFiles()
-
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else {
                     completion?()

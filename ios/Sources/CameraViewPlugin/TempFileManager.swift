@@ -6,8 +6,7 @@ import UIKit
 ///
 /// This singleton tracks all temporary files created by the camera plugin
 /// and provides cleanup at various lifecycle points:
-/// - On session stop (cleans up session-specific files)
-/// - On app activation (cleans up stale files older than 1 hour)
+/// - On app activation (cleans up stale files older than 30 minutes)
 /// - On app termination (cleans up all tracked files)
 public final class TempFileManager: @unchecked Sendable {
     /// Shared singleton instance
@@ -22,8 +21,8 @@ public final class TempFileManager: @unchecked Sendable {
     /// Directory prefix used to identify camera capture temp files
     private let tempFilePrefix = "camera_capture_"
 
-    /// Stale file threshold in seconds (1 hour)
-    private let staleThresholdSeconds: TimeInterval = 3600
+    /// Stale file threshold in seconds (30 minutes)
+    private let staleThresholdSeconds: TimeInterval = 1800
 
     private init() {
         setupAppLifecycleObservers()
@@ -50,24 +49,6 @@ public final class TempFileManager: @unchecked Sendable {
         }
 
         return fileURL
-    }
-
-    /// Registers an externally created file for tracking.
-    ///
-    /// - Parameter url: The URL of the file to track
-    public func trackFile(_ url: URL) {
-        queue.sync {
-            trackedFiles.insert(url)
-        }
-    }
-
-    /// Removes a file from tracking without deleting it.
-    ///
-    /// - Parameter url: The URL of the file to untrack
-    public func untrackFile(_ url: URL) {
-        queue.sync {
-            trackedFiles.remove(url)
-        }
     }
 
     /// Cleans up all tracked temporary files.
