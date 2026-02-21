@@ -29,6 +29,7 @@
 
 - 📹 Embed a **live camera feed** directly into your app.
 - 📸 Capture photos or frames from the camera preview.
+- 🎥 **Video recording** with optional audio support.
 - 🔍 **Barcode detection** support.
 - 📱 **Virtual device support** for automatic lens selection based on zoom level and focus (iOS only).
 - 🔦 Control **zoom**, **flash** and **torch** modes programmatically.
@@ -62,12 +63,70 @@ Add the following keys to your app's `Info.plist` file:
 <string>To capture photos and videos</string>
 ```
 
+If you plan to use `startRecording` with `enableAudio: true`, also add:
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>To record audio with video</string>
+```
+
+> [!IMPORTANT]
+> The `NSMicrophoneUsageDescription` key must be present in `Info.plist` **before** microphone permission is ever requested — even if the request happens automatically when starting a recording with audio. Omitting it will cause your app to crash at runtime.
+
 #### Android
 
-The `CAMERA` permission is automatically added by Capacitor. Ensure your `AndroidManifest.xml` includes it if needed for specific configurations:
+The `CAMERA` permission is added to your app's `AndroidManifest.xml` automatically by the plugin. If you plan to use `startRecording` with `enableAudio: true`, the `RECORD_AUDIO` permission is also declared automatically by the plugin. You can verify these in your merged manifest:
 
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+> [!IMPORTANT]
+> Declaring a permission in `AndroidManifest.xml` is required for the system to allow requesting it at runtime. The plugin handles this for you, but make sure you are not accidentally stripping the permission in your build configuration.
+
+## 🔒 Permissions
+
+The plugin handles permissions for you automatically when a feature that requires them is used. However, you can also request permissions explicitly in advance.
+
+### Requesting permissions explicitly
+
+By default, `requestPermissions()` only requests **camera** permission, preserving backward compatibility:
+
+```typescript
+// Request camera permission only (default behavior)
+const status = await CameraView.requestPermissions();
+console.log(status.camera); // 'granted' | 'denied' | 'prompt'
+```
+
+To also request **microphone** permission (needed for video recording with audio), pass the `permissions` option:
+
+```typescript
+// Request both camera and microphone permissions
+const status = await CameraView.requestPermissions({
+  permissions: ['camera', 'microphone'],
+});
+console.log(status.camera);     // 'granted' | 'denied' | 'prompt'
+console.log(status.microphone); // 'granted' | 'denied' | 'prompt'
+```
+
+### Automatic permission requests
+
+You do not need to call `requestPermissions()` manually. The plugin will automatically request the required permissions when a feature is first used:
+
+- **Camera** permission is requested automatically when `start()` is called.
+- **Microphone** permission is requested automatically when `startRecording({ enableAudio: true })` is called.
+
+Regardless of whether you request permissions manually or rely on the automatic flow, the corresponding entries **must** be declared in your app's platform configuration (`Info.plist` on iOS, `AndroidManifest.xml` on Android) as described above.
+
+### Checking permission status
+
+Use `checkPermissions()` to query the current permission state without triggering a system prompt:
+
+```typescript
+const status = await CameraView.checkPermissions();
+console.log(status.camera);     // 'granted' | 'denied' | 'prompt'
+console.log(status.microphone); // 'granted' | 'denied' | 'prompt'
 ```
 
 ## ▶️ Basic Usage
@@ -174,6 +233,45 @@ CameraView.addListener('barcodeDetected', (data) => {
 
 See the [`BarcodeDetectionData`](#barcodedetectiondata) interface for details on the event payload.
 
+## 🎥 Video Recording
+
+This plugin supports recording video directly from the live camera feed.
+
+**How it works:**
+*   **iOS:** Uses `AVCaptureMovieFileOutput` on top of the existing `AVCaptureSession`. Output is saved as `.mp4`.
+*   **Android:** Uses the CameraX `VideoCapture` use case via `LifecycleCameraController`. Output is saved as `.mp4`.
+*   **Web:** Uses the browser `MediaRecorder` API on the existing `MediaStream`. Output is a `.webm` blob URL (MP4 is not broadly supported by browsers).
+
+**Basic usage:**
+
+```typescript
+import { CameraView } from 'capacitor-camera-view';
+
+// Start recording (camera must already be running)
+await CameraView.startRecording({ enableAudio: false, quality: 'medium' });
+
+// Stop recording and get the result
+const result = await CameraView.stopRecording();
+console.log('Video saved to:', result.webPath);
+```
+
+**Playing back the recorded video:**
+
+```html
+<video [src]="videoPath" controls></video>
+```
+
+**Recording with audio:**
+
+```typescript
+await CameraView.startRecording({ enableAudio: true });
+```
+
+> [!NOTE]
+> When `enableAudio: true` is used, the plugin automatically requests microphone permission from the user if it has not been granted yet. The permission declaration must still be present in your platform configuration — see the [Permissions](#-permissions) section for details.
+
+See the [`VideoRecordingOptions`](#videorecordingoptions) and [`VideoRecordingResponse`](#videorecordingresponse) interfaces in the API section for the full set of options.
+
 ## 🧪 Example App
 
 To see the plugin in action, check out the example app in the `example-app` folder. The app demonstrates how to integrate and use the Capacitor Camera View plugin in an Ionic Angular project.
@@ -206,6 +304,8 @@ chore: update dependencies
 * [`isRunning()`](#isrunning)
 * [`capture(...)`](#capture)
 * [`captureSample(...)`](#capturesample)
+* [`startRecording(...)`](#startrecording)
+* [`stopRecording()`](#stoprecording)
 * [`flipCamera()`](#flipcamera)
 * [`getAvailableDevices()`](#getavailabledevices)
 * [`getZoom()`](#getzoom)
@@ -217,7 +317,7 @@ chore: update dependencies
 * [`getTorchMode()`](#gettorchmode)
 * [`setTorchMode(...)`](#settorchmode)
 * [`checkPermissions()`](#checkpermissions)
-* [`requestPermissions()`](#requestpermissions)
+* [`requestPermissions(...)`](#requestpermissions)
 * [`addListener('barcodeDetected', ...)`](#addlistenerbarcodedetected-)
 * [`removeAllListeners(...)`](#removealllisteners)
 * [Interfaces](#interfaces)
@@ -317,6 +417,40 @@ not yet well supported on the web.
 **Returns:** <code>Promise&lt;<a href="#captureresponse">CaptureResponse</a>&lt;T&gt;&gt;</code>
 
 **Since:** 1.0.0
+
+--------------------
+
+
+### startRecording(...)
+
+```typescript
+startRecording(options?: VideoRecordingOptions | undefined) => Promise<void>
+```
+
+Start recording video from the current camera.
+Camera must be running. Throws if already recording.
+
+| Param         | Type                                                                    | Description                        |
+| ------------- | ----------------------------------------------------------------------- | ---------------------------------- |
+| **`options`** | <code><a href="#videorecordingoptions">VideoRecordingOptions</a></code> | - Optional recording configuration |
+
+**Since:** 3.0.0
+
+--------------------
+
+
+### stopRecording()
+
+```typescript
+stopRecording() => Promise<VideoRecordingResponse>
+```
+
+Stop the current video recording and return the result.
+Throws if no recording is in progress.
+
+**Returns:** <code>Promise&lt;<a href="#videorecordingresponse">VideoRecordingResponse</a>&gt;</code>
+
+**Since:** 3.0.0
 
 --------------------
 
@@ -481,7 +615,7 @@ Set the torch (flashlight) mode and intensity.
 checkPermissions() => Promise<PermissionStatus>
 ```
 
-Check camera permission status without requesting permissions.
+Check camera and microphone permission status without requesting permissions.
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
 
@@ -490,13 +624,20 @@ Check camera permission status without requesting permissions.
 --------------------
 
 
-### requestPermissions()
+### requestPermissions(...)
 
 ```typescript
-requestPermissions() => Promise<PermissionStatus>
+requestPermissions(options?: { permissions?: CameraPermissionType[] | undefined; } | undefined) => Promise<PermissionStatus>
 ```
 
-Request camera permission from the user.
+Request camera and/or microphone permissions from the user.
+
+By default, only camera permission is requested. To also request microphone
+permission (needed for video recording with audio), pass `{ permissions: ['camera', 'microphone'] }`.
+
+| Param         | Type                                                   | Description                                               |
+| ------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| **`options`** | <code>{ permissions?: CameraPermissionType[]; }</code> | - Optional object specifying which permissions to request |
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
 
@@ -581,6 +722,24 @@ Configuration options for capturing photos and samples.
 | **`saveToFile`** | <code>boolean</code> | If true, saves to a temporary file and returns the web path instead of base64. The web path can be used to set the src attribute of an image for efficient loading and rendering. This reduces the data that needs to be transferred over the bridge, which can improve performance especially for high-resolution images. | <code>false</code> | 1.1.0 |
 
 
+#### VideoRecordingOptions
+
+Configuration options for video recording.
+
+| Prop              | Type                 | Description                                                             | Default            | Since |
+| ----------------- | -------------------- | ----------------------------------------------------------------------- | ------------------ | ----- |
+| **`enableAudio`** | <code>boolean</code> | Whether to record audio with the video. Requires microphone permission. | <code>false</code> | 3.0.0 |
+
+
+#### VideoRecordingResponse
+
+Response from stopping a video recording.
+
+| Prop          | Type                | Description                                                                                                                                       | Since |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 3.0.0 |
+
+
 #### GetAvailableDevicesResponse
 
 Response for getting available camera devices.
@@ -652,11 +811,12 @@ Response for getting the current torch mode.
 
 #### PermissionStatus
 
-Response for the camera permission status.
+Response for the camera and microphone permission status.
 
-| Prop         | Type                                                        | Description                        |
-| ------------ | ----------------------------------------------------------- | ---------------------------------- |
-| **`camera`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the camera permission |
+| Prop             | Type                                                        | Description                            |
+| ---------------- | ----------------------------------------------------------- | -------------------------------------- |
+| **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> | The state of the camera permission     |
+| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the microphone permission |
 
 
 #### PluginListenerHandle
@@ -742,5 +902,14 @@ Flash mode options for the camera.
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
+
+
+#### CameraPermissionType
+
+Permission types that can be requested.
+- 'camera': Camera access permission
+- 'microphone': Microphone access permission (needed for video recording with audio)
+
+<code>'camera' | 'microphone'</code>
 
 </docgen-api>
