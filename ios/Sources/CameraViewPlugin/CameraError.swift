@@ -16,13 +16,13 @@ enum CameraError: Error, LocalizedError, CustomNSError {
     case zoomFactorOutOfRange
     case permissionDenied
     case deviceLocked
-
+    
     // MARK: - CustomNSError
-
+    
     static var errorDomain: String {
         return "com.michaelwolz.capacitorcameraview.CameraError"
     }
-
+    
     var errorCode: Int {
         switch self {
         case .cameraUnavailable:
@@ -53,25 +53,25 @@ enum CameraError: Error, LocalizedError, CustomNSError {
             return 1013
         }
     }
-
+    
     var errorUserInfo: [String: Any] {
         var userInfo: [String: Any] = [
             NSLocalizedDescriptionKey: errorDescription ?? "Unknown error"
         ]
-
+        
         if let recovery = recoverySuggestion {
             userInfo[NSLocalizedRecoverySuggestionErrorKey] = recovery
         }
-
+        
         if case .configurationFailed(let underlyingError) = self {
             userInfo[NSUnderlyingErrorKey] = underlyingError
         }
-
+        
         return userInfo
     }
-
+    
     // MARK: - LocalizedError
-
+    
     var errorDescription: String? {
         switch self {
         case .cameraUnavailable:
@@ -102,7 +102,7 @@ enum CameraError: Error, LocalizedError, CustomNSError {
             return "The camera device is currently locked by another process."
         }
     }
-
+    
     /// Provides actionable recovery suggestions for each error type.
     var recoverySuggestion: String? {
         switch self {

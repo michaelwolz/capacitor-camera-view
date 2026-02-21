@@ -9,24 +9,30 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
     ///                          If nil, all supported types are detected (backwards compatible).
     /// - Throws: An error if the output cannot be set.
     internal func setupMetadataOutput(barcodeTypes: [AVMetadataObject.ObjectType]? = nil) throws {
-        let metadataOutput = AVCaptureMetadataOutput()
+        let requestedBarcodeTypes = barcodeTypes ?? ALL_SUPPORTED_BARCODE_TYPES
 
-        if (captureSession.outputs.contains { $0 is AVCaptureMetadataOutput }) {
-            // Nothing todo, we already have an output
-            return
+        let metadataOutput: AVCaptureMetadataOutput
+
+        if let existingOutput = captureSession.outputs.first(where: { $0 is AVCaptureMetadataOutput }) as? AVCaptureMetadataOutput {
+            metadataOutput = existingOutput
+        } else {
+            let newOutput = AVCaptureMetadataOutput()
+            if !captureSession.canAddOutput(newOutput) {
+                throw CameraError.outputAdditionFailed
+            }
+
+            captureSession.addOutput(newOutput)
+            newOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+            metadataOutput = newOutput
         }
 
-        if !captureSession.canAddOutput(metadataOutput) {
-            throw CameraError.outputAdditionFailed
+        let supportedTypes = Set(metadataOutput.availableMetadataObjectTypes)
+        let resolvedTypes = requestedBarcodeTypes.filter { supportedTypes.contains($0) }
+
+        if metadataOutput.metadataObjectTypes != resolvedTypes {
+            // Update the metadata output with the resolved types only if they differ from the current configuration
+            metadataOutput.metadataObjectTypes = resolvedTypes
         }
-
-        captureSession.addOutput(metadataOutput)
-
-        metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-
-        // Use provided barcode types or fall back to all supported types
-        // This maintains backwards compatibility while allowing optimization
-        metadataOutput.metadataObjectTypes = barcodeTypes ?? ALL_SUPPORTED_BARCODE_TYPES
     }
 
     /// Remove the metadata output if in case it is already configured, e.g. because

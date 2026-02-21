@@ -138,8 +138,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                     // Handle barcode detection after session is running
                     if configuration.enableBarcodeDetection {
                         do {
-                            try self.enableBarcodeDetection(
-                                barcodeTypes: configuration.barcodeTypes)
+                            try self.enableBarcodeDetection(barcodeTypes: configuration.barcodeTypes)
                         } catch {
                             completion(error)
                             return
@@ -217,11 +216,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let photoConnection = avPhotoOutput.connection(with: .video),
-            let previewConnection = videoPreviewLayer.connection
+           let previewConnection = videoPreviewLayer.connection
         {
             if photoConnection.isVideoOrientationSupported {
-                photoConnection.videoOrientation =
-                    previewConnection.videoOrientation
+                photoConnection.videoOrientation = previewConnection.videoOrientation
             }
         }
 
@@ -254,7 +252,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let photoConnection = avPhotoOutput.connection(with: .video),
-            let previewConnection = videoPreviewLayer.connection
+           let previewConnection = videoPreviewLayer.connection
         {
             if photoConnection.isVideoOrientationSupported {
                 photoConnection.videoOrientation = previewConnection.videoOrientation
@@ -283,11 +281,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
 
         // Ensure proper orientation
         if let videoConnection = avVideoDataOutput.connection(with: .video),
-            let previewConnection = videoPreviewLayer.connection
+           let previewConnection = videoPreviewLayer.connection
         {
             if videoConnection.isVideoOrientationSupported {
-                videoConnection.videoOrientation =
-                    previewConnection.videoOrientation
+                videoConnection.videoOrientation = previewConnection.videoOrientation
             }
         }
 
@@ -302,9 +299,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Flips the camera to the opposite position (front to back or back to front).
     public func flipCamera() throws {
         let currentPosition: AVCaptureDevice.Position =
-            currentCameraDevice?.position ?? .back
+        currentCameraDevice?.position ?? .back
         let newPosition: AVCaptureDevice.Position =
-            currentPosition == .back ? .front : .back
+        currentPosition == .back ? .front : .back
 
         let newCamera = try getCameraDevice(for: newPosition)
         try setInput(with: newCamera)
@@ -578,7 +575,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// - Returns: The camera device for the specified position
     /// - Throws: An error if no camera device is found.
     private func getCameraDevice(for position: AVCaptureDevice.Position?) throws
-        -> AVCaptureDevice
+    -> AVCaptureDevice
     {
         let preferredDevices = getPreferredCameraDevices()
 
@@ -591,11 +588,10 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         // If we haven't found one we try to get a best match for the position by iterating all supported device types
         // Only doing this when preferredCameraDeviceTypes size differs from SUPPORTED_CAMERA_DEVICE_TYPES, otherwise
         // we don't have to initialize a new discovery session
-        if preferredCameraDeviceTypes.count
-            < SUPPORTED_CAMERA_DEVICE_TYPES.count,
-            let match = getAvailableDevices().first(where: {
-                $0.position == position
-            })
+        if preferredCameraDeviceTypes.count < SUPPORTED_CAMERA_DEVICE_TYPES.count,
+           let match = getAvailableDevices().first(where: {
+               $0.position == position
+           })
         {
             return match
         }
@@ -606,8 +602,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
         }
 
         // Log when we're falling back to a device with different position than requested
-        if let requestedPosition = position,
-            device.position != requestedPosition
+        if let requestedPosition = position, device.position != requestedPosition
         {
             print(
                 "Warning: Falling back to camera at position \(device.position) when \(requestedPosition) was requested"
@@ -624,7 +619,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// - Returns: The camera device for the specified position
     /// - Throws: An error if no camera device is found.
     private func getCameraDeviceById(_ deviceId: String) throws
-        -> AVCaptureDevice
+    -> AVCaptureDevice
     {
         guard
             let device = getAvailableDevices().first(where: {
@@ -744,7 +739,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// - Parameter duration: The duration of the fade out animation
     @MainActor
     private func removeBlurOverlayWithAnimation(duration: TimeInterval = 0.3)
-        async
+    async
     {
         guard let blurEffectView = blurOverlayView else { return }
 
@@ -779,14 +774,14 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Updates the preview layer orientation based on the current device orientation.
     private func updatePreviewOrientation() {
         guard let connection = self.videoPreviewLayer.connection,
-            connection.isVideoOrientationSupported
+              connection.isVideoOrientationSupported
         else {
             return
         }
 
-        let interfaceOrientation =
-            UIApplication.shared.windows.first?.windowScene?
-            .interfaceOrientation ?? .portrait
+        let interfaceOrientation = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.interfaceOrientation ?? .portrait
         let videoOrientation: AVCaptureVideoOrientation
 
         switch interfaceOrientation {
