@@ -78,6 +78,7 @@ export class CameraSettingsPage implements OnInit {
   protected useTripleCameraIfAvailable = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
   protected saveToFile = model<boolean>(false);
+  protected enableAudio = model<boolean>(true);
 
   protected barcodeValue = signal<string | undefined>(undefined);
 
@@ -111,6 +112,7 @@ export class CameraSettingsPage implements OnInit {
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
         initialZoomFactor: this.initialZoomFactor(),
         saveToFile: this.saveToFile(),
+        enableAudio: this.enableAudio(),
       },
     });
 
@@ -119,6 +121,7 @@ export class CameraSettingsPage implements OnInit {
     const { data } = await cameraModal.onDidDismiss<{
       photo?: string;
       webPath?: string;
+      videoWebPath?: string;
       barcode?: BarcodeDetectionData;
     }>();
 
@@ -126,6 +129,8 @@ export class CameraSettingsPage implements OnInit {
       this.#galleryService.addPhoto(data.photo);
     } else if (data?.webPath) {
       this.#galleryService.addPhotoFromFile(data.webPath);
+    } else if (data?.videoWebPath) {
+      this.#galleryService.addVideoFromFile(data.videoWebPath);
     }
 
     if (data?.barcode) {

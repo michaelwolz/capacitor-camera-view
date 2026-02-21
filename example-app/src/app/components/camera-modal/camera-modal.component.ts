@@ -79,6 +79,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
   public readonly initialZoomFactor = input<number>(1.0);
   public readonly saveToFile = input<boolean>(false);
+  public readonly enableAudio = input<boolean>(true);
 
   protected readonly cameraStarted = toSignal(
     this.#cameraViewService.cameraStarted,
@@ -93,6 +94,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected readonly torchLevel = signal<number>(1.0);
 
   protected readonly isCapturingPhoto = signal(false);
+  protected readonly isRecording = signal(false);
   protected readonly currentZoomFactor = signal(1.0);
   protected readonly minZoom = signal(1.0);
   protected readonly maxZoom = signal(10.0);
@@ -273,6 +275,43 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     });
 
     this.isCapturingPhoto.set(false);
+  }
+
+  protected async startRecording(): Promise<void> {
+    if (this.isRecording()) {
+      return;
+    }
+
+    try {
+      this.isRecording.set(true);
+      await this.#cameraViewService.startRecording({
+        enableAudio: this.enableAudio(),
+      });
+    } catch (error) {
+      console.error('Failed to start recording', error);
+      alert('Failed to start recording');
+      this.isRecording.set(false);
+    }
+  }
+
+  protected async stopRecording(): Promise<void> {
+    try {
+      const result = await this.#cameraViewService.stopRecording();
+      this.isRecording.set(false);
+
+      await this.stopCamera();
+
+      if (result.webPath) {
+        this.#modalController.dismiss({
+          photo: undefined,
+          webPath: undefined,
+          videoWebPath: result.webPath,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to stop recording', error);
+      this.isRecording.set(false);
+    }
   }
 
   protected async flipCamera(): Promise<void> {

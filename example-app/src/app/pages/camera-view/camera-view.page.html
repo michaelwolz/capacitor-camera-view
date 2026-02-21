@@ -116,6 +116,16 @@
         Save to File
       </ion-checkbox>
     </ion-item>
+
+    <ion-item>
+      <ion-checkbox
+        [(ngModel)]="enableAudio"
+        color="primary"
+        justify="space-between"
+      >
+        Enable Audio for Video Recording
+      </ion-checkbox>
+    </ion-item>
   </ion-list>
 
   <ion-button (click)="startCamera()" expand="block">

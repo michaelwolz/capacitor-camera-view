@@ -17,9 +17,11 @@ import {
   remove,
   search,
   searchOutline,
+  stop,
   sunny,
   sunnyOutline,
   trashOutline,
+  videocamOutline,
 } from 'ionicons/icons';
 
 @Component({
@@ -45,9 +47,11 @@ export class AppComponent {
       remove,
       search,
       searchOutline,
+      stop,
       sunny,
       sunnyOutline,
       trashOutline,
+      videocamOutline,
     });
   }
 }
