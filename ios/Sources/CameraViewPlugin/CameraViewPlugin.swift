@@ -316,7 +316,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         }
 
         let level = call.getFloat("level") ?? 1.0
-        
+
         guard level >= 0.0 && level <= 1.0 else {
             call.reject("Level must be between 0.0 and 1.0")
             return
