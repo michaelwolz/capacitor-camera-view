@@ -63,6 +63,27 @@ export interface CameraViewPlugin {
   captureSample<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>>;
 
   /**
+   * Start recording video from the current camera.
+   * Camera must be running. Throws if already recording.
+   *
+   * @param options - Optional recording configuration
+   * @returns A promise that resolves when recording has started
+   *
+   * @since 3.0.0
+   */
+  startRecording(options?: VideoRecordingOptions): Promise<void>;
+
+  /**
+   * Stop the current video recording and return the result.
+   * Throws if no recording is in progress.
+   *
+   * @returns A promise that resolves with the recorded video file path
+   *
+   * @since 3.0.0
+   */
+  stopRecording(): Promise<VideoRecordingResponse>;
+
+  /**
    * Switch between front and back camera.
    *
    * @returns A promise that resolves when the camera has been flipped
@@ -185,22 +206,26 @@ export interface CameraViewPlugin {
   setTorchMode(options: { enabled: boolean; level?: number }): Promise<void>;
 
   /**
-   * Check camera permission status without requesting permissions.
+   * Check camera and microphone permission status without requesting permissions.
    *
-   * @returns A promise that resolves with an object containing the camera permission status
+   * @returns A promise that resolves with an object containing the camera and microphone permission status
    *
    * @since 1.0.0
    */
   checkPermissions(): Promise<PermissionStatus>;
 
   /**
-   * Request camera permission from the user.
+   * Request camera and/or microphone permissions from the user.
    *
-   * @returns A promise that resolves with an object containing the camera permission status
+   * By default, only camera permission is requested. To also request microphone
+   * permission (needed for video recording with audio), pass `{ permissions: ['camera', 'microphone'] }`.
+   *
+   * @param options - Optional object specifying which permissions to request
+   * @returns A promise that resolves with an object containing the camera and microphone permission status
    *
    * @since 1.0.0
    */
-  requestPermissions(): Promise<PermissionStatus>;
+  requestPermissions(options?: { permissions?: CameraPermissionType[] }): Promise<PermissionStatus>;
 
   /**
    * Listen for barcode detection events.
@@ -420,6 +445,34 @@ export interface CaptureOptions {
   saveToFile?: boolean;
 }
 
+/**
+ * Configuration options for video recording.
+ * @since 3.0.0
+ */
+export interface VideoRecordingOptions {
+  /**
+   * Whether to record audio with the video.
+   * Requires microphone permission.
+   * @default false
+   * @since 3.0.0
+   */
+  enableAudio?: boolean;
+}
+
+/**
+ * Response from stopping a video recording.
+ * @since 3.0.0
+ */
+export interface VideoRecordingResponse {
+  /**
+   * Web-accessible path to the recorded video file.
+   * On web, this is a blob URL.
+   * On iOS/Android, this is a path accessible via Capacitor's filesystem.
+   * @since 3.0.0
+   */
+  webPath: string;
+}
+
 // ------------------------------------------------------------------------------
 // Response Interfaces
 // ------------------------------------------------------------------------------
@@ -555,11 +608,22 @@ export interface BoundingRect {
 }
 
 /**
- * Response for the camera permission status.
+ * Permission types that can be requested.
+ * - 'camera': Camera access permission
+ * - 'microphone': Microphone access permission (needed for video recording with audio)
+ *
+ * @since 3.0.0
+ */
+export type CameraPermissionType = 'camera' | 'microphone';
+
+/**
+ * Response for the camera and microphone permission status.
  *
  * @since 1.0.0
  */
 export interface PermissionStatus {
   /** The state of the camera permission */
   camera: PermissionState;
+  /** The state of the microphone permission */
+  microphone: PermissionState;
 }

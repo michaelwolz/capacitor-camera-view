@@ -3,6 +3,7 @@ import { WebPlugin } from '@capacitor/core';
 import type {
   CameraSessionConfiguration,
   CameraViewPlugin,
+  CameraPermissionType,
   GetAvailableDevicesResponse,
   GetFlashModeResponse,
   GetSupportedFlashModesResponse,
@@ -14,6 +15,8 @@ import type {
   CaptureResponse,
   FlashMode,
   CaptureOptions,
+  VideoRecordingOptions,
+  VideoRecordingResponse,
   BarcodeType,
 } from './definitions';
 import { calculateVisibleArea, canvasToBase64, drawVisibleAreaToCanvas, transformBarcodeBoundingBox } from './utils';
@@ -55,6 +58,13 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   // Barcode detection support
   private barcodeDetectionSupported = false;
   private barcodeDetector: BarcodeDetector | null = null;
+
+  // Recording state
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
+  private recordingAudioTrack: MediaStreamTrack | null = null;
+  private recordingResolve: ((response: VideoRecordingResponse) => void) | null = null;
+  private recordingReject: ((error: Error) => void) | null = null;
 
   constructor() {
     super();
@@ -131,6 +141,21 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
     }
 
     try {
+      // Stop any active recording
+      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+        // Reject any pending stopRecording promise since we're force-stopping
+        this.recordingReject?.(new Error('Camera session stopped while recording'));
+        this.recordingResolve = null;
+        this.recordingReject = null;
+        this.mediaRecorder.stop();
+        this.mediaRecorder = null;
+      }
+      this.recordedChunks = [];
+      if (this.recordingAudioTrack) {
+        this.recordingAudioTrack.stop();
+        this.recordingAudioTrack = null;
+      }
+
       // Stop all tracks in the stream
       if (this.stream) {
         this.stream.getTracks().forEach((track) => track.stop());
@@ -206,6 +231,101 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
    */
   async captureSample<T extends CaptureOptions>(options: T): Promise<CaptureResponse<T>> {
     return this.capture(options);
+  }
+
+  /**
+   * Start recording video using MediaRecorder API
+   */
+  async startRecording(options?: VideoRecordingOptions): Promise<void> {
+    if (!this.#isRunning || !this.videoElement) {
+      throw new Error('Camera is not running');
+    }
+
+    if (this.mediaRecorder) {
+      throw new Error('Recording is already in progress');
+    }
+
+    try {
+      let stream = this.stream;
+
+      // If audio is requested, get a new stream with audio track
+      if (options?.enableAudio && stream) {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioTrack = audioStream.getAudioTracks()[0];
+        this.recordingAudioTrack = audioTrack;
+        const videoTracks = stream.getVideoTracks();
+        stream = new MediaStream([...videoTracks, audioTrack]);
+      }
+
+      if (!stream) {
+        throw new Error('No camera stream available');
+      }
+
+      this.recordedChunks = [];
+
+      const mimeType = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'].find((type) =>
+        MediaRecorder.isTypeSupported(type),
+      );
+
+      if (!mimeType) {
+        throw new Error('No supported video recording format found');
+      }
+
+      this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          this.recordedChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.onstop = () => {
+        // Stop audio track if it was added for recording
+        if (this.recordingAudioTrack) {
+          this.recordingAudioTrack.stop();
+          this.recordingAudioTrack = null;
+        }
+        const blob = new Blob(this.recordedChunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        this.recordedChunks = [];
+        this.mediaRecorder = null;
+        this.recordingResolve?.({ webPath: url });
+        this.recordingResolve = null;
+        this.recordingReject = null;
+      };
+
+      this.mediaRecorder.onerror = (event) => {
+        if (this.recordingAudioTrack) {
+          this.recordingAudioTrack.stop();
+          this.recordingAudioTrack = null;
+        }
+        this.mediaRecorder = null;
+        this.recordedChunks = [];
+        const errorMessage = (event as ErrorEvent).error?.message ?? 'Unknown recording error';
+        this.recordingReject?.(new Error('Recording error: ' + errorMessage));
+        this.recordingResolve = null;
+        this.recordingReject = null;
+      };
+
+      this.mediaRecorder.start(100); // Collect data in 100ms chunks
+    } catch (err) {
+      throw new Error(`Failed to start recording: ${this.formatError(err)}`);
+    }
+  }
+
+  /**
+   * Stop the current video recording
+   */
+  async stopRecording(): Promise<VideoRecordingResponse> {
+    if (!this.mediaRecorder) {
+      throw new Error('No recording is in progress');
+    }
+
+    return new Promise<VideoRecordingResponse>((resolve, reject) => {
+      this.recordingResolve = resolve;
+      this.recordingReject = reject;
+      this.mediaRecorder?.stop();
+    });
   }
 
   /**
@@ -341,47 +461,77 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   }
 
   /**
-   * Check camera permission without requesting
+   * Check camera and microphone permission without requesting
    */
   public async checkPermissions(): Promise<PermissionStatus> {
     try {
       // Use Permissions API if available
       if (navigator.permissions) {
-        const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        const [cameraResult, microphoneResult] = await Promise.all([
+          navigator.permissions.query({ name: 'camera' as PermissionName }),
+          navigator.permissions.query({ name: 'microphone' as PermissionName }),
+        ]);
         return {
-          camera: result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'prompt',
+          camera: cameraResult.state === 'granted' ? 'granted' : cameraResult.state === 'denied' ? 'denied' : 'prompt',
+          microphone:
+            microphoneResult.state === 'granted'
+              ? 'granted'
+              : microphoneResult.state === 'denied'
+                ? 'denied'
+                : 'prompt',
         };
       }
 
-      // If Permissions API is not available, check if we have an active stream
+      // If Permissions API is not available, fall back to checking the active stream
       return {
         camera: this.stream ? 'granted' : 'prompt',
+        microphone: 'prompt',
       };
     } catch (err) {
       // If permissions API is not supported or fails
       return {
         camera: 'prompt',
+        microphone: 'prompt',
       };
     }
   }
 
   /**
-   * Request camera permission from the user
+   * Request camera and/or microphone permissions from the user.
+   * By default, only camera permission is requested.
    */
-  public async requestPermissions(): Promise<PermissionStatus> {
-    try {
-      // Try to access the camera to trigger the permission prompt
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  public async requestPermissions(options?: { permissions?: CameraPermissionType[] }): Promise<PermissionStatus> {
+    const permissions = options?.permissions ?? ['camera'];
+    const result: PermissionStatus = { camera: 'prompt', microphone: 'prompt' };
 
-      // If we get here, permission was granted
-      // Clean up the test stream
-      stream.getTracks().forEach((track) => track.stop());
-
-      return { camera: 'granted' };
-    } catch (err) {
-      // Permission denied or other error
-      return { camera: 'denied' };
+    // Request camera permission if included
+    if (permissions.includes('camera')) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach((track) => track.stop());
+        result.camera = 'granted';
+      } catch {
+        result.camera = 'denied';
+      }
+    } else {
+      // Still report current status even if not requesting
+      result.camera = (await this.checkPermissions()).camera;
     }
+
+    // Request microphone permission only if explicitly included
+    if (permissions.includes('microphone')) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        result.microphone = 'granted';
+      } catch {
+        result.microphone = 'denied';
+      }
+    } else {
+      result.microphone = (await this.checkPermissions()).microphone;
+    }
+
+    return result;
   }
 
   /**
