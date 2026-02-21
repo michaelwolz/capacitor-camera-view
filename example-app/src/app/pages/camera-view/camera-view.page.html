@@ -89,6 +89,24 @@
       </ion-checkbox>
     </ion-item>
 
+    @if (enableBarcodeDetection()) {
+      <ion-item>
+        <ion-select
+          [(ngModel)]="barcodeTypes"
+          label="Barcode Types"
+          placeholder="Select barcode types to detect"
+          label-placement="floating"
+          multiple
+        >
+          @for (type of barcodeTypeOptions; track type.value) {
+            <ion-select-option value="{{ type.value }}">
+              {{ type.label }}
+            </ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+    }
+
     <ion-item>
       <ion-checkbox
         [(ngModel)]="saveToFile"

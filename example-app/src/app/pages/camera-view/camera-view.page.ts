@@ -19,12 +19,29 @@ import {
 } from '@ionic/angular/standalone';
 import {
   BarcodeDetectionData,
+  BarcodeType,
   CameraDevice,
   FlashMode,
 } from 'capacitor-camera-view';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 import { GalleryService } from '../../services/gallery.service';
+
+const barcodeTypeLabels = {
+  aztec: 'Aztec',
+  code128: 'Code 128',
+  code39: 'Code 39',
+  code39Mod43: 'Code 39 Mod 43',
+  code93: 'Code 93',
+  dataMatrix: 'Data Matrix',
+  ean13: 'EAN-13',
+  ean8: 'EAN-8',
+  interleaved2of5: 'Interleaved 2 of 5',
+  itf14: 'ITF-14',
+  pdf417: 'PDF417',
+  qr: 'QR Code',
+  upce: 'UPC-E',
+} satisfies Record<BarcodeType, string>;
 
 @Component({
   selector: 'app-camera-view',
@@ -55,6 +72,7 @@ export class CameraSettingsPage implements OnInit {
 
   protected deviceId = model<string | null>(null);
   protected enableBarcodeDetection = model<boolean>(false);
+  protected barcodeTypes = model<BarcodeType[]>(['qr']);
   protected position = model<string>('back');
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
@@ -64,6 +82,13 @@ export class CameraSettingsPage implements OnInit {
   protected barcodeValue = signal<string | undefined>(undefined);
 
   protected readonly isIos = Capacitor.getPlatform() === 'ios';
+
+  protected readonly barcodeTypeOptions: {
+    label: string;
+    value: BarcodeType;
+  }[] = (Object.entries(barcodeTypeLabels) as [BarcodeType, string][]).map(
+    ([value, label]) => ({ label, value }),
+  );
 
   ngOnInit() {
     setTimeout(() => {
@@ -80,6 +105,7 @@ export class CameraSettingsPage implements OnInit {
       componentProps: {
         deviceId: this.deviceId(),
         enableBarcodeDetection: this.enableBarcodeDetection(),
+        barcodeTypes: this.barcodeTypes(),
         position: this.position(),
         quality: this.quality(),
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
