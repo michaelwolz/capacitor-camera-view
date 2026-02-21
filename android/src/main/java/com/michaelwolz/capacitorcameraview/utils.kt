@@ -16,6 +16,49 @@ import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
 import java.io.ByteArrayOutputStream
 
+/**
+ * Memory-efficient Base64 encoding utilities.
+ * Uses ThreadLocal ByteArrayOutputStream pool to reduce allocation churn.
+ */
+object StreamingBase64Encoder {
+    // Reusable ByteArrayOutputStream to reduce allocation churn (per-thread)
+    private val outputStreamPool = object : ThreadLocal<ByteArrayOutputStream>() {
+        override fun initialValue(): ByteArrayOutputStream {
+            return ByteArrayOutputStream(256 * 1024) // 256KB initial capacity
+        }
+    }
+
+    /**
+     * Encodes a bitmap to Base64 with memory optimization.
+     * Reuses ByteArrayOutputStream to reduce allocations.
+     *
+     * @param bitmap The bitmap to encode
+     * @param quality JPEG compression quality (0-100)
+     * @param format Compression format (default JPEG)
+     * @return Base64 encoded string
+     */
+    fun encodeToBase64(
+        bitmap: Bitmap,
+        quality: Int,
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG
+    ): String {
+        val outputStream = outputStreamPool.get()!!
+        outputStream.reset() // Clear previous data
+
+        bitmap.compress(format, quality, outputStream)
+        val byteArray = outputStream.toByteArray()
+
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+
+    /**
+     * Encodes raw byte array to Base64.
+     */
+    fun encodeToBase64(bytes: ByteArray): String {
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+}
+
 /** Converts a barcode format code to a readable string. */
 fun getBarcodeFormatString(format: Int): String {
     return when (format) {
@@ -34,6 +77,43 @@ fun getBarcodeFormatString(format: Int): String {
         Barcode.FORMAT_UPC_E -> "upcE"
         else -> "unknown"
     }
+}
+
+/**
+ * Converts a string barcode type from JavaScript to ML Kit Barcode format constant.
+ *
+ * @param stringType The string barcode type from JavaScript.
+ * @return The corresponding ML Kit Barcode format constant, or null if not recognized.
+ */
+fun convertToNativeBarcodeFormat(stringType: String): Int? {
+    return when (stringType) {
+        "qr" -> Barcode.FORMAT_QR_CODE
+        "aztec" -> Barcode.FORMAT_AZTEC
+        "codabar" -> Barcode.FORMAT_CODABAR
+        "code39" -> Barcode.FORMAT_CODE_39
+        "code39Mod43" -> Barcode.FORMAT_CODE_39 // ML Kit doesn't distinguish Mod43
+        "code93" -> Barcode.FORMAT_CODE_93
+        "code128" -> Barcode.FORMAT_CODE_128
+        "dataMatrix" -> Barcode.FORMAT_DATA_MATRIX
+        "ean8" -> Barcode.FORMAT_EAN_8
+        "ean13" -> Barcode.FORMAT_EAN_13
+        "interleaved2of5" -> Barcode.FORMAT_ITF
+        "itf14" -> Barcode.FORMAT_ITF
+        "pdf417" -> Barcode.FORMAT_PDF417
+        "upcA" -> Barcode.FORMAT_UPC_A
+        "upce" -> Barcode.FORMAT_UPC_E
+        else -> null
+    }
+}
+
+/**
+ * Converts an array of string barcode types to ML Kit Barcode format constants.
+ *
+ * @param stringTypes List of string barcode types from JavaScript.
+ * @return List of ML Kit Barcode format constants (invalid types are filtered out).
+ */
+fun convertToNativeBarcodeFormats(stringTypes: List<String>): List<Int> {
+    return stringTypes.mapNotNull { convertToNativeBarcodeFormat(it) }.distinct()
 }
 
 /**
@@ -84,9 +164,20 @@ fun calculateTopOffset(webView: View): Int {
 
 /** Maps a Capacitor plugin call to a [CameraSessionConfiguration]. */
 fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
+    // Parse barcode types if provided
+    val barcodeTypes: List<Int>? = call.getArray("barcodeTypes")?.let { jsonArray ->
+        val stringTypes = mutableListOf<String>()
+        for (i in 0 until jsonArray.length()) {
+            jsonArray.optString(i)?.let { stringTypes.add(it) }
+        }
+        val converted = convertToNativeBarcodeFormats(stringTypes)
+        if (converted.isNotEmpty()) converted else null
+    }
+
     return CameraSessionConfiguration(
         deviceId = call.getString("deviceId"),
         enableBarcodeDetection = call.getBoolean("enableBarcodeDetection") ?: false,
+        barcodeTypes = barcodeTypes,
         position = call.getString("position") ?: "back",
         zoomFactor = call.getFloat("zoomFactor") ?: 1.0f
     )
@@ -126,6 +217,7 @@ fun calculateImageRotationBasedOnDisplayRotation(
 
 /**
  * Converts an ImageProxy to a Base64 encoded string and applies rotation if necessary.
+ * Uses StreamingBase64Encoder for memory-efficient encoding.
  *
  * @param image The ImageProxy to convert.
  * @param quality The JPEG compression quality (0-100).
@@ -152,11 +244,8 @@ fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): S
             bitmap = rotatedBitmap
         }
 
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-        val byteArray = outputStream.toByteArray()
-
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        // Use streaming encoder for memory efficiency
+        return StreamingBase64Encoder.encodeToBase64(bitmap, quality)
     } finally {
         // Ensure bitmap is always recycled
         bitmap.recycle()

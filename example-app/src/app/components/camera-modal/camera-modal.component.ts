@@ -26,7 +26,11 @@ import {
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
-import { type CameraPosition, type FlashMode } from 'capacitor-camera-view';
+import {
+  BarcodeType,
+  type CameraPosition,
+  type FlashMode,
+} from 'capacitor-camera-view';
 import { concat, map, of, switchMap, tap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 
@@ -69,6 +73,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   public readonly deviceId = input<string>();
   public readonly enableBarcodeDetection = input<boolean>(false);
+  public readonly barcodeTypes = input<BarcodeType[]>(['qr']);
   public readonly position = input<CameraPosition>('back');
   public readonly quality = input<number>(85);
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
@@ -164,6 +169,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     await this.#cameraViewService.start({
       deviceId: this.deviceId(),
       enableBarcodeDetection: this.enableBarcodeDetection(),
+      barcodeTypes: this.barcodeTypes(),
       position: this.position(),
       useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
       zoomFactor: this.initialZoomFactor(),

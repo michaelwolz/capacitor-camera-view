@@ -12,12 +12,24 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 @CapacitorPlugin(
     name = "CameraView",
     permissions = [Permission(strings = [Manifest.permission.CAMERA], alias = "camera")]
 )
 class CameraViewPlugin : Plugin() {
+    // Coroutine scope for async operations
+    private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    // Job for barcode event subscription
+    private var barcodeJob: Job? = null
+
     private val implementation by lazy {
         CameraView(this)
     }
@@ -41,26 +53,42 @@ class CameraViewPlugin : Plugin() {
     }
 
     private fun startCamera(call: PluginCall) {
-        implementation.startSession(
-            config = sessionConfigFromPluginCall(call),
-            callback = { error ->
-                if (error != null) {
-                    call.reject("Failed to start camera preview: ${error.localizedMessage}", error)
-                } else {
+        val config = sessionConfigFromPluginCall(call)
+
+        pluginScope.launch {
+            implementation.startSessionAsync(config).fold(
+                onSuccess = {
+                    // Subscribe to barcode events if detection is enabled
+                    if (config.enableBarcodeDetection) {
+                        barcodeJob?.cancel()
+                        barcodeJob = pluginScope.launch {
+                            implementation.barcodeEvents.collect { result ->
+                                notifyBarcodeDetected(result)
+                            }
+                        }
+                    }
                     call.resolve()
+                },
+                onError = { error ->
+                    call.reject("Failed to start camera preview: ${error.localizedMessage}", error)
                 }
-            }
-        )
+            )
+        }
     }
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        implementation.stopSession { error ->
-            if (error != null) {
-                call.reject("Failed to stop camera preview: ${error.localizedMessage}", error)
-            } else {
-                call.resolve()
-            }
+        // Cancel barcode subscription
+        barcodeJob?.cancel()
+        barcodeJob = null
+
+        pluginScope.launch {
+            implementation.stopSessionAsync().fold(
+                onSuccess = { call.resolve() },
+                onError = { error ->
+                    call.reject("Failed to stop camera preview: ${error.localizedMessage}", error)
+                }
+            )
         }
     }
 
@@ -74,7 +102,7 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun capture(call: PluginCall) {
-        val timeStart = System.currentTimeMillis();
+        val timeStart = System.currentTimeMillis()
         val quality = call.getInt("quality") ?: 90
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
@@ -83,19 +111,23 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        implementation.capturePhoto(quality, saveToFile) { result, error ->
-            when {
-                error != null -> call.reject("Failed to capture image: ${error.message}", error)
-                result == null -> call.reject("No image data")
-                else -> call.resolve(result)
-            }
-            Log.d(TAG, "capture took ${System.currentTimeMillis() - timeStart}ms")
+        pluginScope.launch {
+            implementation.capturePhotoAsync(quality, saveToFile).fold(
+                onSuccess = { result ->
+                    call.resolve(result)
+                    Log.d(TAG, "capture took ${System.currentTimeMillis() - timeStart}ms")
+                },
+                onError = { error ->
+                    call.reject("Failed to capture image: ${error.message}", error)
+                    Log.d(TAG, "capture failed after ${System.currentTimeMillis() - timeStart}ms")
+                }
+            )
         }
     }
 
     @PluginMethod
     fun captureSample(call: PluginCall) {
-        val timeStart = System.currentTimeMillis();
+        val timeStart = System.currentTimeMillis()
         val quality = call.getInt("quality") ?: 90
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
@@ -104,13 +136,17 @@ class CameraViewPlugin : Plugin() {
             return
         }
 
-        implementation.captureSampleFromPreview(quality, saveToFile) { result, error ->
-            when {
-                error != null -> call.reject("Failed to capture frame: ${error.message}", error)
-                result == null -> call.reject("No frame data")
-                else -> call.resolve(result)
-            }
-            Log.d(TAG, "captureSample took ${System.currentTimeMillis() - timeStart}ms")
+        pluginScope.launch {
+            implementation.captureSampleFromPreviewAsync(quality, saveToFile).fold(
+                onSuccess = { result ->
+                    call.resolve(result)
+                    Log.d(TAG, "captureSample took ${System.currentTimeMillis() - timeStart}ms")
+                },
+                onError = { error ->
+                    call.reject("Failed to capture frame: ${error.message}", error)
+                    Log.d(TAG, "captureSample failed after ${System.currentTimeMillis() - timeStart}ms")
+                }
+            )
         }
     }
 
@@ -268,6 +304,10 @@ class CameraViewPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        // Cancel barcode subscription and plugin scope
+        barcodeJob?.cancel()
+        pluginScope.cancel()
+
         implementation.cleanup()
         super.handleOnDestroy()
     }

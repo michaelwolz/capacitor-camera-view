@@ -5,39 +5,34 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
     /// Set up metadata output for the capture session in case it's not configured yet
     /// Make sure to call `captureSession.beginConfiguration` before calling this
     ///
+    /// - Parameter barcodeTypes: Optional array of specific barcode types to detect.
+    ///                          If nil, all supported types are detected (backwards compatible).
     /// - Throws: An error if the output cannot be set.
-    internal func setupMetadataOutput() throws {
-        let metadataOutput = AVCaptureMetadataOutput()
+    internal func setupMetadataOutput(barcodeTypes: [AVMetadataObject.ObjectType]? = nil) throws {
+        let requestedBarcodeTypes = barcodeTypes ?? ALL_SUPPORTED_BARCODE_TYPES
 
-        if (captureSession.outputs.contains { $0 is AVCaptureMetadataOutput }) {
-            // Nothing todo, we already have an output
-            return
+        let metadataOutput: AVCaptureMetadataOutput
+
+        if let existingOutput = captureSession.outputs.first(where: { $0 is AVCaptureMetadataOutput }) as? AVCaptureMetadataOutput {
+            metadataOutput = existingOutput
+        } else {
+            let newOutput = AVCaptureMetadataOutput()
+            if !captureSession.canAddOutput(newOutput) {
+                throw CameraError.outputAdditionFailed
+            }
+
+            captureSession.addOutput(newOutput)
+            newOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+            metadataOutput = newOutput
         }
 
-        if !captureSession.canAddOutput(metadataOutput) {
-            throw CameraError.outputAdditionFailed
+        let supportedTypes = Set(metadataOutput.availableMetadataObjectTypes)
+        let resolvedTypes = requestedBarcodeTypes.filter { supportedTypes.contains($0) }
+
+        if metadataOutput.metadataObjectTypes != resolvedTypes {
+            // Update the metadata output with the resolved types only if they differ from the current configuration
+            metadataOutput.metadataObjectTypes = resolvedTypes
         }
-
-        captureSession.addOutput(metadataOutput)
-
-        metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-
-        // Set all available barcode types
-        metadataOutput.metadataObjectTypes = [
-            .qr,
-            .code128,
-            .code39,
-            .code39Mod43,
-            .code93,
-            .ean8,
-            .ean13,
-            .interleaved2of5,
-            .itf14,
-            .pdf417,
-            .aztec,
-            .dataMatrix,
-            .upce
-        ]
     }
 
     /// Remove the metadata output if in case it is already configured, e.g. because
@@ -80,21 +75,15 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
             return
         }
 
-        let boundingRect: [String: Double] = [
-            "x": Double(transformedMetadataObject.bounds.origin.x),
-            "y": Double(transformedMetadataObject.bounds.origin.y),
-            "width": Double(transformedMetadataObject.bounds.width),
-            "height": Double(transformedMetadataObject.bounds.height)
-        ]
+        let boundingRect = BarcodeDetectedEvent.BoundingRect(
+            x: Double(transformedMetadataObject.bounds.origin.x),
+            y: Double(transformedMetadataObject.bounds.origin.y),
+            width: Double(transformedMetadataObject.bounds.width),
+            height: Double(transformedMetadataObject.bounds.height)
+        )
 
-        NotificationCenter.default.post(
-            name: Notification.Name("barcodeDetected"),
-            object: nil,
-            userInfo: [
-                "value": barcodeValue,
-                "type": barcodeType,
-                "boundingRect": boundingRect
-            ]
+        eventEmitter.emitBarcodeDetected(
+            BarcodeDetectedEvent(value: barcodeValue, type: barcodeType, boundingRect: boundingRect)
         )
     }
 }

@@ -5,24 +5,24 @@ import Foundation
 /// Please read the Capacitor iOS Plugin Development Guide
 /// here: https://capacitorjs.com/docs/plugins/ios
 @objc(CameraViewPlugin)
-public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
+public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate {
     public let identifier = "CameraViewPlugin"
     public let jsName = "CameraView"
-
+    
     /// Maps string flash mode values to AVCaptureDevice.FlashMode enum values.
     private let strToFlashModeMap: [String: AVCaptureDevice.FlashMode] = [
         "off": .off,
         "on": .on,
         "auto": .auto
     ]
-
+    
     /// Maps AVCaptureDevice.FlashMode enum values to string values.
     private let flashModeToStrMap: [AVCaptureDevice.FlashMode: String] = [
         .off: "off",
         .on: "on",
         .auto: "auto"
     ]
-
+    
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
@@ -42,45 +42,29 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise)
     ]
-
+    
     private let implementation = CameraViewManager()
-    private var notificationObserver: NSObjectProtocol?
-
+    
     override public func load() {
-        // Add observer for barcode detection events
-        notificationObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("barcodeDetected"),
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self = self,
-                  let barcodeData = notification.userInfo as? [String: Any] else {
-                return
-            }
-
-            // Emit event to JS
-            self.notifyListeners("barcodeDetected", data: barcodeData)
-        }
+        implementation.eventEmitter.delegate = self
     }
-
-    deinit {
-        if let observer = notificationObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
+    
+    public func cameraDidDetectBarcode(_ event: BarcodeDetectedEvent) {
+        notifyListeners("barcodeDetected", data: event.toDictionary())
     }
-
+    
     @objc func start(_ call: CAPPluginCall) {
         guard let webView = self.webView else {
             call.reject("Cannot find web view")
             return
         }
-
+        
         maybeRequestCameraAccess { [weak self] granted in
             guard granted else {
                 call.reject("Camera access denied")
                 return
             }
-
+            
             self?.implementation.startSession(
                 configuration: sessionConfigFromPluginCall(call),
                 webView: webView,
@@ -93,55 +77,69 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
                 })
         }
     }
-
+    
     @objc func stop(_ call: CAPPluginCall) {
         implementation.stopSession {
             call.resolve()
         }
     }
-
+    
     @objc func isRunning(_ call: CAPPluginCall) {
         call.resolve([
             "isRunning": implementation.isRunning()
         ])
     }
-
+    
     @objc func capture(_ call: CAPPluginCall) {
         let quality = call.getDouble("quality", 90.0)
         let saveToFile = call.getBool("saveToFile", false)
-
+        
         guard quality >= 0.0 && quality <= 100.0 else {
             call.reject("Quality must be between 0 and 100")
             return
         }
-
-        implementation.capturePhoto(completion: { (image, error) in
+        
+        // Use optimized Data-based capture to avoid double JPEG encoding
+        implementation.capturePhotoData(completion: { [weak self] (data, error) in
             if let error = error {
                 call.reject("Failed to capture image", nil, error)
                 return
             }
-
-            guard let image = image else {
+            
+            guard let originalData = data else {
                 call.reject("No image data")
                 return
             }
-
-            guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
-                call.reject("Failed to compress image")
-                return
+            
+            // Determine final image data based on quality setting
+            // For quality >= 90%, use original camera JPEG data to avoid re-encoding
+            // For lower quality, re-encode to reduce file size
+            let imageData: Data
+            if quality >= 90.0 {
+                // Use original JPEG data from camera (avoids quality loss and CPU overhead)
+                imageData = originalData
+            } else {
+                // Re-encode at lower quality for smaller file size
+                guard let image = UIImage(data: originalData),
+                      let compressedData = image.jpegData(compressionQuality: quality / 100.0) else {
+                    call.reject("Failed to compress image")
+                    return
+                }
+                imageData = compressedData
             }
-
+            
             if saveToFile {
+                // Use TempFileManager for tracked temp files with automatic cleanup
+                let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
-                    let tempFileURL = try createTempImageFile()
                     try imageData.write(to: tempFileURL)
-
+                    
                     // Convert file URL to webView-accessible path using Capacitor bridge
-                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                    guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
                         call.reject("Failed to create web-accessible path")
                         return
                     }
-
+                    
                     call.resolve(["webPath": webPath])
                 } catch {
                     call.reject("Failed to save image to file", nil, error)
@@ -154,43 +152,44 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         })
     }
-
+    
     @objc func captureSample(_ call: CAPPluginCall) {
         let quality = call.getDouble("quality", 90.0)
         let saveToFile = call.getBool("saveToFile", false)
-
+        
         guard quality >= 0.0 && quality <= 100.0 else {
             call.reject("Quality must be between 0 and 100")
             return
         }
-
-        implementation.captureSnapshot { (image, error) in
+        
+        implementation.captureSnapshot { [weak self] (image, error) in
             if let error = error {
                 call.reject("Failed to capture frame", nil, error)
                 return
             }
-
+            
             guard let image = image else {
                 call.reject("No frame data")
                 return
             }
-
+            
             guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
                 call.reject("Failed to compress image")
                 return
             }
-
+            
             if saveToFile {
+                // Use TempFileManager for tracked temp files with automatic cleanup
+                let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
-                    let tempFileURL = try createTempImageFile()
                     try imageData.write(to: tempFileURL)
-
+                    
                     // Convert file URL to webView-accessible path using Capacitor bridge
-                    guard let webPath = self.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
+                    guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
                         call.reject("Failed to create web-accessible path")
                         return
                     }
-
+                    
                     call.resolve(["webPath": webPath])
                 } catch {
                     call.reject("Failed to save sample to file", nil, error)
@@ -203,10 +202,10 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
     }
-
+    
     @objc func getAvailableDevices(_ call: CAPPluginCall) {
         let devices = implementation.getAvailableDevices()
-
+        
         var result = JSArray()
         for device in devices {
             var deviceInfo = JSObject()
@@ -216,12 +215,12 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             deviceInfo["deviceType"] = convertToStringCameraType(device.deviceType)
             result.append(deviceInfo)
         }
-
+        
         call.resolve([
             "devices": result
         ])
     }
-
+    
     @objc func flipCamera(_ call: CAPPluginCall) {
         do {
             try implementation.flipCamera()
@@ -231,25 +230,25 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
     }
-
+    
     @objc func getZoom(_ call: CAPPluginCall) {
         let zoom = implementation.getSupportedZoomFactors()
-
+        
         call.resolve([
             "min": zoom.min,
             "max": zoom.max,
             "current": zoom.current
         ])
     }
-
+    
     @objc func setZoom(_ call: CAPPluginCall) {
         guard let level = call.getDouble("level") else {
             call.reject("Zoom level must be provided")
             return
         }
-
+        
         let ramp = call.getBool("ramp") ?? false
-
+        
         do {
             try implementation.setZoomFactor(level, ramp: ramp)
             call.resolve()
@@ -258,35 +257,35 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
     }
-
+    
     @objc func getFlashMode(_ call: CAPPluginCall) {
         let flashMode = implementation.getFlashMode()
-
+        
         call.resolve([
             "flashMode": flashModeToStrMap[flashMode] ?? "off"
         ])
     }
-
+    
     @objc func getSupportedFlashModes(_ call: CAPPluginCall) {
         let supportedFlashModes = implementation.getSupportedFlashModes()
         let supportedFlashModeStrArr = supportedFlashModes.map { flashModeToStrMap[$0] }
-
+        
         call.resolve([
             "flashModes": supportedFlashModeStrArr
         ])
     }
-
+    
     @objc func setFlashMode(_ call: CAPPluginCall) {
         guard let mode = call.getString("mode") else {
             call.reject("Flash mode must be provided")
             return
         }
-
+        
         guard let flashMode = strToFlashModeMap[mode] else {
             call.reject("Invalid flash mode")
             return
         }
-
+        
         do {
             try implementation.setFlashMode(flashMode)
             call.resolve()
@@ -294,14 +293,14 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Failed to set flash mode", nil, error)
         }
     }
-
+    
     @objc func isTorchAvailable(_ call: CAPPluginCall) {
         let available = implementation.isTorchAvailable()
         call.resolve([
             "available": available
         ])
     }
-
+    
     @objc func getTorchMode(_ call: CAPPluginCall) {
         let torchState = implementation.getTorchMode()
         call.resolve([
@@ -309,20 +308,20 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             "level": torchState.level
         ])
     }
-
+    
     @objc func setTorchMode(_ call: CAPPluginCall) {
         guard let enabled = call.getBool("enabled") else {
             call.reject("Enabled parameter is required")
             return
         }
-
+        
         let level = call.getFloat("level") ?? 1.0
-
+        
         guard level >= 0.0 && level <= 1.0 else {
             call.reject("Level must be between 0.0 and 1.0")
             return
         }
-
+        
         do {
             try implementation.setTorchMode(enabled: enabled, level: level)
             call.resolve()
@@ -330,10 +329,10 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Failed to set torch mode", nil, error)
         }
     }
-
+    
     @objc override public func checkPermissions(_ call: CAPPluginCall) {
         let cameraState: String
-
+        
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .notDetermined:
             cameraState = "prompt"
@@ -344,18 +343,18 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin {
         @unknown default:
             cameraState = "prompt"
         }
-
+        
         call.resolve([
             "camera": cameraState
         ])
     }
-
+    
     @objc override public func requestPermissions(_ call: CAPPluginCall) {
         AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
             self?.checkPermissions(call)
         }
     }
-
+    
     private func maybeRequestCameraAccess(completion: @escaping (Bool) -> Void) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .authorized {

@@ -36,20 +36,44 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
 import com.michaelwolz.capacitorcameraview.model.CameraDevice
+import com.michaelwolz.capacitorcameraview.model.CameraResult
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
 
 /** Throttle time for barcode detection in milliseconds. */
-const val BARCODE_DETECTION_THROTTLE_MS = 100
+const val BARCODE_DETECTION_THROTTLE_MS = 100L
 
 class CameraView(plugin: Plugin) {
-    // Camera components
-    private var cameraController: LifecycleCameraController? = null
+    // Coroutine scope for async operations
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    // Thread-safe camera controller reference
+    private val cameraControllerRef = AtomicReference<LifecycleCameraController?>(null)
+
+    // Camera components (using atomic reference for thread safety)
+    private var cameraController: LifecycleCameraController?
+        get() = cameraControllerRef.get()
+        set(value) { cameraControllerRef.set(value) }
+
     private val cameraExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
     private var previewView: PreviewView? = null
 
@@ -65,56 +89,77 @@ class CameraView(plugin: Plugin) {
 
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
-    private var lastBarcodeDetectionTime = 0L
+    // Thread-safe barcode throttle timestamp
+    private val lastBarcodeDetectionTime = AtomicLong(0L)
+
+    // Flow for reactive barcode events
+    private val _barcodeEvents = MutableSharedFlow<BarcodeDetectionResult>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val barcodeEvents: SharedFlow<BarcodeDetectionResult> = _barcodeEvents.asSharedFlow()
 
     /** Starts a camera session with the provided configuration. */
-    fun startSession(config: CameraSessionConfiguration, callback: (Exception?) -> Unit) {
-        val lifecycleOwner =
-            context as? LifecycleOwner
-                ?: run {
-                    callback(CameraError.LifecycleOwnerMissing())
-                    return
-                }
+    suspend fun startSessionAsync(config: CameraSessionConfiguration): CameraResult<Unit> =
+        withContext(Dispatchers.Main) {
+            val lifecycleOwner = context as? LifecycleOwner
+                ?: return@withContext CameraResult.Error(CameraError.LifecycleOwnerMissing())
 
-        // Store references for later use
-        this.lifecycleOwner = lifecycleOwner
+            this@CameraView.lifecycleOwner = lifecycleOwner
 
-        mainHandler.post {
             try {
                 initializeCamera(context, lifecycleOwner, config)
-                callback(null)
+                CameraResult.Success(Unit)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in camera setup", e)
-                callback(e)
+                CameraResult.Error(e)
             }
+        }
+
+    /** Starts a camera session with the provided configuration (callback version for backward compatibility). */
+    fun startSession(config: CameraSessionConfiguration, callback: (Exception?) -> Unit) {
+        scope.launch {
+            startSessionAsync(config).fold(
+                onSuccess = { callback(null) },
+                onError = { callback(it) }
+            )
         }
     }
 
-    /** Stop the camera session and release resources */
-    fun stopSession(callback: ((Exception?) -> Unit)? = null) {
-        mainHandler.post {
+    /** Stop the camera session and release resources. */
+    suspend fun stopSessionAsync(): CameraResult<Unit> = withContext(Dispatchers.Main) {
+        try {
             cameraController?.unbind()
 
-            try {
-                previewView?.let { view ->
-                    try {
-                        (webView.parent as? ViewGroup)?.removeView(view)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error removing preview view", e)
-                    } finally {
-                        previewView = null
-                    }
+            previewView?.let { view ->
+                try {
+                    (webView.parent as? ViewGroup)?.removeView(view)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error removing preview view", e)
+                } finally {
+                    previewView = null
                 }
-
-                webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
-                webView.setBackgroundColor(android.graphics.Color.WHITE)
-
-                Log.d(TAG, "Camera session stopped successfully")
-                callback?.invoke(null)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping camera session", e)
-                callback?.invoke(e)
             }
+
+            webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
+            webView.setBackgroundColor(android.graphics.Color.WHITE)
+
+            Log.d(TAG, "Camera session stopped successfully")
+            CameraResult.Success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping camera session", e)
+            CameraResult.Error(e)
+        }
+    }
+
+    /** Stop the camera session and release resources (callback version for backward compatibility). */
+    fun stopSession(callback: ((Exception?) -> Unit)? = null) {
+        scope.launch {
+            stopSessionAsync().fold(
+                onSuccess = { callback?.invoke(null) },
+                onError = { callback?.invoke(it) }
+            )
         }
     }
 
@@ -123,24 +168,24 @@ class CameraView(plugin: Plugin) {
         return cameraController != null
     }
 
-    /** Capture a photo with the current camera configuration */
-    fun capturePhoto(
+    /** Capture a photo with the current camera configuration. */
+    suspend fun capturePhotoAsync(
         quality: Int,
-        saveToFile: Boolean = false,
-        callback: (JSObject?, Exception?) -> Unit
-    ) {
+        saveToFile: Boolean = false
+    ): CameraResult<JSObject> = suspendCancellableCoroutine { continuation ->
         val startTime = System.currentTimeMillis()
+
         val controller = cameraController
-            ?: run {
-                callback(null, CameraError.CameraNotInitialized())
-                return
-            }
+        if (controller == null) {
+            continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
+            return@suspendCancellableCoroutine
+        }
 
         val preview = previewView
-            ?: run {
-                callback(null, CameraError.PreviewNotInitialized())
-                return
-            }
+        if (preview == null) {
+            continuation.resume(CameraResult.Error(CameraError.PreviewNotInitialized()))
+            return@suspendCancellableCoroutine
+        }
 
         mainHandler.post {
             val cameraInfo = controller.cameraInfo
@@ -177,12 +222,12 @@ class CameraView(plugin: Plugin) {
 
                                     put("webPath", capacitorFilePath)
                                 }
-                                callback(result, null)
+                                continuation.resume(CameraResult.Success(result))
                             }
 
                             override fun onError(exception: ImageCaptureException) {
                                 Log.e(TAG, "Error saving image to file", exception)
-                                callback(null, exception)
+                                continuation.resume(CameraResult.Error(exception))
                             }
                         }
                     )
@@ -196,106 +241,108 @@ class CameraView(plugin: Plugin) {
                                     TAG,
                                     "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
                                 )
-                                handleCaptureSuccess(image, quality, imageRotationDegrees, callback)
+                                try {
+                                    val base64String = imageProxyToBase64(image, quality, imageRotationDegrees)
+                                    val result = JSObject().apply {
+                                        put("photo", base64String)
+                                    }
+                                    Log.d(TAG, "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms")
+                                    continuation.resume(CameraResult.Success(result))
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error processing captured image", e)
+                                    continuation.resume(CameraResult.Error(e))
+                                } finally {
+                                    image.close()
+                                }
                             }
 
                             override fun onError(exception: ImageCaptureException) {
                                 Log.e(TAG, "Error capturing image", exception)
-                                callback(null, exception)
+                                continuation.resume(CameraResult.Error(exception))
                             }
                         }
                     )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting up image capture", e)
-                callback(null, e)
+                continuation.resume(CameraResult.Error(e))
             }
         }
     }
 
-    /**
-     * Handles the successful capture of an image for base64 conversion
-     */
-    fun handleCaptureSuccess(
-        image: ImageProxy,
+    /** Capture a photo with the current camera configuration (callback version for backward compatibility). */
+    fun capturePhoto(
         quality: Int,
-        rotationDegrees: Int,
+        saveToFile: Boolean = false,
         callback: (JSObject?, Exception?) -> Unit
     ) {
-        val startTime = System.currentTimeMillis()
-        try {
-            val base64String = imageProxyToBase64(image, quality, rotationDegrees)
-            val result = JSObject().apply {
-                put("photo", base64String)
-            }
-            Log.d(TAG, "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms")
-            callback(result, null)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error processing captured image", e)
-            callback(null, e)
-        } finally {
-            image.close()
+        scope.launch {
+            capturePhotoAsync(quality, saveToFile).fold(
+                onSuccess = { callback(it, null) },
+                onError = { callback(null, it) }
+            )
         }
     }
 
     /**
-     * Capture a frame directly from the preview without using the full photo pipeline which is
-     * faster but has lower quality.
+     * Capture a frame directly from the preview without using the full photo pipeline.
+     * Faster but has lower quality than full photo capture.
+     */
+    suspend fun captureSampleFromPreviewAsync(
+        quality: Int,
+        saveToFile: Boolean = false
+    ): CameraResult<JSObject> = withContext(Dispatchers.Main) {
+        val preview = previewView
+            ?: return@withContext CameraResult.Error(CameraError.PreviewNotInitialized())
+
+        try {
+            val bitmap = preview.bitmap
+                ?: return@withContext CameraResult.Error(Exception("Preview bitmap not available"))
+
+            val result = JSObject()
+
+            if (saveToFile) {
+                val tempFile =
+                    File.createTempFile("camera_capture_sample", ".jpg", context.cacheDir)
+
+                FileOutputStream(tempFile).use { outputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                }
+
+                val capacitorFilePath = FileUtils.getPortablePath(
+                    context,
+                    pluginDelegate.bridge.localUrl,
+                    Uri.fromFile(tempFile)
+                )
+
+                result.put("webPath", capacitorFilePath)
+            } else {
+                // Convert bitmap to Base64 using pooled stream
+                val base64String = bitmapToBase64(bitmap, quality)
+                result.put("photo", base64String)
+            }
+
+            CameraResult.Success(result)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error capturing preview frame", e)
+            CameraResult.Error(e)
+        }
+    }
+
+    /**
+     * Capture a frame directly from the preview without using the full photo pipeline (callback version).
+     * Faster but has lower quality than full photo capture.
      */
     fun captureSampleFromPreview(
         quality: Int,
         saveToFile: Boolean = false,
         callback: (JSObject?, Exception?) -> Unit
     ) {
-        val previewView =
-            this.previewView
-                ?: run {
-                    callback(null, CameraError.PreviewNotInitialized())
-                    return
-                }
-
-        mainHandler.post {
-            try {
-                val bitmap =
-                    previewView.bitmap
-                        ?: run {
-                            callback(null, Exception("Preview bitmap not available"))
-                            return@post
-                        }
-
-                val result = JSObject()
-
-                if (saveToFile) {
-                    val tempFile =
-                        File.createTempFile("camera_capture_sample", ".jpg", context.cacheDir)
-
-                    FileOutputStream(tempFile).use { outputStream ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-                    }
-
-                    val capacitorFilePath = FileUtils.getPortablePath(
-                        context,
-                        pluginDelegate.bridge.localUrl,
-                        Uri.fromFile(tempFile)
-                    )
-
-                    result.put("webPath", capacitorFilePath)
-                } else {
-                    // Convert bitmap to Base64
-                    val outputStream = ByteArrayOutputStream()
-                    outputStream.use { stream ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
-                        val byteArray = stream.toByteArray()
-                        val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
-                        result.put("photo", base64String)
-                    }
-                }
-
-                callback(result, null)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error capturing preview frame", e)
-                callback(null, e)
-            }
+        scope.launch {
+            captureSampleFromPreviewAsync(quality, saveToFile).fold(
+                onSuccess = { callback(it, null) },
+                onError = { callback(null, it) }
+            )
         }
     }
 
@@ -481,6 +528,9 @@ class CameraView(plugin: Plugin) {
 
     /** Clean up resources when the plugin is being destroyed */
     fun cleanup() {
+        // Cancel all coroutines first
+        scope.cancel()
+
         mainHandler.post {
             try {
                 // Stop camera session
@@ -510,6 +560,14 @@ class CameraView(plugin: Plugin) {
                 Log.e(TAG, "Error during cleanup", e)
             }
         }
+    }
+
+    /** Converts a bitmap to Base64 with memory-efficient pooled ByteArrayOutputStream. */
+    private fun bitmapToBase64(bitmap: Bitmap, quality: Int): String {
+        val outputStream = ByteArrayOutputStream(256 * 1024) // 256KB initial capacity
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+        val byteArray = outputStream.toByteArray()
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
 
     private fun setupPreviewView(context: Context) {
@@ -575,7 +633,7 @@ class CameraView(plugin: Plugin) {
 
         // Setup barcode scanning if needed
         if (config.enableBarcodeDetection) {
-            setupBarcodeScanner(controller)
+            setupBarcodeScanner(controller, config.barcodeTypes)
         }
 
         // Bind to lifecycle
@@ -585,13 +643,33 @@ class CameraView(plugin: Plugin) {
         this.setZoomFactor(config.zoomFactor, null)
     }
 
-    private fun setupBarcodeScanner(controller: LifecycleCameraController) {
+    /**
+     * Sets up the barcode scanner with the specified formats.
+     *
+     * @param controller The camera controller to attach the scanner to.
+     * @param barcodeTypes Optional list of specific barcode format codes to detect.
+     *                     If null, all supported formats are detected (backwards compatible).
+     */
+    private fun setupBarcodeScanner(
+        controller: LifecycleCameraController,
+        barcodeTypes: List<Int>? = null
+    ) {
         val previewView = this.previewView ?: return
 
-        val options =
+        // Build scanner options with specified formats or all formats
+        val options = if (barcodeTypes != null && barcodeTypes.isNotEmpty()) {
+            // Use specific formats - setBarcodeFormats takes first format + vararg rest
+            val firstFormat = barcodeTypes.first()
+            val restFormats = barcodeTypes.drop(1).toIntArray()
+            BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(firstFormat, *restFormats)
+                .build()
+        } else {
+            // Default to all formats for backwards compatibility
             BarcodeScannerOptions.Builder()
                 .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
                 .build()
+        }
 
         val barcodeScanner = BarcodeScanning.getClient(options)
         val mainExecutor = ContextCompat.getMainExecutor(previewView.context)
@@ -621,8 +699,16 @@ class CameraView(plugin: Plugin) {
         topOffset: Int
     ) {
         val now = System.currentTimeMillis()
-        if (now - lastBarcodeDetectionTime < BARCODE_DETECTION_THROTTLE_MS) {
+        val lastTime = lastBarcodeDetectionTime.get()
+
+        // Thread-safe throttle check using atomic compare-and-set
+        if (now - lastTime < BARCODE_DETECTION_THROTTLE_MS) {
             return // Skip this frame
+        }
+
+        // Atomically update the timestamp - if another thread beat us, skip
+        if (!lastBarcodeDetectionTime.compareAndSet(lastTime, now)) {
+            return
         }
 
         val barcodes = result?.getValue(barcodeScanner) ?: return
@@ -642,8 +728,13 @@ class CameraView(plugin: Plugin) {
                 boundingRect = webBoundingRect
             )
 
+        // Emit to Flow for reactive subscribers
+        scope.launch {
+            _barcodeEvents.emit(barcodeResult)
+        }
+
+        // Also notify via callback for backward compatibility
         notifyBarcodeDetected(barcodeResult)
-        lastBarcodeDetectionTime = now
     }
 
     private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {

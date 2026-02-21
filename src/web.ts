@@ -14,8 +14,25 @@ import type {
   CaptureResponse,
   FlashMode,
   CaptureOptions,
+  BarcodeType,
 } from './definitions';
 import { calculateVisibleArea, canvasToBase64, drawVisibleAreaToCanvas, transformBarcodeBoundingBox } from './utils';
+
+export const BARCODE_TYPE_TO_WEB_FORMAT: Readonly<Record<BarcodeType, BarcodeFormat | null>> = {
+  qr: 'qr_code',
+  code128: 'code_128',
+  code39: 'code_39',
+  code39Mod43: null,
+  code93: 'code_93',
+  ean8: 'ean_8',
+  ean13: 'ean_13',
+  interleaved2of5: 'itf',
+  itf14: 'itf',
+  pdf417: 'pdf417',
+  aztec: 'aztec',
+  dataMatrix: 'data_matrix',
+  upce: 'upc_e',
+} satisfies Record<BarcodeType, BarcodeFormat | null>;
 
 /**
  * Web implementation of the CameraViewPlugin.
@@ -91,8 +108,13 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
         this.#isRunning = true;
 
         // If barcode detection is enabled and supported, start detection
-        if (options?.enableBarcodeDetection && this.barcodeDetectionSupported) {
-          this.startBarcodeDetection();
+        if (options?.enableBarcodeDetection) {
+          await this.checkBarcodeDetectionSupport();
+
+          if (this.barcodeDetectionSupported) {
+            await this.configureBarcodeDetector(options?.barcodeTypes);
+            this.startBarcodeDetection();
+          }
         }
       }
     } catch (err) {
@@ -456,6 +478,69 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
         console.warn('BarcodeDetector is not supported by this browser.');
         this.barcodeDetectionSupported = false;
       }
+    }
+  }
+
+  /**
+   * Configure the barcode detector with requested barcode formats.
+   * Unsupported formats are ignored and logged.
+   */
+  private async configureBarcodeDetector(barcodeTypes?: BarcodeType[]): Promise<void> {
+    if (!this.barcodeDetectionSupported) {
+      return;
+    }
+
+    if (!barcodeTypes?.length) {
+      this.barcodeDetector = new BarcodeDetector();
+      return;
+    }
+
+    const requestedFormats = barcodeTypes
+      .map((barcodeType) => {
+        const webFormat = BARCODE_TYPE_TO_WEB_FORMAT[barcodeType];
+        if (!webFormat) {
+          console.warn(`[CameraView] Barcode type "${barcodeType}" is not supported by the web BarcodeDetector API.`);
+        }
+        return webFormat;
+      })
+      .filter((format): format is BarcodeFormat => format !== null);
+
+    if (!requestedFormats.length) {
+      console.warn(
+        '[CameraView] No requested barcode types are supported on web. Falling back to all supported formats.',
+      );
+      this.barcodeDetector = new BarcodeDetector();
+      return;
+    }
+
+    const uniqueRequestedFormats = Array.from(new Set(requestedFormats));
+
+    try {
+      const supportedFormats = await BarcodeDetector.getSupportedFormats();
+      const configuredFormats = uniqueRequestedFormats.filter((format) => supportedFormats.includes(format));
+      const ignoredFormats = uniqueRequestedFormats.filter((format) => !supportedFormats.includes(format));
+
+      if (ignoredFormats.length) {
+        console.warn(
+          `[CameraView] Ignoring unsupported barcode formats for this browser: ${ignoredFormats.join(', ')}.`,
+        );
+      }
+
+      if (!configuredFormats.length) {
+        console.warn(
+          '[CameraView] No requested barcode formats are available in this browser. Falling back to all supported formats.',
+        );
+        this.barcodeDetector = new BarcodeDetector();
+        return;
+      }
+
+      this.barcodeDetector = new BarcodeDetector({ formats: configuredFormats });
+    } catch (error) {
+      console.warn(
+        '[CameraView] Failed to resolve supported barcode formats; falling back to unfiltered detector.',
+        error,
+      );
+      this.barcodeDetector = new BarcodeDetector();
     }
   }
 
