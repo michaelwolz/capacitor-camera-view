@@ -23,11 +23,14 @@ import androidx.camera.core.TorchState
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.mlkit.vision.MlKitAnalyzer
-import androidx.camera.view.LifecycleCameraController
-import androidx.camera.view.CameraController
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recording
 import androidx.camera.video.VideoRecordEvent
+import androidx.camera.view.CameraController
+import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.camera.view.video.AudioConfig
 import androidx.core.content.ContextCompat
@@ -43,6 +46,7 @@ import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
 import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraResult
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
+import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,7 +81,9 @@ class CameraView(plugin: Plugin) {
     // Camera components (using atomic reference for thread safety)
     private var cameraController: LifecycleCameraController?
         get() = cameraControllerRef.get()
-        set(value) { cameraControllerRef.set(value) }
+        set(value) {
+            cameraControllerRef.set(value)
+        }
 
     private val cameraExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
     private var previewView: PreviewView? = null
@@ -268,11 +274,15 @@ class CameraView(plugin: Plugin) {
                                     "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
                                 )
                                 try {
-                                    val base64String = imageProxyToBase64(image, quality, imageRotationDegrees)
+                                    val base64String =
+                                        imageProxyToBase64(image, quality, imageRotationDegrees)
                                     val result = JSObject().apply {
                                         put("photo", base64String)
                                     }
-                                    Log.d(TAG, "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms")
+                                    Log.d(
+                                        TAG,
+                                        "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms"
+                                    )
                                     continuation.resume(CameraResult.Success(result))
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error processing captured image", e)
@@ -377,6 +387,7 @@ class CameraView(plugin: Plugin) {
      */
     suspend fun startRecordingAsync(
         enableAudio: Boolean,
+        videoQuality: VideoRecordingQuality,
     ): CameraResult<Unit> = suspendCancellableCoroutine { continuation ->
         mainHandler.post {
             val controller = cameraController
@@ -391,6 +402,8 @@ class CameraView(plugin: Plugin) {
             }
 
             try {
+                controller.videoCaptureQualitySelector = videoQuality.toQualitySelector()
+
                 // Enable VIDEO_CAPTURE use case alongside IMAGE_CAPTURE
                 controller.setEnabledUseCases(
                     CameraController.IMAGE_CAPTURE or CameraController.VIDEO_CAPTURE
@@ -404,7 +417,8 @@ class CameraView(plugin: Plugin) {
                 currentRecordingFile = tempFile
 
                 val outputOptions = FileOutputOptions.Builder(tempFile).build()
-                val audioConfig = if (enableAudio) AudioConfig.create(true) else AudioConfig.AUDIO_DISABLED
+                val audioConfig =
+                    if (enableAudio) AudioConfig.create(true) else AudioConfig.AUDIO_DISABLED
 
                 var startResumed = false
 
@@ -421,14 +435,17 @@ class CameraView(plugin: Plugin) {
                                 continuation.resume(CameraResult.Success(Unit))
                             }
                         }
+
                         is VideoRecordEvent.Finalize -> {
                             // If recording finalized before Start was emitted, resume the
                             // startRecording continuation with an error
                             if (!startResumed && continuation.isActive) {
                                 startResumed = true
-                                continuation.resume(CameraResult.Error(
-                                    Exception("Recording failed to start: error code ${event.error}")
-                                ))
+                                continuation.resume(
+                                    CameraResult.Error(
+                                        Exception("Recording failed to start: error code ${event.error}")
+                                    )
+                                )
                             }
 
                             mainHandler.post {
@@ -464,6 +481,7 @@ class CameraView(plugin: Plugin) {
                                 }
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -476,27 +494,55 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /**
-     * Stops the current video recording and returns the file path.
-     */
-    suspend fun stopRecordingAsync(): CameraResult<JSObject> = suspendCancellableCoroutine { continuation ->
-        mainHandler.post {
-            val recording = activeRecording
-            if (recording == null) {
-                continuation.resume(CameraResult.Error(Exception("No recording is in progress")))
-                return@post
-            }
+    private fun VideoRecordingQuality.toQualitySelector(): QualitySelector {
+        return when (this) {
+            VideoRecordingQuality.LOWEST -> QualitySelector.from(Quality.LOWEST)
+            VideoRecordingQuality.SD -> QualitySelector.from(
+                Quality.SD,
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+            )
 
-            pendingStopCallback = { result ->
-                continuation.resume(result)
-            }
+            VideoRecordingQuality.HD -> QualitySelector.from(
+                Quality.HD,
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)
+            )
 
-            activeRecording = null
-            recording.stop()
+            VideoRecordingQuality.FHD -> QualitySelector.from(
+                Quality.FHD,
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
+            )
+
+            VideoRecordingQuality.UHD -> QualitySelector.from(
+                Quality.UHD,
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.UHD)
+            )
+
+            VideoRecordingQuality.HIGHEST -> QualitySelector.from(Quality.HIGHEST)
         }
     }
 
-        /** Flip between front and back cameras */
+    /**
+     * Stops the current video recording and returns the file path.
+     */
+    suspend fun stopRecordingAsync(): CameraResult<JSObject> =
+        suspendCancellableCoroutine { continuation ->
+            mainHandler.post {
+                val recording = activeRecording
+                if (recording == null) {
+                    continuation.resume(CameraResult.Error(Exception("No recording is in progress")))
+                    return@post
+                }
+
+                pendingStopCallback = { result ->
+                    continuation.resume(result)
+                }
+
+                activeRecording = null
+                recording.stop()
+            }
+        }
+
+    /** Flip between front and back cameras */
     fun flipCamera(callback: (Exception?) -> Unit) {
         currentCameraSelector = when (currentCameraSelector) {
             CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA

@@ -22,11 +22,15 @@ import {
   BarcodeType,
   CameraDevice,
   FlashMode,
+  VideoRecordingQuality,
 } from 'capacitor-camera-view';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
 import { GalleryService } from '../../services/gallery.service';
 
+/**
+ * Labels for different barcode types.
+ */
 const barcodeTypeLabels = {
   aztec: 'Aztec',
   code128: 'Code 128',
@@ -42,6 +46,18 @@ const barcodeTypeLabels = {
   qr: 'QR Code',
   upce: 'UPC-E',
 } satisfies Record<BarcodeType, string>;
+
+/**
+ * Labels for different video recording qualities.
+ */
+const videoRecordingQualityLabels = {
+  lowest: 'Lowest',
+  sd: 'SD',
+  hd: 'HD',
+  fhd: 'Full HD',
+  uhd: 'UHD',
+  highest: 'Highest',
+} satisfies Record<VideoRecordingQuality, string>;
 
 @Component({
   selector: 'app-camera-view',
@@ -79,6 +95,7 @@ export class CameraSettingsPage implements OnInit {
   protected initialZoomFactor = model<number>(1.0);
   protected saveToFile = model<boolean>(false);
   protected enableAudio = model<boolean>(true);
+  protected videoRecordingQuality = model<VideoRecordingQuality>('hd');
 
   protected barcodeValue = signal<string | undefined>(undefined);
 
@@ -90,6 +107,16 @@ export class CameraSettingsPage implements OnInit {
   }[] = (Object.entries(barcodeTypeLabels) as [BarcodeType, string][]).map(
     ([value, label]) => ({ label, value }),
   );
+
+  protected readonly videoRecordingQualityOptions: {
+    label: string;
+    value: VideoRecordingQuality;
+  }[] = (
+    Object.entries(videoRecordingQualityLabels) as [
+      VideoRecordingQuality,
+      string,
+    ][]
+  ).map(([value, label]) => ({ label, value }));
 
   ngOnInit() {
     setTimeout(() => {
@@ -113,6 +140,7 @@ export class CameraSettingsPage implements OnInit {
         initialZoomFactor: this.initialZoomFactor(),
         saveToFile: this.saveToFile(),
         enableAudio: this.enableAudio(),
+        videoRecordingQuality: this.videoRecordingQuality(),
       },
     });
 

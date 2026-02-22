@@ -171,7 +171,7 @@ fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
             jsonArray.optString(i)?.let { stringTypes.add(it) }
         }
         val converted = convertToNativeBarcodeFormats(stringTypes)
-        if (converted.isNotEmpty()) converted else null
+        converted.ifEmpty { null }
     }
 
     return CameraSessionConfiguration(

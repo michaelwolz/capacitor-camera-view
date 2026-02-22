@@ -277,6 +277,17 @@ export type CameraPosition = 'front' | 'back';
 export type FlashMode = 'off' | 'on' | 'auto';
 
 /**
+ * Video recording quality presets.
+ *
+ * @remarks
+ * On iOS this maps to `AVCaptureSession.Preset` values.
+ * On Android this maps to CameraX `QualitySelector` values.
+ *
+ * @since 2.2.0
+ */
+export type VideoRecordingQuality = 'lowest' | 'sd' | 'hd' | 'fhd' | 'uhd' | 'highest';
+
+/**
  * Represents a physical camera device on the device.
  *
  * @since 1.0.0
@@ -457,6 +468,14 @@ export interface VideoRecordingOptions {
    * @since 2.2.0
    */
   enableAudio?: boolean;
+
+  /**
+   * Video recording quality preset.
+   * Native platforms only (iOS/Android). Ignored on web.
+   * @default 'highest'
+   * @since 2.2.0
+   */
+  videoQuality?: VideoRecordingQuality;
 }
 
 /**

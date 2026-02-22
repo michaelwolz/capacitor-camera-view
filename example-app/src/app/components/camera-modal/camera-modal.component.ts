@@ -28,6 +28,7 @@ import {
 } from '@ionic/angular/standalone';
 import {
   BarcodeType,
+  VideoRecordingQuality,
   type CameraPosition,
   type FlashMode,
 } from 'capacitor-camera-view';
@@ -80,6 +81,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly initialZoomFactor = input<number>(1.0);
   public readonly saveToFile = input<boolean>(false);
   public readonly enableAudio = input<boolean>(true);
+  public readonly videoRecordingQuality = input<VideoRecordingQuality>('hd');
 
   protected readonly cameraStarted = toSignal(
     this.#cameraViewService.cameraStarted,
@@ -286,6 +288,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       this.isRecording.set(true);
       await this.#cameraViewService.startRecording({
         enableAudio: this.enableAudio(),
+        videoQuality: this.videoRecordingQuality(),
       });
     } catch (error) {
       console.error('Failed to start recording', error);

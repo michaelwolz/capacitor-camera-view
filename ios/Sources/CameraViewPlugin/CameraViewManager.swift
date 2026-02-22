@@ -87,6 +87,9 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     
     /// Whether audio was added to the session for the current recording.
     internal var recordingWithAudio = false
+
+    /// Session preset used before starting recording, restored when recording ends.
+    internal var sessionPresetBeforeRecording: AVCaptureSession.Preset?
     
     override public init() {
         super.init()

@@ -207,6 +207,12 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc func startRecording(_ call: CAPPluginCall) {
         let enableAudio = call.getBool("enableAudio") ?? false
+        let videoQuality = call.getString("videoQuality") ?? "highest"
+
+        guard let parsedVideoQuality = VideoRecordingQuality(rawValue: videoQuality) else {
+            call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+            return
+        }
         
         if enableAudio {
             maybeRequestMicrophoneAccess { [weak self] granted in
@@ -214,15 +220,19 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
                     call.reject("Microphone access denied")
                     return
                 }
-                self?.doStartRecording(call: call, enableAudio: true)
+                self?.doStartRecording(call: call, enableAudio: true, videoQuality: parsedVideoQuality)
             }
         } else {
-            doStartRecording(call: call, enableAudio: false)
+            doStartRecording(call: call, enableAudio: false, videoQuality: parsedVideoQuality)
         }
     }
     
-    private func doStartRecording(call: CAPPluginCall, enableAudio: Bool) {
-        implementation.startRecording(enableAudio: enableAudio) { error in
+    private func doStartRecording(
+        call: CAPPluginCall,
+        enableAudio: Bool,
+        videoQuality: VideoRecordingQuality
+    ) {
+        implementation.startRecording(enableAudio: enableAudio, videoQuality: videoQuality) { error in
             if let error = error {
                 call.reject("Failed to start recording", nil, error)
                 return

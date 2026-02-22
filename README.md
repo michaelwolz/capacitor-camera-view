@@ -267,6 +267,15 @@ console.log('Video saved to:', result.webPath);
 await CameraView.startRecording({ enableAudio: true });
 ```
 
+**Recording with explicit quality preset (native):**
+
+```typescript
+await CameraView.startRecording({
+  enableAudio: true,
+  videoQuality: 'fhd', // lowest | sd | hd | fhd | uhd | highest
+});
+```
+
 > [!NOTE]
 > When `enableAudio: true` is used, the plugin automatically requests microphone permission from the user if it has not been granted yet. The permission declaration must still be present in your platform configuration — see the [Permissions](#-permissions) section for details.
 
@@ -434,7 +443,7 @@ Camera must be running. Throws if already recording.
 | ------------- | ----------------------------------------------------------------------- | ---------------------------------- |
 | **`options`** | <code><a href="#videorecordingoptions">VideoRecordingOptions</a></code> | - Optional recording configuration |
 
-**Since:** 3.0.0
+**Since:** 2.2.0
 
 --------------------
 
@@ -450,7 +459,7 @@ Throws if no recording is in progress.
 
 **Returns:** <code>Promise&lt;<a href="#videorecordingresponse">VideoRecordingResponse</a>&gt;</code>
 
-**Since:** 3.0.0
+**Since:** 2.2.0
 
 --------------------
 
@@ -726,9 +735,10 @@ Configuration options for capturing photos and samples.
 
 Configuration options for video recording.
 
-| Prop              | Type                 | Description                                                             | Default            | Since |
-| ----------------- | -------------------- | ----------------------------------------------------------------------- | ------------------ | ----- |
-| **`enableAudio`** | <code>boolean</code> | Whether to record audio with the video. Requires microphone permission. | <code>false</code> | 3.0.0 |
+| Prop               | Type                                                                    | Description                                                                          | Default                | Since |
+| ------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------- | ----- |
+| **`enableAudio`**  | <code>boolean</code>                                                    | Whether to record audio with the video. Requires microphone permission.              | <code>false</code>     | 2.2.0 |
+| **`videoQuality`** | <code><a href="#videorecordingquality">VideoRecordingQuality</a></code> | Video recording quality preset. Native platforms only (iOS/Android). Ignored on web. | <code>'highest'</code> | 2.2.0 |
 
 
 #### VideoRecordingResponse
@@ -737,7 +747,7 @@ Response from stopping a video recording.
 
 | Prop          | Type                | Description                                                                                                                                       | Since |
 | ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 3.0.0 |
+| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 2.2.0 |
 
 
 #### GetAvailableDevicesResponse
@@ -816,7 +826,7 @@ Response for the camera and microphone permission status.
 | Prop             | Type                                                        | Description                            |
 | ---------------- | ----------------------------------------------------------- | -------------------------------------- |
 | **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> | The state of the camera permission     |
-| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the microphone permission (optional for backward compatibility) |
+| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the microphone permission |
 
 
 #### PluginListenerHandle
@@ -887,6 +897,13 @@ This will contain either a base64 encoded string or a web path to the captured p
 depending on the `saveToFile` option in the <a href="#captureoptions">CaptureOptions</a>.
 
 <code>T['saveToFile'] extends true ? { /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */ webPath: string; } : { /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */ photo: string; }</code>
+
+
+#### VideoRecordingQuality
+
+Video recording quality presets.
+
+<code>'lowest' | 'sd' | 'hd' | 'fhd' | 'uhd' | 'highest'</code>
 
 
 #### FlashMode

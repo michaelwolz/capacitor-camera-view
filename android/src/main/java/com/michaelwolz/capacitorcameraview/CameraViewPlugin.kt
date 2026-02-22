@@ -12,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
+import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -197,20 +198,32 @@ class CameraViewPlugin : Plugin() {
     @PluginMethod
     fun startRecording(call: PluginCall) {
         val enableAudio = call.getBoolean("enableAudio") ?: false
+        val videoQuality =
+            parseVideoRecordingQuality(call.getString("videoQuality"))
+                ?: run {
+                    call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                    return
+                }
 
         if (enableAudio && getPermissionState("microphone") != PermissionState.GRANTED) {
             requestPermissionForAlias("microphone", call, "microphonePermsCallback")
             return
         }
 
-        doStartRecording(call, enableAudio)
+        doStartRecording(call, enableAudio, videoQuality)
     }
 
     @PermissionCallback
     private fun microphonePermsCallback(call: PluginCall) {
         if (getPermissionState("microphone") == PermissionState.GRANTED) {
             val enableAudio = call.getBoolean("enableAudio") ?: false
-            doStartRecording(call, enableAudio)
+            val videoQuality =
+                parseVideoRecordingQuality(call.getString("videoQuality"))
+                    ?: run {
+                        call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                        return
+                    }
+            doStartRecording(call, enableAudio, videoQuality)
         } else {
             call.reject("Microphone permission is required for audio recording")
         }
@@ -220,14 +233,34 @@ class CameraViewPlugin : Plugin() {
     /**
      * Helper method to start recording after ensuring permissions are granted.
      */
-    private fun doStartRecording(call: PluginCall, enableAudio: Boolean) {
+    private fun doStartRecording(
+        call: PluginCall,
+        enableAudio: Boolean,
+        videoQuality: VideoRecordingQuality
+    ) {
         pluginScope.launch {
-            implementation.startRecordingAsync(enableAudio).fold(
+            implementation.startRecordingAsync(enableAudio, videoQuality).fold(
                 onSuccess = { call.resolve() },
                 onError = { error ->
                     call.reject("Failed to start recording: ${error.message}", error)
                 }
             )
+        }
+    }
+
+    private fun parseVideoRecordingQuality(rawValue: String?): VideoRecordingQuality? {
+        if (rawValue == null) {
+            return VideoRecordingQuality.HIGHEST
+        }
+
+        return when (rawValue) {
+            "lowest" -> VideoRecordingQuality.LOWEST
+            "sd" -> VideoRecordingQuality.SD
+            "hd" -> VideoRecordingQuality.HD
+            "fhd" -> VideoRecordingQuality.FHD
+            "uhd" -> VideoRecordingQuality.UHD
+            "highest" -> VideoRecordingQuality.HIGHEST
+            else -> null
         }
     }
 

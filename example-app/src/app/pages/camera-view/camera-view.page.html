@@ -126,6 +126,21 @@
         Enable Audio for Video Recording
       </ion-checkbox>
     </ion-item>
+
+    <ion-item>
+      <ion-select
+        [(ngModel)]="videoRecordingQuality"
+        label="Video Recording Quality"
+        placeholder="Select video recording quality"
+        label-placement="floating"
+      >
+        @for (option of videoRecordingQualityOptions; track option.value) {
+          <ion-select-option value="{{ option.value }}">
+            {{ option.label }}
+          </ion-select-option>
+        }
+      </ion-select>
+    </ion-item>
   </ion-list>
 
   <ion-button (click)="startCamera()" expand="block">
