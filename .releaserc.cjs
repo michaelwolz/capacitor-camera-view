@@ -1,5 +1,8 @@
 const rcBranch = process.env.SEMANTIC_RELEASE_RC_BRANCH;
-const branches = rcBranch && rcBranch !== 'main' ? ['main', { name: rcBranch, prerelease: 'rc' }] : ['main'];
+const branches =
+  rcBranch && rcBranch !== 'main'
+    ? ['main', { name: rcBranch, channel: 'prerelease', prerelease: 'rc' }]
+    : ['main'];
 
 module.exports = {
   branches,
