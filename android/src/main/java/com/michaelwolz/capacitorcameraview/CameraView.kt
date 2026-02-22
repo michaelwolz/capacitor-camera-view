@@ -89,7 +89,10 @@ class CameraView(plugin: Plugin) {
     // Active video recording
     private var activeRecording: Recording? = null
 
-    // Continuation callback for stop recording result
+    /**
+     * Holds the pending stop-recording continuation result handler.
+     * Needed because CameraX delivers the final recording outcome asynchronously via Finalize.
+     */
     private var pendingStopCallback: ((CameraResult<JSObject>) -> Unit)? = null
 
     // Track the output file for the current recording
@@ -147,6 +150,9 @@ class CameraView(plugin: Plugin) {
             // Stop any active recording before unbinding
             activeRecording?.stop()
             activeRecording = null
+            pendingStopCallback?.invoke(
+                CameraResult.Error(Exception("Recording was interrupted because the camera session stopped"))
+            )
             pendingStopCallback = null
             currentRecordingFile = null
 
