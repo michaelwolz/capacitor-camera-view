@@ -398,7 +398,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc override public func requestPermissions(_ call: CAPPluginCall) {
         let permissionsList = call.getArray("permissions", String.self) ?? ["camera"]
-        
+
         let requestCamera = permissionsList.contains("camera")
         let requestMicrophone = permissionsList.contains("microphone")
         
