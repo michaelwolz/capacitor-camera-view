@@ -1,7 +1,9 @@
 package com.michaelwolz.capacitorcameraview
 
+import android.Manifest
 import android.content.Context
 import android.content.Context.CAMERA_SERVICE
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -48,6 +50,7 @@ import com.michaelwolz.capacitorcameraview.model.CameraResult
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,6 +67,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
@@ -390,107 +394,185 @@ class CameraView(plugin: Plugin) {
         videoQuality: VideoRecordingQuality,
     ): CameraResult<Unit> = suspendCancellableCoroutine { continuation ->
         mainHandler.post {
-            val controller = cameraController
-            if (controller == null) {
-                continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
-                return@post
-            }
+            startRecordingOnMainThread(enableAudio, videoQuality, continuation)
+        }
+    }
 
-            if (activeRecording != null) {
-                continuation.resume(CameraResult.Error(Exception("Recording is already in progress")))
-                return@post
-            }
+    private fun startRecordingOnMainThread(
+        enableAudio: Boolean,
+        videoQuality: VideoRecordingQuality,
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ) {
+        val controller = validateRecordingPreconditions(continuation) ?: return
 
-            try {
-                controller.videoCaptureQualitySelector = videoQuality.toQualitySelector()
+        try {
+            controller.videoCaptureQualitySelector = videoQuality.toQualitySelector()
 
-                // Enable VIDEO_CAPTURE use case alongside IMAGE_CAPTURE
-                controller.setEnabledUseCases(
-                    CameraController.IMAGE_CAPTURE or CameraController.VIDEO_CAPTURE
-                )
+            // Enable VIDEO_CAPTURE use case alongside IMAGE_CAPTURE
+            controller.setEnabledUseCases(
+                CameraController.IMAGE_CAPTURE or CameraController.VIDEO_CAPTURE
+            )
 
-                val tempFile = File.createTempFile(
-                    "camera_recording_",
-                    ".mp4",
-                    context.cacheDir
-                )
-                currentRecordingFile = tempFile
+            val outputOptions = createRecordingOutputOptions()
+            val audioConfig = resolveAudioConfig(enableAudio, continuation) ?: return
 
-                val outputOptions = FileOutputOptions.Builder(tempFile).build()
-                val audioConfig =
-                    if (enableAudio) AudioConfig.create(true) else AudioConfig.AUDIO_DISABLED
+            startCameraRecording(controller, outputOptions, audioConfig, continuation)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Security exception when starting recording. Missing permission?", e)
+            // Restore normal use cases on permission error
+            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+            continuation.resume(CameraResult.Error(e))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting recording", e)
+            // Restore normal use cases on error
+            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+            continuation.resume(CameraResult.Error(e))
+        }
+    }
 
-                var startResumed = false
+    private fun validateRecordingPreconditions(
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ): LifecycleCameraController? {
+        val controller = cameraController
+        if (controller == null) {
+            continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
+            return null
+        }
 
-                activeRecording = controller.startRecording(
-                    outputOptions,
-                    audioConfig,
-                    cameraExecutor
-                ) { event ->
-                    when (event) {
-                        is VideoRecordEvent.Start -> {
-                            Log.d(TAG, "Video recording started")
-                            if (!startResumed && continuation.isActive) {
-                                startResumed = true
-                                continuation.resume(CameraResult.Success(Unit))
-                            }
-                        }
+        if (activeRecording != null) {
+            continuation.resume(CameraResult.Error(Exception("Recording is already in progress")))
+            return null
+        }
 
-                        is VideoRecordEvent.Finalize -> {
-                            // If recording finalized before Start was emitted, resume the
-                            // startRecording continuation with an error
-                            if (!startResumed && continuation.isActive) {
-                                startResumed = true
-                                continuation.resume(
-                                    CameraResult.Error(
-                                        Exception("Recording failed to start: error code ${event.error}")
-                                    )
-                                )
-                            }
+        return controller
+    }
 
-                            mainHandler.post {
-                                // CameraX requires use case changes on the main thread.
-                                cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+    private fun createRecordingOutputOptions(): FileOutputOptions {
+        val tempFile = File.createTempFile(
+            "camera_recording_",
+            ".mp4",
+            context.cacheDir
+        )
+        currentRecordingFile = tempFile
+        return FileOutputOptions.Builder(tempFile).build()
+    }
 
-                                val callback = pendingStopCallback
-                                pendingStopCallback = null
-                                // Always clean up recording state
-                                activeRecording = null
+    private fun resolveAudioConfig(
+        enableAudio: Boolean,
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ): AudioConfig? {
+        if (!enableAudio) {
+            return AudioConfig.AUDIO_DISABLED
+        }
 
-                                if (event.hasError()) {
-                                    Log.e(TAG, "Recording error: ${event.error}")
-                                    val file = currentRecordingFile
-                                    currentRecordingFile = null
-                                    callback?.invoke(CameraResult.Error(Exception("Recording failed with error code: ${event.error}")))
-                                } else {
-                                    val file = currentRecordingFile
-                                    currentRecordingFile = null
-                                    if (file != null) {
-                                        val capacitorFilePath = FileUtils.getPortablePath(
-                                            context,
-                                            pluginDelegate.bridge.localUrl,
-                                            Uri.fromFile(file)
-                                        )
-                                        val result = JSObject().apply {
-                                            put("webPath", capacitorFilePath)
-                                        }
-                                        callback?.invoke(CameraResult.Success(result))
-                                    } else {
-                                        callback?.invoke(CameraResult.Error(Exception("Recording file not found")))
-                                    }
-                                }
-                            }
-                        }
-
-                        else -> {}
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error starting recording", e)
-                // Restore normal use cases on error
-                cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+        if (hasMicrophonePermission()) {
+            return try {
+                AudioConfig.create(true)
+            } catch (e: SecurityException) {
                 continuation.resume(CameraResult.Error(e))
+                null
             }
+        }
+
+        continuation.resume(
+            CameraResult.Error(
+                SecurityException("Microphone permission is required for audio recording")
+            )
+        )
+        return null
+    }
+
+    private fun hasMicrophonePermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun startCameraRecording(
+        controller: LifecycleCameraController,
+        outputOptions: FileOutputOptions,
+        audioConfig: AudioConfig,
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ) {
+        val startResumed = AtomicBoolean(false)
+        activeRecording = controller.startRecording(
+            outputOptions,
+            audioConfig,
+            cameraExecutor
+        ) { event ->
+            when (event) {
+                is VideoRecordEvent.Start -> handleRecordingStartEvent(startResumed, continuation)
+                is VideoRecordEvent.Finalize -> {
+                    handleRecordingFinalizeEvent(event, startResumed, continuation)
+                }
+
+                else -> Unit
+            }
+        }
+    }
+
+    private fun handleRecordingStartEvent(
+        startResumed: AtomicBoolean,
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ) {
+        Log.d(TAG, "Video recording started")
+        if (continuation.isActive && startResumed.compareAndSet(false, true)) {
+            continuation.resume(CameraResult.Success(Unit))
+        }
+    }
+
+    private fun handleRecordingFinalizeEvent(
+        event: VideoRecordEvent.Finalize,
+        startResumed: AtomicBoolean,
+        continuation: CancellableContinuation<CameraResult<Unit>>
+    ) {
+        // If recording finalized before Start was emitted, resume the
+        // startRecording continuation with an error
+        if (continuation.isActive && startResumed.compareAndSet(false, true)) {
+            continuation.resume(
+                CameraResult.Error(
+                    Exception("Recording failed to start: error code ${event.error}")
+                )
+            )
+        }
+
+        finalizeRecordingAndNotifyStopCallback(event)
+    }
+
+    private fun finalizeRecordingAndNotifyStopCallback(event: VideoRecordEvent.Finalize) {
+        mainHandler.post {
+            // CameraX requires use case changes on the main thread.
+            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+
+            val callback = pendingStopCallback
+            pendingStopCallback = null
+            // Always clean up recording state
+            activeRecording = null
+
+            if (event.hasError()) {
+                Log.e(TAG, "Recording error: ${event.error}")
+                currentRecordingFile = null
+                callback?.invoke(CameraResult.Error(Exception("Recording failed with error code: ${event.error}")))
+                return@post
+            }
+
+            val file = currentRecordingFile
+            currentRecordingFile = null
+            if (file == null) {
+                callback?.invoke(CameraResult.Error(Exception("Recording file not found")))
+                return@post
+            }
+
+            val capacitorFilePath = FileUtils.getPortablePath(
+                context,
+                pluginDelegate.bridge.localUrl,
+                Uri.fromFile(file)
+            )
+            val result = JSObject().apply {
+                put("webPath", capacitorFilePath)
+            }
+            callback?.invoke(CameraResult.Success(result))
         }
     }
 
