@@ -248,7 +248,7 @@ This plugin supports recording video directly from the live camera feed.
 import { CameraView } from 'capacitor-camera-view';
 
 // Start recording (camera must already be running)
-await CameraView.startRecording({ enableAudio: false, quality: 'medium' });
+await CameraView.startRecording({ enableAudio: false });
 
 // Stop recording and get the result
 const result = await CameraView.stopRecording();
@@ -816,7 +816,7 @@ Response for the camera and microphone permission status.
 | Prop             | Type                                                        | Description                            |
 | ---------------- | ----------------------------------------------------------- | -------------------------------------- |
 | **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> | The state of the camera permission     |
-| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the microphone permission |
+| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | The state of the microphone permission (optional for backward compatibility) |
 
 
 #### PluginListenerHandle

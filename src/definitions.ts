@@ -69,7 +69,7 @@ export interface CameraViewPlugin {
    * @param options - Optional recording configuration
    * @returns A promise that resolves when recording has started
    *
-   * @since 3.0.0
+   * @since 2.2.0
    */
   startRecording(options?: VideoRecordingOptions): Promise<void>;
 
@@ -79,7 +79,7 @@ export interface CameraViewPlugin {
    *
    * @returns A promise that resolves with the recorded video file path
    *
-   * @since 3.0.0
+   * @since 2.2.0
    */
   stopRecording(): Promise<VideoRecordingResponse>;
 
@@ -447,28 +447,28 @@ export interface CaptureOptions {
 
 /**
  * Configuration options for video recording.
- * @since 3.0.0
+ * @since 2.2.0
  */
 export interface VideoRecordingOptions {
   /**
    * Whether to record audio with the video.
    * Requires microphone permission.
    * @default false
-   * @since 3.0.0
+   * @since 2.2.0
    */
   enableAudio?: boolean;
 }
 
 /**
  * Response from stopping a video recording.
- * @since 3.0.0
+ * @since 2.2.0
  */
 export interface VideoRecordingResponse {
   /**
    * Web-accessible path to the recorded video file.
    * On web, this is a blob URL.
    * On iOS/Android, this is a path accessible via Capacitor's filesystem.
-   * @since 3.0.0
+   * @since 2.2.0
    */
   webPath: string;
 }
@@ -612,7 +612,7 @@ export interface BoundingRect {
  * - 'camera': Camera access permission
  * - 'microphone': Microphone access permission (needed for video recording with audio)
  *
- * @since 3.0.0
+ * @since 2.2.0
  */
 export type CameraPermissionType = 'camera' | 'microphone';
 
