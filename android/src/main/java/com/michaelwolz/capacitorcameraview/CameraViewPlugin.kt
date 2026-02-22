@@ -248,22 +248,6 @@ class CameraViewPlugin : Plugin() {
         }
     }
 
-    private fun parseVideoRecordingQuality(rawValue: String?): VideoRecordingQuality? {
-        if (rawValue == null) {
-            return VideoRecordingQuality.HIGHEST
-        }
-
-        return when (rawValue) {
-            "lowest" -> VideoRecordingQuality.LOWEST
-            "sd" -> VideoRecordingQuality.SD
-            "hd" -> VideoRecordingQuality.HD
-            "fhd" -> VideoRecordingQuality.FHD
-            "uhd" -> VideoRecordingQuality.UHD
-            "highest" -> VideoRecordingQuality.HIGHEST
-            else -> null
-        }
-    }
-
     @PluginMethod
     fun stopRecording(call: PluginCall) {
         pluginScope.launch {

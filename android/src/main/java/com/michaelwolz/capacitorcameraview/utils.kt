@@ -13,6 +13,7 @@ import androidx.camera.view.PreviewView
 import com.getcapacitor.PluginCall
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
+import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
 import java.io.ByteArrayOutputStream
 
@@ -249,5 +250,24 @@ fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): S
     } finally {
         // Ensure bitmap is always recycled
         bitmap.recycle()
+    }
+}
+
+/**
+ * Parses a string representation of video recording quality into a [VideoRecordingQuality] enum.
+ */
+fun parseVideoRecordingQuality(rawValue: String?): VideoRecordingQuality? {
+    if (rawValue == null) {
+        return VideoRecordingQuality.HIGHEST
+    }
+
+    return when (rawValue) {
+        "lowest" -> VideoRecordingQuality.LOWEST
+        "sd" -> VideoRecordingQuality.SD
+        "hd" -> VideoRecordingQuality.HD
+        "fhd" -> VideoRecordingQuality.FHD
+        "uhd" -> VideoRecordingQuality.UHD
+        "highest" -> VideoRecordingQuality.HIGHEST
+        else -> null
     }
 }
