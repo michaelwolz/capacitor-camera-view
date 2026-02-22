@@ -158,6 +158,8 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
         enableAudio: Bool,
         completion: @escaping (Error?) -> Void
     ) {
+        let sessionQueue = self.sessionQueue
+        // Keep the token so we can remove the observer on success and timeout paths.
         var observerToken: NSObjectProtocol?
         var handled = false
 
@@ -166,27 +168,27 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
             object: captureSession,
             queue: nil
         ) { [weak self] _ in
-            guard let self = self else { return }
-            self.sessionQueue.async {
+            sessionQueue.async {
                 guard !handled else { return }
                 handled = true
                 if let token = observerToken {
                     NotificationCenter.default.removeObserver(token)
                     observerToken = nil
                 }
+                guard let self = self else { return }
                 self.startRecording(enableAudio: enableAudio, completion: completion)
             }
         }
 
         // Timeout: if the session hasn't restarted within 2 seconds, give up.
         sessionQueue.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self = self else { return }
             guard !handled else { return }
             handled = true
             if let token = observerToken {
                 NotificationCenter.default.removeObserver(token)
                 observerToken = nil
             }
+            guard let self = self else { return }
             // One final check in case the session started just as we timed out.
             if self.captureSession.isRunning {
                 self.startRecording(enableAudio: enableAudio, completion: completion)
