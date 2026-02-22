@@ -9,6 +9,8 @@ import {
   CaptureOptions,
   CaptureResponse,
   FlashMode,
+  VideoRecordingOptions,
+  VideoRecordingResponse,
 } from 'capacitor-camera-view';
 import { BehaviorSubject, Subject } from 'rxjs';
 
@@ -165,6 +167,22 @@ export class CapacitorCameraViewService {
    */
   async setTorchMode(enabled: boolean, level: number = 1.0): Promise<void> {
     return this.#cameraView.setTorchMode({ enabled, level });
+  }
+
+  /**
+   * Start video recording
+   * @param options Optional recording configuration
+   */
+  async startRecording(options?: VideoRecordingOptions): Promise<void> {
+    await this.#cameraView.startRecording(options);
+  }
+
+  /**
+   * Stop the current video recording
+   * @returns The recorded video file path
+   */
+  async stopRecording(): Promise<VideoRecordingResponse> {
+    return this.#cameraView.stopRecording();
   }
 
   /**

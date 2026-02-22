@@ -4,18 +4,27 @@ import { Injectable, signal } from '@angular/core';
   providedIn: 'root',
 })
 export class GalleryService {
-  readonly #photos = signal<Array<string>>([]);
-  public photos = this.#photos.asReadonly();
+  readonly #items = signal<Array<{ type: 'photo' | 'video'; data: string }>>(
+    [],
+  );
+  public items = this.#items.asReadonly();
 
   public addPhoto(photo: string) {
-    this.#photos.update((curr) => [...curr, `data:image/jpeg;base64,${photo}`]);
+    this.#items.update((curr) => [
+      ...curr,
+      { type: 'photo', data: `data:image/jpeg;base64,${photo}` },
+    ]);
   }
 
   public addPhotoFromFile(filePath: string) {
-    this.#photos.update((curr) => [...curr, filePath]);
+    this.#items.update((curr) => [...curr, { type: 'photo', data: filePath }]);
+  }
+
+  public addVideoFromFile(filePath: string) {
+    this.#items.update((curr) => [...curr, { type: 'video', data: filePath }]);
   }
 
   public clearGallery() {
-    this.#photos.set([]);
+    this.#items.set([]);
   }
 }

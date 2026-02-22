@@ -12,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
+import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +22,10 @@ import kotlinx.coroutines.launch
 
 @CapacitorPlugin(
     name = "CameraView",
-    permissions = [Permission(strings = [Manifest.permission.CAMERA], alias = "camera")]
+    permissions = [
+        Permission(strings = [Manifest.permission.CAMERA], alias = "camera"),
+        Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone")
+    ]
 )
 class CameraViewPlugin : Plugin() {
     // Coroutine scope for async operations
@@ -144,7 +148,113 @@ class CameraViewPlugin : Plugin() {
                 },
                 onError = { error ->
                     call.reject("Failed to capture frame: ${error.message}", error)
-                    Log.d(TAG, "captureSample failed after ${System.currentTimeMillis() - timeStart}ms")
+                    Log.d(
+                        TAG,
+                        "captureSample failed after ${System.currentTimeMillis() - timeStart}ms"
+                    )
+                }
+            )
+        }
+    }
+
+    @PluginMethod
+    override fun requestPermissions(call: PluginCall) {
+        val permissionsList = call.getArray("permissions")
+            ?.toList<String>()
+            ?: listOf("camera")
+
+        // Determine which aliases still need to be requested
+        val aliasesToRequest = permissionsList.filter { alias ->
+            getPermissionState(alias) != PermissionState.GRANTED
+        }
+
+        if (aliasesToRequest.isEmpty()) {
+            checkPermissions(call)
+            return
+        }
+
+        // Store which permissions to request so callback can continue the chain
+        call.data.put("_pendingAliases", com.getcapacitor.JSArray(aliasesToRequest))
+        requestPermissionForAlias(aliasesToRequest.first(), call, "requestedPermsCallback")
+    }
+
+    @PermissionCallback
+    private fun requestedPermsCallback(call: PluginCall) {
+        val pendingAliases = call.getArray("_pendingAliases")?.toList<String>() ?: emptyList()
+
+        // Find remaining aliases that still need requesting
+        val remaining = pendingAliases.drop(1).filter { alias ->
+            getPermissionState(alias) != PermissionState.GRANTED
+        }
+
+        if (remaining.isNotEmpty()) {
+            call.data.put("_pendingAliases", com.getcapacitor.JSArray(remaining))
+            requestPermissionForAlias(remaining.first(), call, "requestedPermsCallback")
+        } else {
+            checkPermissions(call)
+        }
+    }
+
+    @PluginMethod
+    fun startRecording(call: PluginCall) {
+        val enableAudio = call.getBoolean("enableAudio") ?: false
+        val videoQuality =
+            parseVideoRecordingQuality(call.getString("videoQuality"))
+                ?: run {
+                    call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                    return
+                }
+
+        if (enableAudio && getPermissionState("microphone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("microphone", call, "microphonePermsCallback")
+            return
+        }
+
+        doStartRecording(call, enableAudio, videoQuality)
+    }
+
+    @PermissionCallback
+    private fun microphonePermsCallback(call: PluginCall) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) {
+            val enableAudio = call.getBoolean("enableAudio") ?: false
+            val videoQuality =
+                parseVideoRecordingQuality(call.getString("videoQuality"))
+                    ?: run {
+                        call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                        return
+                    }
+            doStartRecording(call, enableAudio, videoQuality)
+        } else {
+            call.reject("Microphone permission is required for audio recording")
+        }
+    }
+
+
+    /**
+     * Helper method to start recording after ensuring permissions are granted.
+     */
+    private fun doStartRecording(
+        call: PluginCall,
+        enableAudio: Boolean,
+        videoQuality: VideoRecordingQuality
+    ) {
+        pluginScope.launch {
+            implementation.startRecordingAsync(enableAudio, videoQuality).fold(
+                onSuccess = { call.resolve() },
+                onError = { error ->
+                    call.reject("Failed to start recording: ${error.message}", error)
+                }
+            )
+        }
+    }
+
+    @PluginMethod
+    fun stopRecording(call: PluginCall) {
+        pluginScope.launch {
+            implementation.stopRecordingAsync().fold(
+                onSuccess = { result -> call.resolve(result) },
+                onError = { error ->
+                    call.reject("Failed to stop recording: ${error.message}", error)
                 }
             )
         }

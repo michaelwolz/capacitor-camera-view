@@ -16,6 +16,10 @@ enum CameraError: Error, LocalizedError, CustomNSError {
     case zoomFactorOutOfRange
     case permissionDenied
     case deviceLocked
+    case recordingAlreadyInProgress
+    case noRecordingInProgress
+    case audioDeviceUnavailable
+    case audioInputAdditionFailed
     
     // MARK: - CustomNSError
     
@@ -51,6 +55,14 @@ enum CameraError: Error, LocalizedError, CustomNSError {
             return 1012
         case .deviceLocked:
             return 1013
+        case .recordingAlreadyInProgress:
+            return 1014
+        case .noRecordingInProgress:
+            return 1015
+        case .audioDeviceUnavailable:
+            return 1016
+        case .audioInputAdditionFailed:
+            return 1017
         }
     }
     
@@ -100,6 +112,14 @@ enum CameraError: Error, LocalizedError, CustomNSError {
             return "Camera access has been denied."
         case .deviceLocked:
             return "The camera device is currently locked by another process."
+        case .recordingAlreadyInProgress:
+            return "A video recording is already in progress"
+        case .noRecordingInProgress:
+            return "No video recording is in progress"
+        case .audioDeviceUnavailable:
+            return "No microphone is available on this device."
+        case .audioInputAdditionFailed:
+            return "Failed to add the microphone input to the capture session."
         }
     }
     
@@ -132,6 +152,14 @@ enum CameraError: Error, LocalizedError, CustomNSError {
             return "Go to Settings > Privacy > Camera and enable access for this app."
         case .deviceLocked:
             return "Wait for the other process to release the camera or restart the app."
+        case .recordingAlreadyInProgress:
+            return nil
+        case .noRecordingInProgress:
+            return nil
+        case .audioDeviceUnavailable:
+            return "Ensure the device has a microphone and that microphone access has been granted."
+        case .audioInputAdditionFailed:
+            return "The microphone may be in use by another application. Close other apps and try again."
         }
     }
 }

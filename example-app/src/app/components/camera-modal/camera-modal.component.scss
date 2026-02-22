@@ -84,7 +84,73 @@ ion-chip.barcode-detected {
   }
 }
 
+// Recording
+.record-video {
+  margin-bottom: var(--ion-safe-area-bottom, 0);
+
+  ion-fab-button.recording {
+    --background: rgba(220, 50, 50, 0.8);
+    --background-activated: rgba(220, 50, 50, 1);
+  }
+}
+
+.recording-indicator {
+  position: fixed;
+  top: 60px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: red;
+  animation: blink 1s step-start infinite;
+}
+
+// Video preview
+.video-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 101;
+}
+
+.video-preview {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 // Animations
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;

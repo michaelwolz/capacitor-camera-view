@@ -78,6 +78,23 @@
   }
 
   <ion-fab
+    class="record-video"
+    slot="fixed"
+    horizontal="start"
+    vertical="bottom"
+  >
+    @if (isRecording()) {
+      <ion-fab-button (click)="stopRecording()" size="small" color="danger">
+        <ion-icon name="stop"></ion-icon>
+      </ion-fab-button>
+    } @else {
+      <ion-fab-button (click)="startRecording()" size="small">
+        <ion-icon name="videocam-outline"></ion-icon>
+      </ion-fab-button>
+    }
+  </ion-fab>
+
+  <ion-fab
     class="camera-trigger"
     slot="fixed"
     horizontal="center"
