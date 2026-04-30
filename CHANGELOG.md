@@ -1,3 +1,16 @@
+# [2.2.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.1.0...2.2.0) (2026-04-30)
+
+
+### Bug Fixes
+
+* **example-app:** bump dependencies ([1c1644f](https://github.com/michaelwolz/capacitor-camera-view/commit/1c1644f380236e51b52ec595d84d51fc595d02f3))
+* **ios:** remove non existent displayValue property for barcodes ([78e263c](https://github.com/michaelwolz/capacitor-camera-view/commit/78e263cdcff6165965d6abfec470b13fc866a449))
+
+
+### Features
+
+* add rawBytes property for barcode scanning ([4be262f](https://github.com/michaelwolz/capacitor-camera-view/commit/4be262fa1ecfc0cb400c6f3fadd293f1b0da5579))
+
 # [2.1.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.0.2...2.1.0) (2026-02-21)
 
 
