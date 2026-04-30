@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import Foundation
 
 extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
@@ -62,7 +63,13 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
         else {
             return
         }
-        guard let barcodeValue = metadataObject.stringValue else { return }
+
+        let barcodeValue = metadataObject.stringValue ?? ""
+        let rawBytes = getRawBytes(from: metadataObject)
+
+        if barcodeValue.isEmpty && rawBytes == nil {
+            return
+        }
 
         let barcodeType = metadataObject.type.rawValue
 
@@ -83,7 +90,32 @@ extension CameraViewManager: AVCaptureMetadataOutputObjectsDelegate {
         )
 
         eventEmitter.emitBarcodeDetected(
-            BarcodeDetectedEvent(value: barcodeValue, type: barcodeType, boundingRect: boundingRect)
+            BarcodeDetectedEvent(
+                value: barcodeValue,
+                displayValue: metadataObject.stringValue,
+                rawBytes: rawBytes,
+                type: barcodeType,
+                boundingRect: boundingRect
+            )
         )
+    }
+
+    private func getRawBytes(from metadataObject: AVMetadataMachineReadableCodeObject) -> [UInt8]? {
+        guard let descriptor = metadataObject.descriptor else {
+            return nil
+        }
+
+        switch descriptor {
+        case let descriptor as CIQRCodeDescriptor:
+            return [UInt8](descriptor.errorCorrectedPayload)
+        case let descriptor as CIAztecCodeDescriptor:
+            return [UInt8](descriptor.errorCorrectedPayload)
+        case let descriptor as CIPDF417CodeDescriptor:
+            return [UInt8](descriptor.errorCorrectedPayload)
+        case let descriptor as CIDataMatrixCodeDescriptor:
+            return [UInt8](descriptor.errorCorrectedPayload)
+        default:
+            return nil
+        }
     }
 }
