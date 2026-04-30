@@ -123,13 +123,40 @@
     Start Camera
   </ion-button>
 
-  @if (barcodeValue()) {
-    <ion-textarea
-      [value]="barcodeValue()"
-      label="Barcode value"
-      labelPlacement="floating"
-      fill="solid"
-      placeholder="Enter text"
-    ></ion-textarea>
+  @if (barcodeValue() || barcodeDisplayValue() || barcodeRawBytes()) {
+    <ion-list>
+      <ion-item class="ion-margin-bottom ion-margin-top">
+        <ion-textarea
+          [value]="barcodeValue() ?? ''"
+          [readonly]="true"
+          [autoGrow]="true"
+          fill="solid"
+          label="Value"
+          labelPlacement="floating"
+        />
+      </ion-item>
+
+      <ion-item class="ion-margin-bottom">
+        <ion-textarea
+          [value]="barcodeDisplayValue() ?? ''"
+          [readonly]="true"
+          [autoGrow]="true"
+          fill="solid"
+          label="Display Value"
+          labelPlacement="floating"
+        />
+      </ion-item>
+
+      <ion-item class="ion-margin-bottom">
+        <ion-textarea
+          [value]="barcodeRawBytes() ?? ''"
+          [readonly]="true"
+          [autoGrow]="true"
+          fill="solid"
+          label="Raw Bytes"
+          labelPlacement="floating"
+        />
+      </ion-item>
+    </ion-list>
   }
 </ion-content>

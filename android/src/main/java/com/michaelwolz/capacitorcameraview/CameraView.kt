@@ -723,6 +723,7 @@ class CameraView(plugin: Plugin) {
         val barcodeResult =
             BarcodeDetectionResult(
                 value = barcode.rawValue ?: "",
+                rawBytes = barcode.rawBytes ?: ByteArray(0),
                 displayValue = barcode.displayValue ?: "",
                 type = getBarcodeFormatString(barcode.format),
                 boundingRect = webBoundingRect

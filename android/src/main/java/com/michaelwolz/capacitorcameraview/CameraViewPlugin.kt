@@ -289,8 +289,14 @@ class CameraViewPlugin : Plugin() {
      * Called by the CameraView when a barcode is detected.
      */
     fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
+        val rawBytesArray = JSArray().apply {
+            result.rawBytes.forEach { put(it.toInt() and 0xFF) }
+        }
+
         val jsObject = JSObject().apply {
             put("value", result.value)
+            put("displayValue", result.displayValue)
+            put("rawBytes", rawBytesArray)
             put("type", result.type)
             put("boundingRect", JSObject().apply {
                 put("x", result.boundingRect.x)

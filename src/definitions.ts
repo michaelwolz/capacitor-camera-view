@@ -527,7 +527,24 @@ export interface BarcodeDetectionData {
   /** The decoded string value of the barcode */
   value: string;
 
-  /** The display value of the barcode (may differ from the raw value) */
+  /**
+   * Raw bytes as they were encoded in the barcode.
+   *
+   * On Android, this is forwarded from ML Kit.
+   * On iOS, this is available for descriptor-backed formats such as QR, Aztec, PDF417, and Data Matrix.
+   * On web, this is not available because the Barcode Detection API only exposes the decoded string value.
+   *
+   * @since 2.2.0
+   */
+  rawBytes?: number[];
+
+  /**
+   * The display value of the barcode on Android.
+   *
+   * This is forwarded from ML Kit and may contain a formatted, human-readable
+   * representation that differs from the raw decoded value. iOS and web do not
+   * expose a separate display value, so this property is only emitted on Android.
+   */
   displayValue?: string;
 
   /** The type/format of the barcode (e.g., 'qr', 'code128', etc.) */
