@@ -10,7 +10,14 @@
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  @for (photo of galleryService.photos(); track $index) {
-    <img [src]="photo" />
+  @for (item of galleryService.items(); track $index) {
+    @if (item.type === "photo") {
+      <img [src]="item.data" />
+    } @else if (item.type === "video") {
+      <video controls style="width: 100%; min-height: 180px; background: black">
+        <source [src]="item.data" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    }
   }
 </ion-content>
