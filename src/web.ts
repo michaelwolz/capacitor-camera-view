@@ -309,6 +309,12 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
       this.mediaRecorder.start(100); // Collect data in 100ms chunks
     } catch (err) {
+      if (this.recordingAudioTrack) {
+        this.recordingAudioTrack.stop();
+        this.recordingAudioTrack = null;
+      }
+      this.mediaRecorder = null;
+      this.recordedChunks = [];
       throw new Error(`Failed to start recording: ${this.formatError(err)}`);
     }
   }

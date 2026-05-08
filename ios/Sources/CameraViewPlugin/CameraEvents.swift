@@ -9,6 +9,12 @@ public struct BarcodeDetectedEvent: Sendable {
     /// The decoded string value of the barcode.
     public let value: String
 
+    /// The barcode value in a human readable format.
+    public let displayValue: String?
+
+    /// Raw bytes as they were encoded in the barcode when the platform exposes them.
+    public let rawBytes: [UInt8]?
+
     /// The type of barcode detected (e.g., "org.iso.QRCode").
     public let type: String
 
@@ -40,19 +46,37 @@ public struct BarcodeDetectedEvent: Sendable {
         }
     }
 
-    public init(value: String, type: String, boundingRect: BoundingRect) {
+    public init(
+        value: String,
+        displayValue: String? = nil,
+        rawBytes: [UInt8]? = nil,
+        type: String,
+        boundingRect: BoundingRect
+    ) {
         self.value = value
+        self.displayValue = displayValue
+        self.rawBytes = rawBytes
         self.type = type
         self.boundingRect = boundingRect
     }
 
     /// Converts to dictionary for Capacitor event emission.
     public func toDictionary() -> [String: Any] {
-        return [
+        var dictionary: [String: Any] = [
             "value": value,
             "type": type,
             "boundingRect": boundingRect.toDictionary()
         ]
+
+        if let displayValue {
+            dictionary["displayValue"] = displayValue
+        }
+
+        if let rawBytes {
+            dictionary["rawBytes"] = rawBytes.map(Int.init)
+        }
+
+        return dictionary
     }
 }
 
@@ -81,7 +105,7 @@ public protocol CameraEventDelegate: AnyObject {
 /// These maintain backwards compatibility with the NotificationCenter-based event system.
 public extension Notification.Name {
     /// Posted when a barcode is detected.
-    /// UserInfo contains: "value", "type", "boundingRect"
+    /// UserInfo contains: "value", "displayValue", "rawBytes", "type", "boundingRect"
     static let cameraViewBarcodeDetected = Notification.Name("barcodeDetected")
 }
 

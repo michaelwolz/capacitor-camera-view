@@ -69,7 +69,7 @@ export interface CameraViewPlugin {
    * @param options - Optional recording configuration
    * @returns A promise that resolves when recording has started
    *
-   * @since 2.2.0
+   * @since 2.3.0
    */
   startRecording(options?: VideoRecordingOptions): Promise<void>;
 
@@ -79,7 +79,7 @@ export interface CameraViewPlugin {
    *
    * @returns A promise that resolves with the recorded video file path
    *
-   * @since 2.2.0
+   * @since 2.3.0
    */
   stopRecording(): Promise<VideoRecordingResponse>;
 
@@ -283,7 +283,7 @@ export type FlashMode = 'off' | 'on' | 'auto';
  * On iOS this maps to `AVCaptureSession.Preset` values.
  * On Android this maps to CameraX `QualitySelector` values.
  *
- * @since 2.2.0
+ * @since 2.3.0
  */
 export type VideoRecordingQuality = 'lowest' | 'sd' | 'hd' | 'fhd' | 'uhd' | 'highest';
 
@@ -458,14 +458,14 @@ export interface CaptureOptions {
 
 /**
  * Configuration options for video recording.
- * @since 2.2.0
+ * @since 2.3.0
  */
 export interface VideoRecordingOptions {
   /**
    * Whether to record audio with the video.
    * Requires microphone permission.
    * @default false
-   * @since 2.2.0
+   * @since 2.3.0
    */
   enableAudio?: boolean;
 
@@ -473,21 +473,21 @@ export interface VideoRecordingOptions {
    * Video recording quality preset.
    * Native platforms only (iOS/Android). Ignored on web.
    * @default 'highest'
-   * @since 2.2.0
+   * @since 2.3.0
    */
   videoQuality?: VideoRecordingQuality;
 }
 
 /**
  * Response from stopping a video recording.
- * @since 2.2.0
+ * @since 2.3.0
  */
 export interface VideoRecordingResponse {
   /**
    * Web-accessible path to the recorded video file.
    * On web, this is a blob URL.
    * On iOS/Android, this is a path accessible via Capacitor's filesystem.
-   * @since 2.2.0
+   * @since 2.3.0
    */
   webPath: string;
 }
@@ -599,7 +599,24 @@ export interface BarcodeDetectionData {
   /** The decoded string value of the barcode */
   value: string;
 
-  /** The display value of the barcode (may differ from the raw value) */
+  /**
+   * Raw bytes as they were encoded in the barcode.
+   *
+   * On Android, this is forwarded from ML Kit.
+   * On iOS, this is available for descriptor-backed formats such as QR, Aztec, PDF417, and Data Matrix.
+   * On web, this is not available because the Barcode Detection API only exposes the decoded string value.
+   *
+   * @since 2.2.0
+   */
+  rawBytes?: number[];
+
+  /**
+   * The display value of the barcode on Android.
+   *
+   * This is forwarded from ML Kit and may contain a formatted, human-readable
+   * representation that differs from the raw decoded value. iOS and web do not
+   * expose a separate display value, so this property is only emitted on Android.
+   */
   displayValue?: string;
 
   /** The type/format of the barcode (e.g., 'qr', 'code128', etc.) */
@@ -631,7 +648,7 @@ export interface BoundingRect {
  * - 'camera': Camera access permission
  * - 'microphone': Microphone access permission (needed for video recording with audio)
  *
- * @since 2.2.0
+ * @since 2.3.0
  */
 export type CameraPermissionType = 'camera' | 'microphone';
 

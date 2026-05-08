@@ -1,4 +1,11 @@
-import { Component, inject, model, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  model,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -97,7 +104,16 @@ export class CameraSettingsPage implements OnInit {
   protected enableAudio = model<boolean>(true);
   protected videoRecordingQuality = model<VideoRecordingQuality>('hd');
 
-  protected barcodeValue = signal<string | undefined>(undefined);
+  protected barcodeData = signal<BarcodeDetectionData | undefined>(undefined);
+  protected barcodeValue = computed(() => this.barcodeData()?.value);
+  protected barcodeDisplayValue = computed(
+    () => this.barcodeData()?.displayValue,
+  );
+  protected barcodeRawBytes = computed(() => {
+    const rawBytes = this.barcodeData()?.rawBytes;
+
+    return rawBytes?.length ? rawBytes.join(', ') : undefined;
+  });
 
   protected readonly isIos = Capacitor.getPlatform() === 'ios';
 
@@ -161,11 +177,7 @@ export class CameraSettingsPage implements OnInit {
       this.#galleryService.addVideoFromFile(data.videoWebPath);
     }
 
-    if (data?.barcode) {
-      this.barcodeValue.set(data.barcode.value);
-    } else {
-      this.barcodeValue.set(undefined);
-    }
+    this.barcodeData.set(data?.barcode);
   }
 
   async isCameraRunning() {

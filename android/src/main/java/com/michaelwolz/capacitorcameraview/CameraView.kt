@@ -108,6 +108,9 @@ class CameraView(plugin: Plugin) {
     // Track the output file for the current recording
     private var currentRecordingFile: File? = null
 
+    // Enabled CameraX use cases before video recording temporarily changes them.
+    private var enabledUseCasesBeforeRecording: Int? = null
+
     // Plugin context
     private var lifecycleOwner: LifecycleOwner? = null
     private var pluginDelegate: Plugin = plugin
@@ -409,6 +412,7 @@ class CameraView(plugin: Plugin) {
             controller.videoCaptureQualitySelector = videoQuality.toQualitySelector()
 
             // Enable VIDEO_CAPTURE use case alongside IMAGE_CAPTURE
+            enabledUseCasesBeforeRecording = controller.currentEnabledUseCases()
             controller.setEnabledUseCases(
                 CameraController.IMAGE_CAPTURE or CameraController.VIDEO_CAPTURE
             )
@@ -419,13 +423,11 @@ class CameraView(plugin: Plugin) {
             startCameraRecording(controller, outputOptions, audioConfig, continuation)
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception when starting recording. Missing permission?", e)
-            // Restore normal use cases on permission error
-            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+            restoreUseCasesAfterRecording()
             continuation.resume(CameraResult.Error(e))
         } catch (e: Exception) {
             Log.e(TAG, "Error starting recording", e)
-            // Restore normal use cases on error
-            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+            restoreUseCasesAfterRecording()
             continuation.resume(CameraResult.Error(e))
         }
     }
@@ -543,7 +545,7 @@ class CameraView(plugin: Plugin) {
     private fun finalizeRecordingAndNotifyStopCallback(event: VideoRecordEvent.Finalize) {
         mainHandler.post {
             // CameraX requires use case changes on the main thread.
-            cameraController?.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
+            restoreUseCasesAfterRecording()
 
             val callback = pendingStopCallback
             pendingStopCallback = null
@@ -574,6 +576,26 @@ class CameraView(plugin: Plugin) {
             }
             callback?.invoke(CameraResult.Success(result))
         }
+    }
+
+    private fun LifecycleCameraController.currentEnabledUseCases(): Int {
+        var enabledUseCases = 0
+        if (isImageCaptureEnabled) {
+            enabledUseCases = enabledUseCases or CameraController.IMAGE_CAPTURE
+        }
+        if (isImageAnalysisEnabled) {
+            enabledUseCases = enabledUseCases or CameraController.IMAGE_ANALYSIS
+        }
+        if (isVideoCaptureEnabled) {
+            enabledUseCases = enabledUseCases or CameraController.VIDEO_CAPTURE
+        }
+        return enabledUseCases
+    }
+
+    private fun restoreUseCasesAfterRecording() {
+        val useCases = enabledUseCasesBeforeRecording ?: CameraController.IMAGE_CAPTURE
+        enabledUseCasesBeforeRecording = null
+        cameraController?.setEnabledUseCases(useCases)
     }
 
     private fun VideoRecordingQuality.toQualitySelector(): QualitySelector {
@@ -1007,6 +1029,7 @@ class CameraView(plugin: Plugin) {
         val barcodeResult =
             BarcodeDetectionResult(
                 value = barcode.rawValue ?: "",
+                rawBytes = barcode.rawBytes ?: ByteArray(0),
                 displayValue = barcode.displayValue ?: "",
                 type = getBarcodeFormatString(barcode.format),
                 boundingRect = webBoundingRect

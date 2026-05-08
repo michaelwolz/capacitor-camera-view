@@ -443,7 +443,7 @@ Camera must be running. Throws if already recording.
 | ------------- | ----------------------------------------------------------------------- | ---------------------------------- |
 | **`options`** | <code><a href="#videorecordingoptions">VideoRecordingOptions</a></code> | - Optional recording configuration |
 
-**Since:** 2.2.0
+**Since:** 2.3.0
 
 --------------------
 
@@ -459,7 +459,7 @@ Throws if no recording is in progress.
 
 **Returns:** <code>Promise&lt;<a href="#videorecordingresponse">VideoRecordingResponse</a>&gt;</code>
 
-**Since:** 2.2.0
+**Since:** 2.3.0
 
 --------------------
 
@@ -737,8 +737,8 @@ Configuration options for video recording.
 
 | Prop               | Type                                                                    | Description                                                                          | Default                | Since |
 | ------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------- | ----- |
-| **`enableAudio`**  | <code>boolean</code>                                                    | Whether to record audio with the video. Requires microphone permission.              | <code>false</code>     | 2.2.0 |
-| **`videoQuality`** | <code><a href="#videorecordingquality">VideoRecordingQuality</a></code> | Video recording quality preset. Native platforms only (iOS/Android). Ignored on web. | <code>'highest'</code> | 2.2.0 |
+| **`enableAudio`**  | <code>boolean</code>                                                    | Whether to record audio with the video. Requires microphone permission.              | <code>false</code>     | 2.3.0 |
+| **`videoQuality`** | <code><a href="#videorecordingquality">VideoRecordingQuality</a></code> | Video recording quality preset. Native platforms only (iOS/Android). Ignored on web. | <code>'highest'</code> | 2.3.0 |
 
 
 #### VideoRecordingResponse
@@ -747,7 +747,7 @@ Response from stopping a video recording.
 
 | Prop          | Type                | Description                                                                                                                                       | Since |
 | ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 2.2.0 |
+| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 2.3.0 |
 
 
 #### GetAvailableDevicesResponse
@@ -840,12 +840,13 @@ Response for the camera and microphone permission status.
 
 Data for a detected barcode.
 
-| Prop               | Type                                                  | Description                                                      |
-| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| **`value`**        | <code>string</code>                                   | The decoded string value of the barcode                          |
-| **`displayValue`** | <code>string</code>                                   | The display value of the barcode (may differ from the raw value) |
-| **`type`**         | <code>string</code>                                   | The type/format of the barcode (e.g., 'qr', 'code128', etc.)     |
-| **`boundingRect`** | <code><a href="#boundingrect">BoundingRect</a></code> | The bounding rectangle of the barcode in the camera frame.       |
+| Prop               | Type                                                  | Description                                                                                                                                                                                                                                                                                          | Since |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`value`**        | <code>string</code>                                   | The decoded string value of the barcode                                                                                                                                                                                                                                                              |       |
+| **`rawBytes`**     | <code>number[]</code>                                 | Raw bytes as they were encoded in the barcode. On Android, this is forwarded from ML Kit. On iOS, this is available for descriptor-backed formats such as QR, Aztec, PDF417, and Data Matrix. On web, this is not available because the Barcode Detection API only exposes the decoded string value. | 2.2.0 |
+| **`displayValue`** | <code>string</code>                                   | The display value of the barcode on Android. This is forwarded from ML Kit and may contain a formatted, human-readable representation that differs from the raw decoded value. iOS and web do not expose a separate display value, so this property is only emitted on Android.                      |       |
+| **`type`**         | <code>string</code>                                   | The type/format of the barcode (e.g., 'qr', 'code128', etc.)                                                                                                                                                                                                                                         |       |
+| **`boundingRect`** | <code><a href="#boundingrect">BoundingRect</a></code> | The bounding rectangle of the barcode in the camera frame.                                                                                                                                                                                                                                           |       |
 
 
 #### BoundingRect

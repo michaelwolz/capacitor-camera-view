@@ -1,17 +1,15 @@
-# [2.2.0-rc.1](https://github.com/michaelwolz/capacitor-camera-view/compare/2.1.0...2.2.0-rc.1) (2026-02-22)
+# [2.2.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.1.0...2.2.0) (2026-04-30)
+
+
+### Bug Fixes
+
+* **example-app:** bump dependencies ([1c1644f](https://github.com/michaelwolz/capacitor-camera-view/commit/1c1644f380236e51b52ec595d84d51fc595d02f3))
+* **ios:** remove non existent displayValue property for barcodes ([78e263c](https://github.com/michaelwolz/capacitor-camera-view/commit/78e263cdcff6165965d6abfec470b13fc866a449))
 
 
 ### Features
 
-* **android:** add pending stop-recording callback for CameraX integration ([1eff5a9](https://github.com/michaelwolz/capacitor-camera-view/commit/1eff5a9c5b2ae361cad7d8bd90057883f1ec8b1a))
-* **android:** implement CameraX video recording support ([2d98c08](https://github.com/michaelwolz/capacitor-camera-view/commit/2d98c088e7aaaecb0e2ce3447344c4d7d9e56f42))
-* **example-app:** add video recording UI and gallery integration ([bcb9ae9](https://github.com/michaelwolz/capacitor-camera-view/commit/bcb9ae9f414203931165c3610c3e6cabd548aeb8))
-* **ios:** implement native video recording pipeline ([d80b0f6](https://github.com/michaelwolz/capacitor-camera-view/commit/d80b0f6cd4327690814df0f783234e59bfd88ca5))
-* **ios:** improve session handling in startRecording method ([10ca684](https://github.com/michaelwolz/capacitor-camera-view/commit/10ca684d3f9ddb24159c235a994c9bc74f2504f5))
-* **ios:** update minimum iOS platform version to 15.0 ([f727e68](https://github.com/michaelwolz/capacitor-camera-view/commit/f727e68c526e1fd300d3ac9d07c321c9da5a18a2))
-* update video recording options and documentation for backward compatibility ([78d1e9a](https://github.com/michaelwolz/capacitor-camera-view/commit/78d1e9a0a63ff0ca2c49c5ba4ce542769bb4819d))
-* **video:** add configurable recording quality ([50475eb](https://github.com/michaelwolz/capacitor-camera-view/commit/50475eb02598dcc0b2eaf3f05025ad0f21a6c658))
-* **web:** add video recording API and MediaRecorder implementation ([19ff57d](https://github.com/michaelwolz/capacitor-camera-view/commit/19ff57d301cedd8c695d9342bb870c367deca9a3))
+* add rawBytes property for barcode scanning ([4be262f](https://github.com/michaelwolz/capacitor-camera-view/commit/4be262fa1ecfc0cb400c6f3fadd293f1b0da5579))
 
 # [2.1.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.0.2...2.1.0) (2026-02-21)
 
