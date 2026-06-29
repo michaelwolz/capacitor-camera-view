@@ -197,6 +197,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       console.error('Failed to stop camera', error);
     }
 
+    // Validation for issue #23: isRunning() should report false right after stop().
+    const isRunning = await this.#cameraViewService.isRunning();
+    console.log(`Camera isRunning after stop(): ${isRunning}`);
+
     await this.#debugCurrentTorchState();
   }
 

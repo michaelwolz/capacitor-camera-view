@@ -170,6 +170,7 @@ class CameraView(plugin: Plugin) {
             currentRecordingFile = null
 
             cameraController?.unbind()
+            cameraController = null
 
             previewView?.let { view ->
                 try {
