@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/michaelwolz/capacitor-camera-view/compare/2.3.0...2.3.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **android:** correctly reflect camera running state after stopping ([c733eea](https://github.com/michaelwolz/capacitor-camera-view/commit/c733eea3990bee6e12472fda62902f4c05666220)), closes [#23](https://github.com/michaelwolz/capacitor-camera-view/issues/23)
+
 # [2.3.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.2.0...2.3.0) (2026-05-08)
 
 
