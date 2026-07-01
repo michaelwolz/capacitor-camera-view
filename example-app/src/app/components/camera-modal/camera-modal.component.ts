@@ -221,6 +221,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
           quality: this.quality(),
           saveToFile: true,
         });
+        console.log('capture() result:', {
+          path: result.path,
+          webPath: result.webPath,
+        });
         this.#modalController.dismiss({
           photo: undefined,
           webPath: result.webPath,
@@ -256,6 +260,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
         const result = await this.#cameraViewService.captureSample({
           quality: this.quality(),
           saveToFile: true,
+        });
+        console.log('captureSample() result:', {
+          path: result.path,
+          webPath: result.webPath,
         });
         this.#modalController.dismiss({
           photo: undefined,
@@ -304,6 +312,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected async stopRecording(): Promise<void> {
     try {
       const result = await this.#cameraViewService.stopRecording();
+      console.log('stopRecording() result:', {
+        path: result.path,
+        webPath: result.webPath,
+      });
       this.isRecording.set(false);
 
       await this.stopCamera();

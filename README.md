@@ -745,9 +745,10 @@ Configuration options for video recording.
 
 Response from stopping a video recording.
 
-| Prop          | Type                | Description                                                                                                                                       | Since |
-| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file. On web, this is a blob URL. On iOS/Android, this is a path accessible via Capacitor's filesystem. | 2.3.0 |
+| Prop          | Type                | Description                                                                                                                                                                                                                                                    | Since |
+| ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`webPath`** | <code>string</code> | Web-accessible path to the recorded video file that can be used to set the `src` attribute of a video element for efficient loading and rendering. On web, this is a blob URL. On iOS/Android, this is a Capacitor bridge path served by the local web server. | 2.3.0 |
+| **`path`**    | <code>string</code> | The full, platform-specific file URL (`file://...`) to the recorded video, usable with the Filesystem API or `Capacitor.convertFileSrc()`. Native only (iOS/Android); `undefined` on web.                                                                      | 2.4.0 |
 
 
 #### GetAvailableDevicesResponse
@@ -897,7 +898,7 @@ Response for capturing a photo
 This will contain either a base64 encoded string or a web path to the captured photo,
 depending on the `saveToFile` option in the <a href="#captureoptions">CaptureOptions</a>.
 
-<code>T['saveToFile'] extends true ? { /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */ webPath: string; } : { /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */ photo: string; }</code>
+<code>T['saveToFile'] extends true ? { /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */ webPath: string; /** * The full, platform-specific file URL (`file://...`) to the captured photo, * usable with the Filesystem API or `Capacitor.convertFileSrc()`. * Native only (iOS/Android); `undefined` on web. * @since 2.4.0 */ path?: string; } : { /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */ photo: string; }</code>
 
 
 #### VideoRecordingQuality

@@ -142,7 +142,10 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
                         return
                     }
                     
-                    call.resolve(["webPath": webPath])
+                    call.resolve([
+                        "path": tempFileURL.absoluteString,
+                        "webPath": webPath,
+                    ])
                 } catch {
                     call.reject("Failed to save image to file", nil, error)
                 }
@@ -192,7 +195,10 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
                         return
                     }
                     
-                    call.resolve(["webPath": webPath])
+                    call.resolve([
+                        "path": tempFileURL.absoluteString,
+                        "webPath": webPath,
+                    ])
                 } catch {
                     call.reject("Failed to save sample to file", nil, error)
                 }
@@ -258,10 +264,13 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
                 return
             }
             
-            call.resolve(["webPath": webPath])
+            call.resolve([
+                "path": outputURL.absoluteString,
+                "webPath": webPath,
+            ])
         }
     }
-    
+
     @objc func getAvailableDevices(_ call: CAPPluginCall) {
         let devices = implementation.getAvailableDevices()
         

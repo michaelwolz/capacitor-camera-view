@@ -260,6 +260,7 @@ class CameraView(plugin: Plugin) {
                                         Uri.fromFile(tempFile)
                                     )
 
+                                    put("path", Uri.fromFile(tempFile).toString())
                                     put("webPath", capacitorFilePath)
                                 }
                                 continuation.resume(CameraResult.Success(result))
@@ -359,6 +360,7 @@ class CameraView(plugin: Plugin) {
                     Uri.fromFile(tempFile)
                 )
 
+                result.put("path", Uri.fromFile(tempFile).toString())
                 result.put("webPath", capacitorFilePath)
             } else {
                 // Convert bitmap to Base64 using pooled stream
@@ -573,6 +575,7 @@ class CameraView(plugin: Plugin) {
                 Uri.fromFile(file)
             )
             val result = JSObject().apply {
+                put("path", Uri.fromFile(file).toString())
                 put("webPath", capacitorFilePath)
             }
             callback?.invoke(CameraResult.Success(result))

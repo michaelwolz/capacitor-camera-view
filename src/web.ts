@@ -200,7 +200,8 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       const quality = Math.min(1.0, Math.max(0.1, options.quality / 100));
 
       if (options.saveToFile) {
-        // Create a blob from canvas and return a blob URL
+        // Create a blob from canvas and return a blob URL.
+        // `path` is native-only (no filesystem path on web), so it is omitted here.
         return new Promise((resolve, reject) => {
           canvas.toBlob(
             (blob) => {

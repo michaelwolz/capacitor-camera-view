@@ -484,12 +484,21 @@ export interface VideoRecordingOptions {
  */
 export interface VideoRecordingResponse {
   /**
-   * Web-accessible path to the recorded video file.
+   * Web-accessible path to the recorded video file that can be used to set the
+   * `src` attribute of a video element for efficient loading and rendering.
    * On web, this is a blob URL.
-   * On iOS/Android, this is a path accessible via Capacitor's filesystem.
+   * On iOS/Android, this is a Capacitor bridge path served by the local web server.
    * @since 2.3.0
    */
   webPath: string;
+
+  /**
+   * The full, platform-specific file URL (`file://...`) to the recorded video,
+   * usable with the Filesystem API or `Capacitor.convertFileSrc()`.
+   * Native only (iOS/Android); `undefined` on web.
+   * @since 2.4.0
+   */
+  path?: string;
 }
 
 // ------------------------------------------------------------------------------
@@ -516,6 +525,14 @@ export type CaptureResponse<T extends CaptureOptions = CaptureOptions> = T['save
   ? {
       /** The web path to the captured photo that can be used to set the src attribute of an image for efficient loading and rendering (when saveToFile is true) */
       webPath: string;
+
+      /**
+       * The full, platform-specific file URL (`file://...`) to the captured photo,
+       * usable with the Filesystem API or `Capacitor.convertFileSrc()`.
+       * Native only (iOS/Android); `undefined` on web.
+       * @since 2.4.0
+       */
+      path?: string;
     }
   : {
       /** The base64 encoded string of the captured photo (when saveToFile is false or undefined) */
