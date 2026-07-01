@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.3.1...2.4.0) (2026-07-01)
+
+
+### Features
+
+* add platform specific `path` to file results ([6ab4631](https://github.com/michaelwolz/capacitor-camera-view/commit/6ab4631d241dbaed4df29fa5db9414fc7f3ff91a)), closes [#26](https://github.com/michaelwolz/capacitor-camera-view/issues/26)
+
 ## [2.3.1](https://github.com/michaelwolz/capacitor-camera-view/compare/2.3.0...2.3.1) (2026-06-29)
 
 
