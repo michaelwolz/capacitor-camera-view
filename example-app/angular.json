@@ -23,7 +23,6 @@
               "browser": ""
             },
             "index": "src/index.html",
-            "polyfills": ["src/polyfills.ts"],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
@@ -33,7 +32,9 @@
                 "output": "assets"
               }
             ],
-            "styles": ["src/global.scss"],
+            "styles": [
+              "src/global.scss"
+            ],
             "scripts": [],
             "browser": "src/main.ts"
           },
@@ -96,7 +97,6 @@
           "builder": "@angular/build:karma",
           "options": {
             "main": "src/test.ts",
-            "polyfills": "src/polyfills.ts",
             "tsConfig": "tsconfig.spec.json",
             "karmaConfig": "karma.conf.js",
             "inlineStyleLanguage": "scss",
@@ -107,7 +107,9 @@
                 "output": "assets"
               }
             ],
-            "styles": ["src/global.scss"],
+            "styles": [
+              "src/global.scss"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -120,7 +122,10 @@
         "lint": {
           "builder": "@angular-eslint/builder:lint",
           "options": {
-            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html"
+            ]
           }
         }
       }
