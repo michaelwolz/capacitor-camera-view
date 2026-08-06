@@ -15,7 +15,7 @@ public struct BarcodeDetectedEvent: Sendable {
     /// Raw bytes as they were encoded in the barcode when the platform exposes them.
     public let rawBytes: [UInt8]?
 
-    /// The type of barcode detected (e.g., "org.iso.QRCode").
+    /// The type of barcode detected, normalized to the shared BarcodeType vocabulary (e.g., "qr").
     public let type: String
 
     /// The bounding rectangle of the barcode in screen coordinates.
@@ -97,37 +97,59 @@ public protocol CameraEventDelegate: AnyObject {
     /// Called when a barcode is detected in the camera feed.
     /// - Parameter event: The barcode detection event with all relevant data.
     func cameraDidDetectBarcode(_ event: BarcodeDetectedEvent)
+
+    /// Called when the capture session is interrupted (e.g. phone call, another
+    /// app claiming the camera, iPad Split View camera loss).
+    /// - Parameter reason: A stable string describing the interruption reason.
+    func cameraWasInterrupted(reason: String)
+
+    /// Called when a capture-session interruption ends and the session resumes.
+    func cameraInterruptionEnded()
+
+    /// Called when the capture session hits a runtime error.
+    /// - Parameters:
+    ///   - message: A human-readable description of the error.
+    ///   - code: The underlying `AVError` code, when available.
+    func cameraRuntimeError(message: String, code: Int?)
 }
 
-// MARK: - Notification Names
-
-/// Extension for camera-related notification names.
-/// These maintain backwards compatibility with the NotificationCenter-based event system.
-public extension Notification.Name {
-    /// Posted when a barcode is detected.
-    /// UserInfo contains: "value", "displayValue", "rawBytes", "type", "boundingRect"
-    static let cameraViewBarcodeDetected = Notification.Name("barcodeDetected")
+/// Default no-op implementations so conformers only implement the events they
+/// care about (and adding new events here stays source-compatible).
+public extension CameraEventDelegate {
+    func cameraWasInterrupted(reason: String) {}
+    func cameraInterruptionEnded() {}
+    func cameraRuntimeError(message: String, code: Int?) {}
 }
 
 // MARK: - Event Emitter Helper
 
-/// Helper class for emitting camera events through both delegate and NotificationCenter.
-/// This maintains backwards compatibility while enabling the new typed delegate pattern.
+/// Helper class for emitting camera events through the typed delegate.
 internal final class CameraEventEmitter {
     /// Weak reference to the delegate to avoid retain cycles.
     weak var delegate: CameraEventDelegate?
 
-    /// Emits a barcode detected event through both channels.
+    /// Emits a barcode detected event to the delegate.
     /// - Parameter event: The barcode detection event to emit.
     func emitBarcodeDetected(_ event: BarcodeDetectedEvent) {
-        // Call typed delegate first (preferred path)
         delegate?.cameraDidDetectBarcode(event)
+    }
 
-        // Also post to NotificationCenter for backwards compatibility
-        NotificationCenter.default.post(
-            name: .cameraViewBarcodeDetected,
-            object: nil,
-            userInfo: event.toDictionary()
-        )
+    /// Emits a camera interruption event to the delegate.
+    /// - Parameter reason: A stable string describing the interruption reason.
+    func emitCameraInterrupted(reason: String) {
+        delegate?.cameraWasInterrupted(reason: reason)
+    }
+
+    /// Emits a camera resumed event to the delegate.
+    func emitCameraResumed() {
+        delegate?.cameraInterruptionEnded()
+    }
+
+    /// Emits a camera runtime error event to the delegate.
+    /// - Parameters:
+    ///   - message: A human-readable description of the error.
+    ///   - code: The underlying `AVError` code, when available.
+    func emitCameraRuntimeError(message: String, code: Int?) {
+        delegate?.cameraRuntimeError(message: message, code: code)
     }
 }

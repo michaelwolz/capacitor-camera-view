@@ -25,6 +25,26 @@ public struct CameraSessionConfiguration: Sendable {
 
     /// Initial zoom factor.
     let zoomFactor: CGFloat?
+
+    /// Whether to prioritize photo quality over capture responsiveness.
+    /// When `false` (default) the plugin opts into the iOS 17+ responsive-capture
+    /// pipeline (zero-shutter-lag, responsive capture, fast capture prioritization)
+    /// where supported. When `true` those optimizations are skipped so captures
+    /// always prioritize quality.
+    let prioritizeQuality: Bool
+
+    /// Desired sensor aspect ratio ("4:3" or "16:9") for both the preview and
+    /// photo capture. `nil` keeps the default `.photo` session preset (4:3).
+    let aspectRatio: String?
+
+    /// Optional upper bound, in pixels, for the longer edge of captured
+    /// photos. `nil` keeps the photo output's default dimensions.
+    let captureMaxDimension: Int?
+
+    /// How the preview is scaled into its container. `"fit"` letterboxes the
+    /// whole frame (`.resizeAspect`); any other value (including `nil`) keeps
+    /// the default cover behavior (`.resizeAspectFill`).
+    let previewScaleMode: String?
 }
 
 /// Maps a Capacitor plugin call to a CameraSessionConfiguration struct.
@@ -37,6 +57,10 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
     let preferredCameraDeviceTypes = call.getArray("preferredCameraDeviceTypes") as? [String]
     let useTripleCameraIfAvailable = call.getBool("useTripleCameraIfAvailable", false)
     let zoomFactor = call.getDouble("zoomFactor").map { CGFloat($0) }
+    let prioritizeQuality = call.getBool("prioritizeQuality", false)
+    let aspectRatio = call.getString("aspectRatio")
+    let captureMaxDimension = call.getInt("captureMaxDimension")
+    let previewScaleMode = call.getString("previewScaleMode")
 
     // Parse barcode types if provided
     let barcodeTypes: [AVMetadataObject.ObjectType]?
@@ -54,6 +78,10 @@ public func sessionConfigFromPluginCall(_ call: CAPPluginCall) -> CameraSessionC
         position: position,
         preferredCameraDeviceTypes: preferredCameraDeviceTypes,
         useTripleCameraIfAvailable: useTripleCameraIfAvailable,
-        zoomFactor: zoomFactor
+        zoomFactor: zoomFactor,
+        prioritizeQuality: prioritizeQuality,
+        aspectRatio: aspectRatio,
+        captureMaxDimension: captureMaxDimension,
+        previewScaleMode: previewScaleMode
     )
 }

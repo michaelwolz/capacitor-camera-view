@@ -1,4 +1,11 @@
 import AVFoundation
+import ImageIO
+import os
+import UniformTypeIdentifiers
+
+/// Shared logger for camera plugin diagnostics (visible in Console.app / `log stream`),
+/// used instead of `print()` so failures are visible in production logs.
+internal let cameraViewLogger = Logger(subsystem: "com.michaelwolz.capacitorcameraview", category: "CameraViewManager")
 
 // MARK: - Camera Type Conversion
 
@@ -57,25 +64,66 @@ public func convertToNativeCameraTypes(_ stringTypes: [String]) -> [AVCaptureDev
     return stringTypes.compactMap { convertToNativeCameraType($0) }
 }
 
-/// Creates a temporary file URL for storing captured images
-/// @deprecated Use TempFileManager.shared.createTempImageFile() for automatic cleanup
-public func createTempImageFile() throws -> URL {
-    let timestamp = Int(Date().timeIntervalSince1970 * 1000)
-    let fileName = "camera_capture_\(timestamp).jpg"
-    let tempDir = FileManager.default.temporaryDirectory
-    return tempDir.appendingPathComponent(fileName)
+// MARK: - Image Re-encoding
+
+/// Re-encodes JPEG data at a lower compression quality while preserving the
+/// original image metadata (EXIF, TIFF, GPS, orientation, etc.).
+///
+/// Uses ImageIO directly instead of round-tripping through `UIImage`/
+/// `UIImage.jpegData(compressionQuality:)`, which silently drops all metadata
+/// from the source JPEG.
+///
+/// - Parameters:
+///   - data: The source JPEG data.
+///   - compressionQuality: The lossy compression quality (0.0-1.0).
+/// - Returns: The re-encoded JPEG data, or nil if the source data or
+///   destination could not be created.
+public func reencodeJPEG(data: Data, compressionQuality: CGFloat) -> Data? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+        return nil
+    }
+
+    let destinationData = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(
+        destinationData,
+        UTType.jpeg.identifier as CFString,
+        1,
+        nil
+    ) else {
+        return nil
+    }
+
+    // Start from the source image's own metadata so EXIF/GPS/orientation
+    // survive the re-encode, then layer the compression quality on top.
+    var properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]) ?? [:]
+    properties[kCGImageDestinationLossyCompressionQuality] = compressionQuality
+
+    CGImageDestinationAddImageFromSource(destination, source, 0, properties as CFDictionary)
+
+    guard CGImageDestinationFinalize(destination) else {
+        return nil
+    }
+
+    return destinationData as Data
 }
 
 // MARK: - Barcode Type Conversion
 
 /// All supported barcode types for detection.
 /// These are enabled by default when no specific types are configured.
+///
+/// Note: there is no UPC-A entry. AVFoundation has no UPC-A metadata object
+/// type and reports UPC-A codes as `.ean13` (a UPC-A value is an EAN-13 with a
+/// leading `0`), so on iOS the `upcA` union member is neither requestable nor
+/// emitted — such codes arrive as `ean13`. `.codabar` is available since iOS
+/// 15.4; the deployment target is 16, so no availability guard is needed.
 public let ALL_SUPPORTED_BARCODE_TYPES: [AVMetadataObject.ObjectType] = [
     .qr,
     .code128,
     .code39,
     .code39Mod43,
     .code93,
+    .codabar,
     .ean8,
     .ean13,
     .interleaved2of5,
@@ -101,6 +149,10 @@ public func convertToNativeBarcodeType(_ stringType: String) -> AVMetadataObject
         return .code39Mod43
     case "code93":
         return .code93
+    case "codabar":
+        return .codabar
+    // Note: "upcA" is intentionally unmapped. AVFoundation has no UPC-A metadata
+    // type and reports UPC-A codes as .ean13, so it cannot be requested on iOS.
     case "ean8":
         return .ean8
     case "ean13":
@@ -137,6 +189,8 @@ public func convertToStringBarcodeType(_ barcodeType: AVMetadataObject.ObjectTyp
         return "code39Mod43"
     case .code93:
         return "code93"
+    case .codabar:
+        return "codabar"
     case .ean8:
         return "ean8"
     case .ean13:

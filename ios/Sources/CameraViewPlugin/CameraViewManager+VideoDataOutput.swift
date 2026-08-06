@@ -31,6 +31,21 @@ extension CameraViewManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         captureSession.addOutput(avVideoDataOutput)
+        deferStart(of: avVideoDataOutput)
+    }
+
+    /// Atomically consumes the snapshot completion handler and cancels its
+    /// timeout. Returns the handler to the caller that wins the race (frame
+    /// delivery or timeout) and `nil` to any later caller.
+    internal func consumeSnapshotHandler() -> ((UIImage?, Error?) -> Void)? {
+        captureHandlerLock.lock()
+        defer { captureHandlerLock.unlock() }
+
+        guard let handler = snapshotCompletionHandler else { return nil }
+        snapshotCompletionHandler = nil
+        snapshotTimeoutWorkItem?.cancel()
+        snapshotTimeoutWorkItem = nil
+        return handler
     }
 
     /// Capture a snapshot from the camera feed using the shared Metal-backed CIContext.
@@ -39,12 +54,12 @@ extension CameraViewManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // Only process if we have a completion handler set
-        guard let completionHandler = snapshotCompletionHandler else { return }
+        // Atomically claim the snapshot; returns nil if it was already consumed
+        // (e.g. by the timeout) or if no capture is in flight. This also cancels
+        // the timeout so the promise settles exactly once.
+        guard let completionHandler = consumeSnapshotHandler() else { return }
 
-        // Clear the completion handler to ensure we only capture one frame
-        snapshotCompletionHandler = nil
-
+        // Stop delivery to ensure we only capture one frame.
         avVideoDataOutput.setSampleBufferDelegate(nil, queue: nil)
 
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -68,12 +83,9 @@ extension CameraViewManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         _ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // If we have a completion handler and a frame was dropped, report the error
-        if let completionHandler = snapshotCompletionHandler {
-            snapshotCompletionHandler = nil
-            avVideoDataOutput.setSampleBufferDelegate(nil, queue: nil)
-
-            completionHandler(nil, CameraError.frameCaptureError)
-        }
+        // With `alwaysDiscardsLateVideoFrames` enabled a transient dropped frame
+        // is normal and must not fail the capture. Keep the delegate installed
+        // and wait for the next delivered frame; the timeout guards against the
+        // case where no frame ever arrives.
     }
 }

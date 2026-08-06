@@ -1,16 +1,19 @@
 import AVFoundation
 import Foundation
-import UIKit
 
 extension CameraViewManager: AVCapturePhotoCaptureDelegate {
     /// Set up output for the capture session in case it's not configured yet
     /// Make sure to call `captureSession.beginConfiguration` before calling this
     ///
+    /// - Parameter prioritizeQuality: When `true`, the iOS 17+ responsive-capture
+    ///   optimizations are skipped so captures always prioritize quality.
     /// - Throws: An error if the output cannot be set.
-    internal func setupPhotoOutput() throws {
+    internal func setupPhotoOutput(prioritizeQuality: Bool = false) throws {
         if (captureSession.outputs.contains { $0 is AVCapturePhotoOutput }) {
-            // Nothing todo, we already have an output and since we only
-            // use outputs for taking photos here we don't need a new one
+            // The output already exists (session restart) - still reconfigure
+            // the responsiveness pipeline, since prioritizeQuality may have
+            // changed between sessions.
+            configureResponsiveCapture(prioritizeQuality: prioritizeQuality)
             return
         }
 
@@ -22,12 +25,67 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
         }
 
         captureSession.addOutput(avPhotoOutput)
+        deferStart(of: avPhotoOutput)
+
+        configureResponsiveCapture(prioritizeQuality: prioritizeQuality)
     }
 
-    /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`
+    /// Applies the iOS 17+ capture-responsiveness state on the photo output where
+    /// supported, reducing shot-to-shot latency.
     ///
-    /// This method handles both the legacy UIImage-based callback and the optimized Data-based
-    /// callback to eliminate double JPEG encoding when possible.
+    /// Ordering matters: responsive capture requires zero-shutter-lag, and fast
+    /// capture prioritization requires responsive capture, so capabilities are
+    /// enabled prerequisite-first and disabled dependent-first.
+    ///
+    /// - Parameter prioritizeQuality: When `true`, the optimizations are turned
+    ///   off (not merely skipped) so a session restart that flips the option
+    ///   always prioritizes quality.
+    private func configureResponsiveCapture(prioritizeQuality: Bool) {
+        if #available(iOS 17.0, *) {
+            let enable = !prioritizeQuality
+
+            if enable {
+                if avPhotoOutput.isZeroShutterLagSupported {
+                    avPhotoOutput.isZeroShutterLagEnabled = true
+                }
+
+                if avPhotoOutput.isResponsiveCaptureSupported {
+                    avPhotoOutput.isResponsiveCaptureEnabled = true
+
+                    // Fast capture prioritization requires responsive capture
+                    // to be enabled first.
+                    if avPhotoOutput.isFastCapturePrioritizationSupported {
+                        avPhotoOutput.isFastCapturePrioritizationEnabled = true
+                    }
+                }
+            } else {
+                // Disable dependents before their prerequisites.
+                if avPhotoOutput.isFastCapturePrioritizationSupported {
+                    avPhotoOutput.isFastCapturePrioritizationEnabled = false
+                }
+                if avPhotoOutput.isResponsiveCaptureSupported {
+                    avPhotoOutput.isResponsiveCaptureEnabled = false
+                }
+                if avPhotoOutput.isZeroShutterLagSupported {
+                    avPhotoOutput.isZeroShutterLagEnabled = false
+                }
+            }
+        }
+    }
+
+    /// Atomically consumes the photo completion handler so a photo-output
+    /// delegate callback can never race handler assignment on the capture thread.
+    internal func consumePhotoDataHandler() -> ((Data?, Error?) -> Void)? {
+        captureHandlerLock.lock()
+        defer { captureHandlerLock.unlock() }
+
+        let dataHandler = photoDataCaptureHandler
+        photoDataCaptureHandler = nil
+        return dataHandler
+    }
+
+    /// Delegate method called when a photo has been captured via `AVCapturePhotoCaptureDelegate`.
+    /// Returns the camera's native JPEG data directly, avoiding a double JPEG encode.
     ///
     /// - Parameters:
     ///   - output: The photo output that captured the photo.
@@ -38,45 +96,19 @@ extension CameraViewManager: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        // Handle optimized Data-based callback first (avoids double encoding)
-        if let dataHandler = photoDataCaptureHandler {
-            photoDataCaptureHandler = nil
+        guard let dataHandler = consumePhotoDataHandler() else { return }
 
-            if let error = error {
-                dataHandler(nil, error)
-                return
-            }
-
-            guard let data = photo.fileDataRepresentation() else {
-                dataHandler(nil, CameraError.photoOutputError)
-                return
-            }
-
-            dataHandler(data, nil)
+        if let error = error {
+            dataHandler(nil, error)
             return
         }
 
-        // Handle legacy UIImage-based callback
-        if let imageHandler = photoCaptureHandler {
-            photoCaptureHandler = nil
-
-            if let error = error {
-                imageHandler(nil, error)
-                return
-            }
-
-            guard let data = photo.fileDataRepresentation() else {
-                imageHandler(nil, CameraError.photoOutputError)
-                return
-            }
-
-            guard let image = UIImage(data: data) else {
-                imageHandler(nil, CameraError.photoOutputError)
-                return
-            }
-
-            imageHandler(image, nil)
+        guard let data = photo.fileDataRepresentation() else {
+            dataHandler(nil, CameraError.photoOutputError)
+            return
         }
+
+        dataHandler(data, nil)
     }
 
 }
