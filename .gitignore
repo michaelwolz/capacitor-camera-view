@@ -70,3 +70,7 @@ captures
 .externalNativeBuild
 .claude
 .worktrees
+.superpowers
+.scratch
+docs/agents
+

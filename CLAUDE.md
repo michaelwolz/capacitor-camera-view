@@ -70,3 +70,17 @@ Uses semantic-release with conventional commits. Commit messages must follow the
 - `feat(scope): description` - New features (minor version bump)
 - `fix(scope): description` - Bug fixes (patch version bump)
 - `chore: description` - Maintenance tasks (no version bump)
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix), unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "capacitor-expert": {
+      "source": "capawesome-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-expert/SKILL.md",
+      "computedHash": "1f15295f56769c715fddf5cda8c296436dfb4a8f382599ca2332754c10a362fd"
+    },
+    "capacitor-plugin-development": {
+      "source": "capawesome-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-plugin-development/SKILL.md",
+      "computedHash": "683a5ed80aab0f125a86ca9241064ffa69789a0697aad1c7bedcb76d35a0cab9"
+    },
+    "capacitor-plugin-upgrades": {
+      "source": "capawesome-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-plugin-upgrades/SKILL.md",
+      "computedHash": "4967087ebfdb4475162f4299713f7127ba1841b4b38711e0f61148434161f9a0"
+    }
+  }
+}
