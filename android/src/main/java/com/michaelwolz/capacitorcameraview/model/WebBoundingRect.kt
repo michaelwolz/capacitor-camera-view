@@ -1,6 +1,6 @@
 package com.michaelwolz.capacitorcameraview.model
 
-/** Normalized rectangle for barcode bounds. */
+/** Rectangle for barcode bounds in display/CSS pixels within the webview coordinate space. */
 data class WebBoundingRect(
     /** Top left x coordinate of the rectangle. */
     val x: Float,

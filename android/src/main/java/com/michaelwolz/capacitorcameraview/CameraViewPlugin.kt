@@ -52,7 +52,7 @@ class CameraViewPlugin : Plugin() {
         if (getPermissionState("camera") == PermissionState.GRANTED) {
             startCamera(call)
         } else {
-            call.reject("Permission is required to take a picture")
+            call.reject("Permission is required to take a picture", CameraError.PERMISSION_DENIED)
         }
     }
 
@@ -60,21 +60,35 @@ class CameraViewPlugin : Plugin() {
         val config = sessionConfigFromPluginCall(call)
 
         pluginScope.launch {
+            // Cancel any previous collector and, if this session wants barcode
+            // detection, subscribe a fresh one *before* starting the session.
+            // `barcodeEvents` has replay = 0, so a detection emitted between
+            // analyzer attachment (inside startSessionAsync -> bindToLifecycle)
+            // and collector subscription would otherwise be silently dropped -
+            // subscribing here, before startSessionAsync even runs, closes
+            // that window entirely. pluginScope uses Dispatchers.Main.immediate,
+            // so this nested launch's `collect` call registers its slot on the
+            // SharedFlow synchronously before control returns here.
+            barcodeJob?.cancel()
+            barcodeJob = if (config.enableBarcodeDetection) {
+                pluginScope.launch {
+                    implementation.barcodeEvents.collect { result ->
+                        notifyBarcodeDetected(result)
+                    }
+                }
+            } else {
+                null
+            }
+
             implementation.startSessionAsync(config).fold(
                 onSuccess = {
-                    // Subscribe to barcode events if detection is enabled
-                    if (config.enableBarcodeDetection) {
-                        barcodeJob?.cancel()
-                        barcodeJob = pluginScope.launch {
-                            implementation.barcodeEvents.collect { result ->
-                                notifyBarcodeDetected(result)
-                            }
-                        }
-                    }
                     call.resolve()
                 },
                 onError = { error ->
-                    call.reject("Failed to start camera preview: ${error.localizedMessage}", error)
+                    // The session never started - don't leak a live collector.
+                    barcodeJob?.cancel()
+                    barcodeJob = null
+                    call.reject("Failed to start camera preview: ${error.localizedMessage}", error.cameraErrorCode, error)
                 }
             )
         }
@@ -90,7 +104,7 @@ class CameraViewPlugin : Plugin() {
             implementation.stopSessionAsync().fold(
                 onSuccess = { call.resolve() },
                 onError = { error ->
-                    call.reject("Failed to stop camera preview: ${error.localizedMessage}", error)
+                    call.reject("Failed to stop camera preview: ${error.localizedMessage}", error.cameraErrorCode, error)
                 }
             )
         }
@@ -111,7 +125,7 @@ class CameraViewPlugin : Plugin() {
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
-            call.reject("Quality must be between 0 and 100")
+            call.reject("Quality must be between 0 and 100", CameraError.INVALID_ARGUMENT)
             return
         }
 
@@ -122,7 +136,7 @@ class CameraViewPlugin : Plugin() {
                     Log.d(TAG, "capture took ${System.currentTimeMillis() - timeStart}ms")
                 },
                 onError = { error ->
-                    call.reject("Failed to capture image: ${error.message}", error)
+                    call.reject("Failed to capture image: ${error.message}", error.cameraErrorCode, error)
                     Log.d(TAG, "capture failed after ${System.currentTimeMillis() - timeStart}ms")
                 }
             )
@@ -136,7 +150,7 @@ class CameraViewPlugin : Plugin() {
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
-            call.reject("Quality must be between 0 and 100")
+            call.reject("Quality must be between 0 and 100", CameraError.INVALID_ARGUMENT)
             return
         }
 
@@ -147,7 +161,7 @@ class CameraViewPlugin : Plugin() {
                     Log.d(TAG, "captureSample took ${System.currentTimeMillis() - timeStart}ms")
                 },
                 onError = { error ->
-                    call.reject("Failed to capture frame: ${error.message}", error)
+                    call.reject("Failed to capture frame: ${error.message}", error.cameraErrorCode, error)
                     Log.d(
                         TAG,
                         "captureSample failed after ${System.currentTimeMillis() - timeStart}ms"
@@ -201,7 +215,10 @@ class CameraViewPlugin : Plugin() {
         val videoQuality =
             parseVideoRecordingQuality(call.getString("videoQuality"))
                 ?: run {
-                    call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                    call.reject(
+                        "Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest",
+                        CameraError.INVALID_ARGUMENT
+                    )
                     return
                 }
 
@@ -220,12 +237,15 @@ class CameraViewPlugin : Plugin() {
             val videoQuality =
                 parseVideoRecordingQuality(call.getString("videoQuality"))
                     ?: run {
-                        call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+                        call.reject(
+                            "Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest",
+                            CameraError.INVALID_ARGUMENT
+                        )
                         return
                     }
             doStartRecording(call, enableAudio, videoQuality)
         } else {
-            call.reject("Microphone permission is required for audio recording")
+            call.reject("Microphone permission is required for audio recording", CameraError.PERMISSION_DENIED)
         }
     }
 
@@ -242,7 +262,7 @@ class CameraViewPlugin : Plugin() {
             implementation.startRecordingAsync(enableAudio, videoQuality).fold(
                 onSuccess = { call.resolve() },
                 onError = { error ->
-                    call.reject("Failed to start recording: ${error.message}", error)
+                    call.reject("Failed to start recording: ${error.message}", error.cameraErrorCode, error)
                 }
             )
         }
@@ -254,7 +274,7 @@ class CameraViewPlugin : Plugin() {
             implementation.stopRecordingAsync().fold(
                 onSuccess = { result -> call.resolve(result) },
                 onError = { error ->
-                    call.reject("Failed to stop recording: ${error.message}", error)
+                    call.reject("Failed to stop recording: ${error.message}", error.cameraErrorCode, error)
                 }
             )
         }
@@ -269,6 +289,7 @@ class CameraViewPlugin : Plugin() {
                     put("id", device.id)
                     put("name", device.name)
                     put("position", device.position)
+                    device.deviceType?.let { put("deviceType", it) }
                 })
             }
         }
@@ -280,7 +301,7 @@ class CameraViewPlugin : Plugin() {
     fun flipCamera(call: PluginCall) {
         implementation.flipCamera { error ->
             if (error != null) {
-                call.reject("Failed to flip camera: ${error.localizedMessage}", error)
+                call.reject("Failed to flip camera: ${error.localizedMessage}", error.cameraErrorCode, error)
             } else {
                 call.resolve()
             }
@@ -302,13 +323,32 @@ class CameraViewPlugin : Plugin() {
     fun setZoom(call: PluginCall) {
         val level = call.getFloat("level")
         if (level == null) {
-            call.reject("Zoom level must be provided")
+            call.reject("Zoom level must be provided", CameraError.INVALID_ARGUMENT)
             return
         }
 
         implementation.setZoomFactor(level) { error ->
             if (error != null) {
-                call.reject(error.localizedMessage)
+                call.reject(error.localizedMessage ?: "Failed to set zoom level", error.cameraErrorCode, error)
+            } else {
+                call.resolve()
+            }
+        }
+    }
+
+    @PluginMethod
+    fun setFocusPoint(call: PluginCall) {
+        val x = call.getFloat("x")
+        val y = call.getFloat("y")
+
+        if (x == null || y == null) {
+            call.reject("Focus point x and y must be provided", CameraError.INVALID_ARGUMENT)
+            return
+        }
+
+        implementation.setFocusPoint(x, y) { error ->
+            if (error != null) {
+                call.reject("Failed to set focus point: ${error.localizedMessage}", error.cameraErrorCode, error)
             } else {
                 call.resolve()
             }
@@ -337,21 +377,22 @@ class CameraViewPlugin : Plugin() {
     fun setFlashMode(call: PluginCall) {
         val mode = call.getString("mode")
         if (mode == null) {
-            call.reject("Flash mode must be provided")
+            call.reject("Flash mode must be provided", CameraError.INVALID_ARGUMENT)
             return
         }
 
         val validModes = listOf("off", "on", "auto")
         if (!validModes.contains(mode)) {
-            call.reject("Invalid flash mode. Must be one of: ${validModes.joinToString(", ")}")
+            call.reject("Invalid flash mode. Must be one of: ${validModes.joinToString(", ")}", CameraError.INVALID_ARGUMENT)
             return
         }
 
-        try {
-            implementation.setFlashMode(mode)
-            call.resolve()
-        } catch (e: Exception) {
-            call.reject("Failed to set flash mode: ${e.localizedMessage}", e)
+        implementation.setFlashMode(mode) { error ->
+            if (error != null) {
+                call.reject("Failed to set flash mode: ${error.localizedMessage}", error.cameraErrorCode, error)
+            } else {
+                call.resolve()
+            }
         }
     }
 
@@ -366,14 +407,10 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getTorchMode(call: PluginCall) {
-        implementation.getTorchMode { enabled ->
+        implementation.getTorchMode { state ->
             call.resolve(JSObject().apply {
-                put("enabled", enabled)
-                put(
-                    "level",
-                    // Android always uses full intensity when enabled
-                    if (enabled) 1.0f else 0.0f
-                )
+                put("enabled", state.enabled)
+                put("level", state.level)
             })
         }
     }
@@ -382,13 +419,19 @@ class CameraViewPlugin : Plugin() {
     fun setTorchMode(call: PluginCall) {
         val enabled = call.getBoolean("enabled")
         if (enabled == null) {
-            call.reject("Enabled parameter is required")
+            call.reject("Enabled parameter is required", CameraError.INVALID_ARGUMENT)
             return
         }
 
-        implementation.setTorchMode(enabled) { error ->
+        val level = call.getFloat("level")
+        if (level != null && (level < 0.0f || level > 1.0f)) {
+            call.reject("Level must be between 0.0 and 1.0", CameraError.INVALID_ARGUMENT)
+            return
+        }
+
+        implementation.setTorchMode(enabled, level) { error ->
             if (error != null) {
-                call.reject("Failed to set torch mode: ${error.localizedMessage}", error)
+                call.reject("Failed to set torch mode: ${error.localizedMessage}", error.cameraErrorCode, error)
             } else {
                 call.resolve()
             }
@@ -396,9 +439,10 @@ class CameraViewPlugin : Plugin() {
     }
 
     /**
-     * Called by the CameraView when a barcode is detected.
+     * Notifies JS listeners of a barcode detection collected from
+     * [CameraView.barcodeEvents].
      */
-    fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
+    private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
         val rawBytesArray = JSArray().apply {
             result.rawBytes.forEach { put(it.toInt() and 0xFF) }
         }

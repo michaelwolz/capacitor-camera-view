@@ -5,25 +5,36 @@ import android.content.Context
 import android.content.Context.CAMERA_SERVICE
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
 import android.net.Uri
-import android.util.Base64
+import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import android.util.Size
 import android.view.Surface
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.TorchState
+import androidx.camera.core.ZoomState
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -37,9 +48,11 @@ import androidx.camera.view.PreviewView
 import androidx.camera.view.video.AudioConfig
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import com.getcapacitor.FileUtils
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
+import com.google.common.util.concurrent.ListenableFuture
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -48,12 +61,14 @@ import com.michaelwolz.capacitorcameraview.model.BarcodeDetectionResult
 import com.michaelwolz.capacitorcameraview.model.CameraDevice
 import com.michaelwolz.capacitorcameraview.model.CameraResult
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
+import com.michaelwolz.capacitorcameraview.model.TorchModeState
 import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import com.michaelwolz.capacitorcameraview.model.ZoomFactors
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -62,7 +77,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
@@ -70,10 +84,46 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.coroutines.resume
+import kotlin.math.atan
+import kotlin.math.roundToInt
 
 /** Throttle time for barcode detection in milliseconds. */
 const val BARCODE_DETECTION_THROTTLE_MS = 100L
+
+/**
+ * Suppression window in milliseconds during which a repeat of the same barcode
+ * (identical value + type) is not re-emitted. A genuinely new code still emits
+ * immediately. Kept consistent with the iOS and web implementations.
+ */
+const val BARCODE_SUPPRESSION_WINDOW_MS = 500L
+
+/**
+ * Once the per-key dedupe map grows past this size, expired entries are pruned
+ * so a long session scanning many different codes stays bounded. Kept
+ * consistent with the iOS and web implementations.
+ */
+const val BARCODE_DEDUPE_MAP_PRUNE_THRESHOLD = 64
+
+/**
+ * Age threshold, in milliseconds, past which a leftover `camera_capture_*`/
+ * `camera_recording_*` file in the cache directory is considered stale and swept on the
+ * next session start. Kept consistent with the iOS implementation's `TempFileManager`.
+ */
+const val STALE_TEMP_FILE_THRESHOLD_MS = 30 * 60 * 1000L
+
+/**
+ * Horizontal field-of-view threshold (degrees) at or above which a lens is classified as
+ * `"ultraWide"` in [CameraView.classifyLensDeviceType]. Common ultra-wide modules sit around
+ * 100-120°; standard wide modules are typically well under 94°.
+ */
+const val ULTRA_WIDE_FOV_THRESHOLD_DEGREES = 94.0
+
+/**
+ * Horizontal field-of-view threshold (degrees) at or below which a lens is classified as
+ * `"telephoto"` in [CameraView.classifyLensDeviceType]. Common telephoto modules are well
+ * under 60°; standard wide modules are typically well above it.
+ */
+const val TELEPHOTO_FOV_THRESHOLD_DEGREES = 60.0
 
 class CameraView(plugin: Plugin) {
     // Coroutine scope for async operations
@@ -92,9 +142,33 @@ class CameraView(plugin: Plugin) {
     private val cameraExecutor: ExecutorService by lazy { Executors.newSingleThreadExecutor() }
     private var previewView: PreviewView? = null
 
+    // The ML Kit barcode scanner currently attached to the image analysis
+    // analyzer, if barcode detection is enabled. Tracked here so it can be
+    // closed (and the analyzer cleared) on session stop/cleanup - the
+    // MlKitAnalyzer that wraps it does not own or close it for us.
+    private var barcodeScanner: BarcodeScanner? = null
+
     // Camera state
     private var currentCameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     private var currentFlashMode: Int = ImageCapture.FLASH_MODE_OFF
+
+    /**
+     * Normalized (0.0-1.0) torch intensity last successfully applied via [setTorchMode],
+     * reported back by [getTorchMode]. CameraX/Camera2 interop expose no getter for the
+     * currently active `FLASH_STRENGTH_LEVEL` capture-request option, so the level this
+     * plugin itself applied is tracked here instead. Reset to 0.0 whenever the torch is off.
+     */
+    private var currentTorchLevel: Float = 0.0f
+
+    /**
+     * The torch-strength Camera2 interop capture-request option currently applied on the
+     * bound camera, or `null` when the torch is off or strength isn't controllable.
+     *
+     * Persisted so [clearJpegQualityCaptureOption] - which clears ALL interop options -
+     * can re-apply it instead of silently resetting an active torch to default strength.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private var torchStrengthCaptureRequestOptions: CaptureRequestOptions? = null
 
     // Active video recording
     private var activeRecording: Recording? = null
@@ -117,10 +191,29 @@ class CameraView(plugin: Plugin) {
     private var webView: WebView = plugin.bridge.webView
     private var context: Context = webView.context
 
+    // The WebView's appearance before the first camera session made it
+    // transparent. Captured once and never overwritten, so teardown restores
+    // the app's real appearance instead of hard-coding white/LAYER_TYPE_NONE.
+    //
+    // A ColorDrawable must be captured as its color int, not as a Drawable
+    // reference: setBackgroundColor() mutates an existing ColorDrawable in
+    // place, so a reference would alias the drawable we turn transparent.
+    private var originalWebViewBackgroundColor: Int? = null
+    private var originalWebViewBackground: Drawable? = null
+    private var originalWebViewLayerType: Int? = null
+    private var hasCapturedOriginalWebViewAppearance = false
+
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     // Thread-safe barcode throttle timestamp
     private val lastBarcodeDetectionTime = AtomicLong(0L)
+
+    // Dedupe state: timestamps of recently emitted barcodes keyed by value +
+    // type. A per-key map (rather than a single "last" slot) is required so
+    // multiple codes in frame can't alternate and defeat the suppression
+    // window. Accessed only on the main executor (MlKitAnalyzer callback) and
+    // the main thread (session teardown), so no locking is needed.
+    private val recentBarcodeEmitTimes = mutableMapOf<String, Long>()
 
     // Flow for reactive barcode events
     private val _barcodeEvents = MutableSharedFlow<BarcodeDetectionResult>(
@@ -133,29 +226,35 @@ class CameraView(plugin: Plugin) {
     /** Starts a camera session with the provided configuration. */
     suspend fun startSessionAsync(config: CameraSessionConfiguration): CameraResult<Unit> =
         withContext(Dispatchers.Main) {
+            if (isRunning()) {
+                return@withContext CameraResult.Error(CameraError.SessionAlreadyRunning())
+            }
+
             val lifecycleOwner = context as? LifecycleOwner
                 ?: return@withContext CameraResult.Error(CameraError.LifecycleOwnerMissing())
 
             this@CameraView.lifecycleOwner = lifecycleOwner
+
+            // Sweep any stale capture/recording temp files left behind by a previous
+            // session that crashed or was killed before it could clean up after itself.
+            // Session start is the one guaranteed point where none of our own
+            // captures/recordings can be in flight yet, so it's safe to delete anything
+            // old here. Run off the main thread so this never delays session start.
+            scope.launch(cameraExecutor.asCoroutineDispatcher()) {
+                sweepStaleTempFiles()
+            }
 
             try {
                 initializeCamera(context, lifecycleOwner, config)
                 CameraResult.Success(Unit)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in camera setup", e)
+                // Tear down any partially initialized state so a failed start
+                // doesn't leave the session guard tripped or a preview attached
+                releaseSessionResources()
                 CameraResult.Error(e)
             }
         }
-
-    /** Starts a camera session with the provided configuration (callback version for backward compatibility). */
-    fun startSession(config: CameraSessionConfiguration, callback: (Exception?) -> Unit) {
-        scope.launch {
-            startSessionAsync(config).fold(
-                onSuccess = { callback(null) },
-                onError = { callback(it) }
-            )
-        }
-    }
 
     /** Stop the camera session and release resources. */
     suspend fun stopSessionAsync(): CameraResult<Unit> = withContext(Dispatchers.Main) {
@@ -163,27 +262,9 @@ class CameraView(plugin: Plugin) {
             // Stop any active recording before unbinding
             activeRecording?.stop()
             activeRecording = null
-            pendingStopCallback?.invoke(
-                CameraResult.Error(Exception("Recording was interrupted because the camera session stopped"))
-            )
-            pendingStopCallback = null
-            currentRecordingFile = null
+            failPendingRecording("Recording was interrupted because the camera session stopped")
 
-            cameraController?.unbind()
-            cameraController = null
-
-            previewView?.let { view ->
-                try {
-                    (webView.parent as? ViewGroup)?.removeView(view)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error removing preview view", e)
-                } finally {
-                    previewView = null
-                }
-            }
-
-            webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
-            webView.setBackgroundColor(android.graphics.Color.WHITE)
+            releaseSessionResources()
 
             Log.d(TAG, "Camera session stopped successfully")
             CameraResult.Success(Unit)
@@ -193,13 +274,113 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Stop the camera session and release resources (callback version for backward compatibility). */
-    fun stopSession(callback: ((Exception?) -> Unit)? = null) {
-        scope.launch {
-            stopSessionAsync().fold(
-                onSuccess = { callback?.invoke(null) },
-                onError = { callback?.invoke(it) }
-            )
+    /**
+     * Releases the camera controller and preview view and restores the WebView.
+     *
+     * Must be called on the main thread. Used both for a regular [stopSessionAsync]
+     * and to tear down partially initialized state when [startSessionAsync] fails.
+     */
+    private fun releaseSessionResources() {
+        closeBarcodeScanner()
+
+        cameraController?.unbind()
+        cameraController = null
+
+        // Reset barcode dedupe state so a restarted session emits immediately
+        recentBarcodeEmitTimes.clear()
+
+        previewView?.let { view ->
+            try {
+                (webView.parent as? ViewGroup)?.removeView(view)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing preview view", e)
+            } finally {
+                previewView = null
+            }
+        }
+
+        restoreWebViewAppearance()
+    }
+
+    /**
+     * Restores the WebView's background and layer type to what they were before
+     * [setupPreviewView] first made it transparent. No-op if a session was never
+     * started, since nothing was ever changed.
+     */
+    private fun restoreWebViewAppearance() {
+        if (!hasCapturedOriginalWebViewAppearance) return
+
+        webView.setLayerType(originalWebViewLayerType ?: WebView.LAYER_TYPE_NONE, null)
+
+        val originalColor = originalWebViewBackgroundColor
+        if (originalColor != null) {
+            webView.setBackgroundColor(originalColor)
+        } else {
+            webView.background = originalWebViewBackground
+        }
+    }
+
+    /**
+     * Clears the image-analysis analyzer from the camera controller (if any) and closes
+     * the ML Kit barcode scanner, releasing its native resources. The [MlKitAnalyzer]
+     * wrapping the scanner does not own or close it, so this must be done explicitly
+     * whenever a session with barcode detection enabled is torn down.
+     */
+    private fun closeBarcodeScanner() {
+        if (barcodeScanner == null) return
+
+        cameraController?.clearImageAnalysisAnalyzer()
+        barcodeScanner?.close()
+        barcodeScanner = null
+    }
+
+    /**
+     * Fails any pending stop-recording callback with [message] and deletes the
+     * partially-written recording file (if any), so an interrupted recording neither
+     * leaves its caller awaiting forever nor leaks an orphaned temp file.
+     *
+     * Used both by [stopSessionAsync] (session stopped mid-recording) and [cleanup]
+     * (plugin torn down mid-recording).
+     */
+    private fun failPendingRecording(message: String) {
+        pendingStopCallback?.invoke(CameraResult.Error(Exception(message)))
+        pendingStopCallback = null
+
+        currentRecordingFile?.let { deleteFileQuietly(it) }
+        currentRecordingFile = null
+    }
+
+    /** Deletes [file] if it exists, logging (but never throwing) on failure. */
+    private fun deleteFileQuietly(file: File) {
+        try {
+            if (file.exists() && !file.delete()) {
+                Log.w(TAG, "Failed to delete temp file: ${file.name}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error deleting temp file: ${file.name}", e)
+        }
+    }
+
+    /**
+     * Deletes stale `camera_capture_*`/`camera_recording_*` files left in [Context.cacheDir]
+     * by a previous session that crashed or was killed before it could clean up after
+     * itself. Only files older than [STALE_TEMP_FILE_THRESHOLD_MS] are removed, so a file
+     * from a capture/recording that is genuinely still in flight is never touched.
+     *
+     * Performs file I/O and must not be called on the main thread.
+     */
+    private fun sweepStaleTempFiles() {
+        try {
+            val cutoff = System.currentTimeMillis() - STALE_TEMP_FILE_THRESHOLD_MS
+            context.cacheDir?.listFiles()?.forEach { file ->
+                val isCameraTempFile = file.isFile &&
+                    (file.name.startsWith("camera_capture_") || file.name.startsWith("camera_recording_"))
+                if (isCameraTempFile && file.lastModified() < cutoff) {
+                    deleteFileQuietly(file)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error sweeping stale temp files", e)
         }
     }
 
@@ -217,26 +398,22 @@ class CameraView(plugin: Plugin) {
 
         val controller = cameraController
         if (controller == null) {
-            continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
+            continuation.resumeIfActive(CameraResult.Error(CameraError.CameraNotInitialized()))
             return@suspendCancellableCoroutine
         }
 
         val preview = previewView
         if (preview == null) {
-            continuation.resume(CameraResult.Error(CameraError.PreviewNotInitialized()))
+            continuation.resumeIfActive(CameraResult.Error(CameraError.PreviewNotInitialized()))
             return@suspendCancellableCoroutine
         }
 
         mainHandler.post {
-            val cameraInfo = controller.cameraInfo
-            val isFrontFacing = controller.cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA
-            val sensorRotationDegrees = cameraInfo?.sensorRotationDegrees ?: 0
+            // Derive facing from the bound camera's lens facing rather than comparing the
+            // selector against DEFAULT_FRONT_CAMERA, which is always false for a selector
+            // built from a deviceId even when it resolves to the front camera.
+            val isFrontFacing = isLensFacingFront(controller.cameraInfo?.lensFacing)
             val displayRotationDegrees = preview.display?.rotation ?: Surface.ROTATION_0
-            val imageRotationDegrees = calculateImageRotationBasedOnDisplayRotation(
-                displayRotationDegrees,
-                sensorRotationDegrees,
-                isFrontFacing
-            )
 
             try {
                 if (saveToFile) {
@@ -245,33 +422,48 @@ class CameraView(plugin: Plugin) {
                         File.createTempFile("camera_capture_photo", ".jpg", context.cacheDir)
                     val outputFileOptions = ImageCapture.OutputFileOptions.Builder(tempFile).build()
 
-                    controller.takePicture(
-                        outputFileOptions,
-                        cameraExecutor,
-                        object : ImageCapture.OnImageSavedCallback {
-                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                val processingTime = System.currentTimeMillis() - startTime
-                                Log.d(TAG, "Image saved directly to file in ${processingTime}ms")
+                    // CameraController has no JPEG-quality setter, so quality is applied via
+                    // Camera2 interop on the capture request. Applying it is asynchronous, so
+                    // the capture is chained on the returned future. If interop isn't usable,
+                    // fall back to re-compressing the saved file.
+                    val qualityOptionFuture = tryApplyJpegQualityCaptureOption(controller, quality)
 
-                                val result = JSObject().apply {
-                                    val capacitorFilePath = FileUtils.getPortablePath(
-                                        context,
-                                        pluginDelegate.bridge.localUrl,
-                                        Uri.fromFile(tempFile)
-                                    )
-
-                                    put("path", Uri.fromFile(tempFile).toString())
-                                    put("webPath", capacitorFilePath)
-                                }
-                                continuation.resume(CameraResult.Success(result))
+                    if (qualityOptionFuture == null) {
+                        // Interop unavailable - capture now, re-compress the file afterwards.
+                        takePictureToFile(
+                            controller,
+                            outputFileOptions,
+                            tempFile,
+                            quality,
+                            recompressAtQuality = true,
+                            startTime,
+                            continuation
+                        )
+                    } else {
+                        qualityOptionFuture.addListener({
+                            val interopApplied = try {
+                                qualityOptionFuture.get()
+                                true
+                            } catch (e: Exception) {
+                                Log.w(
+                                    TAG,
+                                    "JPEG quality capture option was not applied; " +
+                                        "falling back to re-compression",
+                                    e
+                                )
+                                false
                             }
-
-                            override fun onError(exception: ImageCaptureException) {
-                                Log.e(TAG, "Error saving image to file", exception)
-                                continuation.resume(CameraResult.Error(exception))
-                            }
-                        }
-                    )
+                            takePictureToFile(
+                                controller,
+                                outputFileOptions,
+                                tempFile,
+                                quality,
+                                recompressAtQuality = !interopApplied,
+                                startTime,
+                                continuation
+                            )
+                        }, ContextCompat.getMainExecutor(context))
+                    }
                 } else {
                     // Base64 capture using ImageProxy
                     controller.takePicture(
@@ -283,6 +475,13 @@ class CameraView(plugin: Plugin) {
                                     "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
                                 )
                                 try {
+                                    // Base the rotation on the frame's own rotationDegrees so
+                                    // pre-rotated buffers are not rotated a second time.
+                                    val imageRotationDegrees = calculateImageRotation(
+                                        image.imageInfo.rotationDegrees,
+                                        displayRotationDegrees,
+                                        isFrontFacing
+                                    )
                                     val base64String =
                                         imageProxyToBase64(image, quality, imageRotationDegrees)
                                     val result = JSObject().apply {
@@ -292,10 +491,10 @@ class CameraView(plugin: Plugin) {
                                         TAG,
                                         "Image processed to Base64 in ${System.currentTimeMillis() - startTime}ms"
                                     )
-                                    continuation.resume(CameraResult.Success(result))
+                                    continuation.resumeIfActive(CameraResult.Success(result))
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error processing captured image", e)
-                                    continuation.resume(CameraResult.Error(e))
+                                    continuation.resumeIfActive(CameraResult.Error(e))
                                 } finally {
                                     image.close()
                                 }
@@ -303,29 +502,149 @@ class CameraView(plugin: Plugin) {
 
                             override fun onError(exception: ImageCaptureException) {
                                 Log.e(TAG, "Error capturing image", exception)
-                                continuation.resume(CameraResult.Error(exception))
+                                continuation.resumeIfActive(CameraResult.Error(exception))
                             }
                         }
                     )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting up image capture", e)
-                continuation.resume(CameraResult.Error(e))
+                continuation.resumeIfActive(CameraResult.Error(e))
             }
         }
     }
 
-    /** Capture a photo with the current camera configuration (callback version for backward compatibility). */
-    fun capturePhoto(
+    /**
+     * Attempts to apply the requested JPEG quality to the still-capture pipeline via the
+     * Camera2 `JPEG_QUALITY` capture-request option. Returns the future that completes once
+     * the option has been submitted to the capture session, or `null` if interop isn't
+     * usable at all (e.g. the camera control has no Camera2 implementation).
+     *
+     * Options set this way are submitted with every capture request for this camera, so
+     * callers must clear them again via [clearJpegQualityCaptureOption] once the capture
+     * completes, and must await the returned future before triggering the capture.
+     *
+     * Uses `addCaptureRequestOptions()` rather than `setCaptureRequestOptions()` so an
+     * active [torchStrengthCaptureRequestOptions] is preserved.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun tryApplyJpegQualityCaptureOption(
+        controller: LifecycleCameraController,
+        quality: Int
+    ): ListenableFuture<Void>? {
+        return try {
+            val cameraControl = controller.cameraControl ?: return null
+            val options = CaptureRequestOptions.Builder()
+                .setCaptureRequestOption(CaptureRequest.JPEG_QUALITY, quality.coerceIn(1, 100).toByte())
+                .build()
+            Camera2CameraControl.from(cameraControl).addCaptureRequestOptions(options)
+        } catch (e: Exception) {
+            Log.w(TAG, "Camera2 interop unavailable for JPEG quality; falling back to re-compression", e)
+            null
+        }
+    }
+
+    /**
+     * Clears any JPEG-quality Camera2 interop option previously set by
+     * [tryApplyJpegQualityCaptureOption].
+     *
+     * `clearCaptureRequestOptions()` clears ALL interop options on this camera, including an
+     * active [torchStrengthCaptureRequestOptions], so that one is re-applied right after.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun clearJpegQualityCaptureOption(controller: LifecycleCameraController) {
+        try {
+            val cameraControl = controller.cameraControl ?: return
+            val camera2CameraControl = Camera2CameraControl.from(cameraControl)
+            camera2CameraControl.clearCaptureRequestOptions()
+
+            torchStrengthCaptureRequestOptions?.let { options ->
+                camera2CameraControl.addCaptureRequestOptions(options)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear JPEG quality Camera2 interop option", e)
+        }
+    }
+
+    /**
+     * Takes a picture into [tempFile] and resumes [continuation] with the file paths.
+     * Must be called on the main thread.
+     *
+     * If [recompressAtQuality] is true (the Camera2 interop JPEG-quality option could not
+     * be applied), the saved file is re-compressed in place at [quality] before resuming,
+     * so the requested quality is honored either way. Exactly one resume is guaranteed:
+     * either via the capture callbacks or via the synchronous catch below (in which case
+     * no callback will fire, since `takePicture` failed before being registered).
+     */
+    private fun takePictureToFile(
+        controller: LifecycleCameraController,
+        outputFileOptions: ImageCapture.OutputFileOptions,
+        tempFile: File,
         quality: Int,
-        saveToFile: Boolean = false,
-        callback: (JSObject?, Exception?) -> Unit
+        recompressAtQuality: Boolean,
+        startTime: Long,
+        continuation: CancellableContinuation<CameraResult<JSObject>>
     ) {
-        scope.launch {
-            capturePhotoAsync(quality, saveToFile).fold(
-                onSuccess = { callback(it, null) },
-                onError = { callback(null, it) }
+        try {
+            controller.takePicture(
+                outputFileOptions,
+                cameraExecutor,
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        clearJpegQualityCaptureOption(controller)
+                        val processingTime = System.currentTimeMillis() - startTime
+                        Log.d(TAG, "Image saved directly to file in ${processingTime}ms")
+
+                        try {
+                            if (recompressAtQuality) {
+                                recompressFileInPlace(tempFile, quality)
+                            }
+
+                            val result = JSObject().apply {
+                                val capacitorFilePath = FileUtils.getPortablePath(
+                                    context,
+                                    pluginDelegate.bridge.localUrl,
+                                    Uri.fromFile(tempFile)
+                                )
+
+                                put("path", Uri.fromFile(tempFile).toString())
+                                put("webPath", capacitorFilePath)
+                            }
+                            continuation.resumeIfActive(CameraResult.Success(result))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error re-compressing captured file", e)
+                            continuation.resumeIfActive(CameraResult.Error(e))
+                        }
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        clearJpegQualityCaptureOption(controller)
+                        Log.e(TAG, "Error saving image to file", exception)
+                        continuation.resumeIfActive(CameraResult.Error(exception))
+                    }
+                }
             )
+        } catch (e: Exception) {
+            clearJpegQualityCaptureOption(controller)
+            Log.e(TAG, "Error setting up image capture", e)
+            continuation.resumeIfActive(CameraResult.Error(e))
+        }
+    }
+
+    /**
+     * Re-compresses a JPEG file in place at the given quality. Used as a fallback for the
+     * file-based capture path when Camera2 interop isn't available to honor `quality` at
+     * capture time.
+     */
+    private fun recompressFileInPlace(file: File, quality: Int) {
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+            ?: throw IllegalStateException("Failed to decode captured file for re-compression")
+        try {
+            FileOutputStream(file).use { outputStream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            }
+        } finally {
+            bitmap.recycle()
         }
     }
 
@@ -336,59 +655,54 @@ class CameraView(plugin: Plugin) {
     suspend fun captureSampleFromPreviewAsync(
         quality: Int,
         saveToFile: Boolean = false
-    ): CameraResult<JSObject> = withContext(Dispatchers.Main) {
-        val preview = previewView
-            ?: return@withContext CameraResult.Error(CameraError.PreviewNotInitialized())
+    ): CameraResult<JSObject> {
+        val bitmapResult: CameraResult<Bitmap> = withContext(Dispatchers.Main) {
+            val preview = previewView
+                ?: return@withContext CameraResult.Error(CameraError.PreviewNotInitialized())
+            preview.bitmap
+                ?.let { CameraResult.Success(it) }
+                ?: CameraResult.Error(Exception("Preview bitmap not available"))
+        }
 
-        try {
-            val bitmap = preview.bitmap
-                ?: return@withContext CameraResult.Error(Exception("Preview bitmap not available"))
+        val bitmap = when (bitmapResult) {
+            is CameraResult.Error -> return bitmapResult
+            is CameraResult.Success -> bitmapResult.value
+        }
 
-            val result = JSObject()
+        // Compression, encoding and file IO are CPU/IO-bound and must not block the main thread.
+        return withContext(cameraExecutor.asCoroutineDispatcher()) {
+            try {
+                val result = JSObject()
 
-            if (saveToFile) {
-                val tempFile =
-                    File.createTempFile("camera_capture_sample", ".jpg", context.cacheDir)
+                if (saveToFile) {
+                    val tempFile =
+                        File.createTempFile("camera_capture_sample", ".jpg", context.cacheDir)
 
-                FileOutputStream(tempFile).use { outputStream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                    FileOutputStream(tempFile).use { outputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                    }
+
+                    val capacitorFilePath = FileUtils.getPortablePath(
+                        context,
+                        pluginDelegate.bridge.localUrl,
+                        Uri.fromFile(tempFile)
+                    )
+
+                    result.put("path", Uri.fromFile(tempFile).toString())
+                    result.put("webPath", capacitorFilePath)
+                } else {
+                    // Convert bitmap to Base64 using the shared pooled streaming encoder
+                    // (also used by imageProxyToBase64) rather than a separate,
+                    // non-pooled duplicate.
+                    val base64String = StreamingBase64Encoder.encodeToBase64(bitmap, quality)
+                    result.put("photo", base64String)
                 }
 
-                val capacitorFilePath = FileUtils.getPortablePath(
-                    context,
-                    pluginDelegate.bridge.localUrl,
-                    Uri.fromFile(tempFile)
-                )
-
-                result.put("path", Uri.fromFile(tempFile).toString())
-                result.put("webPath", capacitorFilePath)
-            } else {
-                // Convert bitmap to Base64 using pooled stream
-                val base64String = bitmapToBase64(bitmap, quality)
-                result.put("photo", base64String)
+                CameraResult.Success(result)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error capturing preview frame", e)
+                CameraResult.Error(e)
             }
-
-            CameraResult.Success(result)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error capturing preview frame", e)
-            CameraResult.Error(e)
-        }
-    }
-
-    /**
-     * Capture a frame directly from the preview without using the full photo pipeline (callback version).
-     * Faster but has lower quality than full photo capture.
-     */
-    fun captureSampleFromPreview(
-        quality: Int,
-        saveToFile: Boolean = false,
-        callback: (JSObject?, Exception?) -> Unit
-    ) {
-        scope.launch {
-            captureSampleFromPreviewAsync(quality, saveToFile).fold(
-                onSuccess = { callback(it, null) },
-                onError = { callback(null, it) }
-            )
         }
     }
 
@@ -421,17 +735,25 @@ class CameraView(plugin: Plugin) {
             )
 
             val outputOptions = createRecordingOutputOptions()
-            val audioConfig = resolveAudioConfig(enableAudio, continuation) ?: return
+            val audioConfig = resolveAudioConfig(enableAudio, continuation) ?: run {
+                // Recording never actually started - the just-created output file is
+                // empty and unused, so it must be removed here rather than left for
+                // the next session's stale-file sweep to find.
+                discardPendingRecordingFile()
+                return
+            }
 
             startCameraRecording(controller, outputOptions, audioConfig, continuation)
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception when starting recording. Missing permission?", e)
             restoreUseCasesAfterRecording()
-            continuation.resume(CameraResult.Error(e))
+            discardPendingRecordingFile()
+            continuation.resumeIfActive(CameraResult.Error(e))
         } catch (e: Exception) {
             Log.e(TAG, "Error starting recording", e)
             restoreUseCasesAfterRecording()
-            continuation.resume(CameraResult.Error(e))
+            discardPendingRecordingFile()
+            continuation.resumeIfActive(CameraResult.Error(e))
         }
     }
 
@@ -440,12 +762,12 @@ class CameraView(plugin: Plugin) {
     ): LifecycleCameraController? {
         val controller = cameraController
         if (controller == null) {
-            continuation.resume(CameraResult.Error(CameraError.CameraNotInitialized()))
+            continuation.resumeIfActive(CameraResult.Error(CameraError.CameraNotInitialized()))
             return null
         }
 
         if (activeRecording != null) {
-            continuation.resume(CameraResult.Error(Exception("Recording is already in progress")))
+            continuation.resumeIfActive(CameraResult.Error(CameraError.RecordingAlreadyInProgress()))
             return null
         }
 
@@ -462,6 +784,16 @@ class CameraView(plugin: Plugin) {
         return FileOutputOptions.Builder(tempFile).build()
     }
 
+    /**
+     * Deletes the just-created (but not yet recorded-into) output file tracked by
+     * [currentRecordingFile] and clears the reference. Used when recording fails to start
+     * after [createRecordingOutputOptions] has already created the file.
+     */
+    private fun discardPendingRecordingFile() {
+        currentRecordingFile?.let { deleteFileQuietly(it) }
+        currentRecordingFile = null
+    }
+
     private fun resolveAudioConfig(
         enableAudio: Boolean,
         continuation: CancellableContinuation<CameraResult<Unit>>
@@ -474,12 +806,12 @@ class CameraView(plugin: Plugin) {
             return try {
                 AudioConfig.create(true)
             } catch (e: SecurityException) {
-                continuation.resume(CameraResult.Error(e))
+                continuation.resumeIfActive(CameraResult.Error(e))
                 null
             }
         }
 
-        continuation.resume(
+        continuation.resumeIfActive(
             CameraResult.Error(
                 SecurityException("Microphone permission is required for audio recording")
             )
@@ -522,8 +854,8 @@ class CameraView(plugin: Plugin) {
         continuation: CancellableContinuation<CameraResult<Unit>>
     ) {
         Log.d(TAG, "Video recording started")
-        if (continuation.isActive && startResumed.compareAndSet(false, true)) {
-            continuation.resume(CameraResult.Success(Unit))
+        if (startResumed.compareAndSet(false, true)) {
+            continuation.resumeIfActive(CameraResult.Success(Unit))
         }
     }
 
@@ -534,8 +866,8 @@ class CameraView(plugin: Plugin) {
     ) {
         // If recording finalized before Start was emitted, resume the
         // startRecording continuation with an error
-        if (continuation.isActive && startResumed.compareAndSet(false, true)) {
-            continuation.resume(
+        if (startResumed.compareAndSet(false, true)) {
+            continuation.resumeIfActive(
                 CameraResult.Error(
                     Exception("Recording failed to start: error code ${event.error}")
                 )
@@ -557,6 +889,10 @@ class CameraView(plugin: Plugin) {
 
             if (event.hasError()) {
                 Log.e(TAG, "Recording error: ${event.error}")
+                // The recording failed partway through, so the file on disk is
+                // incomplete/corrupt - delete it rather than leaving it for the next
+                // session's stale-file sweep to find.
+                currentRecordingFile?.let { deleteFileQuietly(it) }
                 currentRecordingFile = null
                 callback?.invoke(CameraResult.Error(Exception("Recording failed with error code: ${event.error}")))
                 return@post
@@ -637,12 +973,17 @@ class CameraView(plugin: Plugin) {
             mainHandler.post {
                 val recording = activeRecording
                 if (recording == null) {
-                    continuation.resume(CameraResult.Error(Exception("No recording is in progress")))
+                    continuation.resumeIfActive(CameraResult.Error(Exception("No recording is in progress")))
                     return@post
                 }
 
+                // Delivered later from Finalize (finalizeRecordingAndNotifyStopCallback) or,
+                // if the session/plugin tears down first, from failPendingRecording. Guard
+                // with resumeIfActive: if this coroutine was itself cancelled in the
+                // meantime, the recording still needs to run to completion (it isn't
+                // stoppable from here), but nobody is left to observe the outcome.
                 pendingStopCallback = { result ->
-                    continuation.resume(result)
+                    continuation.resumeIfActive(result)
                 }
 
                 activeRecording = null
@@ -650,13 +991,17 @@ class CameraView(plugin: Plugin) {
             }
         }
 
-    /** Flip between front and back cameras */
+    /**
+     * Flip between front and back cameras.
+     *
+     * Rejects while a recording is active: reassigning the controller's `cameraSelector`
+     * unbinds and rebinds every use case (including the active `VideoCapture`), which
+     * interrupts the in-progress recording. The check runs on [mainHandler], the only
+     * thread [activeRecording] is mutated on, so it can't race a concurrent recording.
+     */
     fun flipCamera(callback: (Exception?) -> Unit) {
-        currentCameraSelector = when (currentCameraSelector) {
-            CameraSelector.DEFAULT_FRONT_CAMERA -> CameraSelector.DEFAULT_BACK_CAMERA
-            else -> CameraSelector.DEFAULT_FRONT_CAMERA
-        }
-
+        // Validate controller state before mutating any stored selector state, so a failed
+        // flip (no active session) leaves currentCameraSelector untouched for the next start.
         val controller = cameraController
             ?: run {
                 callback(CameraError.CameraNotInitialized())
@@ -664,7 +1009,25 @@ class CameraView(plugin: Plugin) {
             }
 
         mainHandler.post {
-            controller.cameraSelector = currentCameraSelector
+            if (activeRecording != null) {
+                callback(CameraError.RecordingAlreadyInProgress())
+                return@post
+            }
+
+            // Derive the current facing from the bound camera rather than the stored selector.
+            // A deviceId-based selector never equals DEFAULT_FRONT/BACK_CAMERA, so toggling on
+            // the selector would flip any deviceId camera to front regardless of which way it
+            // physically points. Flipping abandons the deviceId in favour of the default
+            // camera of the physically opposite facing.
+            val currentlyFront = isLensFacingFront(controller.cameraInfo?.lensFacing)
+            val newSelector = if (currentlyFront) {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            } else {
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            }
+
+            controller.cameraSelector = newSelector
+            currentCameraSelector = newSelector
             callback(null)
         }
     }
@@ -709,6 +1072,88 @@ class CameraView(plugin: Plugin) {
         }
     }
 
+    /**
+     * Focus and meter the camera at a point given in CSS/viewport pixels
+     * (tap-to-focus).
+     *
+     * The coordinates are in the same space the plugin emits for barcode
+     * `boundingRect`, so that mapping is inverted here to build a metering point
+     * in the PreviewView's coordinate system.
+     *
+     * A combined AF + AE [FocusMeteringAction] is used with CameraX's default
+     * auto-cancel, so continuous auto-focus resumes automatically. Fixed-focus
+     * cameras degrade to exposure-only metering; if neither is supported the
+     * callback receives [CameraError.FocusNotSupported].
+     */
+    fun setFocusPoint(x: Float, y: Float, callback: ((Exception?) -> Unit)? = null) {
+        mainHandler.post {
+            val controller = cameraController
+                ?: run {
+                    callback?.invoke(CameraError.CameraNotInitialized())
+                    return@post
+                }
+
+            val preview = previewView
+                ?: run {
+                    callback?.invoke(CameraError.PreviewNotInitialized())
+                    return@post
+                }
+
+            val cameraControl = controller.cameraControl
+                ?: run {
+                    callback?.invoke(CameraError.CameraNotInitialized())
+                    return@post
+                }
+
+            val cameraInfo = controller.cameraInfo
+                ?: run {
+                    callback?.invoke(CameraError.CameraNotInitialized())
+                    return@post
+                }
+
+            // Invert the barcode boundingRect mapping: CSS px -> PreviewView px.
+            val density = preview.context.resources.displayMetrics.density
+            val topOffset = calculateTopOffset(webView)
+            val previewX = x * density
+            val previewY = y * density + topOffset
+
+            val meteringPoint = preview.meteringPointFactory.createPoint(previewX, previewY)
+
+            // Prefer combined focus + exposure metering; degrade to
+            // exposure-only on fixed-focus cameras.
+            var action = FocusMeteringAction.Builder(
+                meteringPoint,
+                FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+            ).build()
+
+            if (!cameraInfo.isFocusMeteringSupported(action)) {
+                action = FocusMeteringAction.Builder(
+                    meteringPoint,
+                    FocusMeteringAction.FLAG_AE
+                ).build()
+
+                if (!cameraInfo.isFocusMeteringSupported(action)) {
+                    callback?.invoke(CameraError.FocusNotSupported())
+                    return@post
+                }
+            }
+
+            val focusFuture = cameraControl.startFocusAndMetering(action)
+            focusFuture.addListener(
+                {
+                    try {
+                        focusFuture.get()
+                        callback?.invoke(null)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to set focus point", e)
+                        callback?.invoke(Exception(e.message))
+                    }
+                },
+                ContextCompat.getMainExecutor(context)
+            )
+        }
+    }
+
     /** Get the current flash mode */
     fun getFlashMode(): String {
         return when (currentFlashMode) {
@@ -737,11 +1182,18 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Set the flash mode */
-    fun setFlashMode(mode: String) {
-        val controller =
-            this.cameraController
-                ?: run { throw Exception("Camera controller not initialized") }
+    /**
+     * Set the flash mode. [callback] is invoked (with `null` on success) only after the mode
+     * has actually been applied to the controller on the main handler, rather than
+     * immediately after posting the change - and with the typed [CameraError.CameraNotInitialized]
+     * rather than a raw `Exception` when there is no active session.
+     */
+    fun setFlashMode(mode: String, callback: (Exception?) -> Unit) {
+        val controller = this.cameraController
+            ?: run {
+                callback(CameraError.CameraNotInitialized())
+                return
+            }
 
         currentFlashMode =
             when (mode) {
@@ -750,7 +1202,10 @@ class CameraView(plugin: Plugin) {
                 else -> ImageCapture.FLASH_MODE_OFF
             }
 
-        mainHandler.post { controller.imageCaptureFlashMode = currentFlashMode }
+        mainHandler.post {
+            controller.imageCaptureFlashMode = currentFlashMode
+            callback(null)
+        }
     }
 
     /** Check if torch is available */
@@ -766,21 +1221,35 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Get the current torch mode */
-    fun getTorchMode(callback: (Boolean) -> Unit) {
+    /** Get the current torch mode and intensity level. */
+    fun getTorchMode(callback: (TorchModeState) -> Unit) {
         mainHandler.post {
             val cameraInfo = cameraController?.cameraInfo
                 ?: run {
-                    callback(false)
+                    callback(TorchModeState(enabled = false, level = 0.0f))
                     return@post
                 }
 
-            callback(cameraInfo.torchState.value == TorchState.ON)
+            val enabled = cameraInfo.torchState.value == TorchState.ON
+            callback(TorchModeState(enabled = enabled, level = if (enabled) currentTorchLevel else 0.0f))
         }
     }
 
-    /** Set the torch mode */
-    fun setTorchMode(enabled: Boolean, callback: ((Exception?) -> Unit)? = null) {
+    /**
+     * Sets the torch mode and, on API 33+ multi-level hardware, its intensity.
+     *
+     * [level] is normalized 0.0-1.0 and mapped onto the device's
+     * [CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL] range via the Camera2 interop
+     * `CaptureRequest.FLASH_STRENGTH_LEVEL` option, applied to the active CameraX session.
+     * `CameraManager.turnOnTorchWithStrengthLevel` is intentionally not used: it throws
+     * `CAMERA_IN_USE` while a CameraX session has the camera device open, which is always
+     * the case here.
+     *
+     * Below API 33 or on single-level hardware [level] is ignored and the torch is simply
+     * switched on/off via [androidx.camera.core.CameraControl.enableTorch].
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    fun setTorchMode(enabled: Boolean, level: Float? = null, callback: ((Exception?) -> Unit)? = null) {
         mainHandler.post {
             try {
                 val controller = cameraController
@@ -796,10 +1265,118 @@ class CameraView(plugin: Plugin) {
                 }
 
                 controller.cameraControl?.enableTorch(enabled)
-                callback?.invoke(null)
+
+                if (!enabled) {
+                    clearTorchStrengthCaptureOption(controller)
+                    currentTorchLevel = 0.0f
+                    callback?.invoke(null)
+                    return@post
+                }
+
+                val requestedLevel = (level ?: 1.0f).coerceIn(0.0f, 1.0f)
+                val maxStrengthLevel = getMaxTorchStrengthLevel(controller)
+
+                if (maxStrengthLevel == null) {
+                    // Below API 33, or single-level hardware: strength isn't controllable, so
+                    // the torch is simply on at the device's (only) strength - report 1.0.
+                    clearTorchStrengthCaptureOption(controller)
+                    currentTorchLevel = 1.0f
+                    callback?.invoke(null)
+                    return@post
+                }
+
+                applyTorchStrengthLevel(controller, requestedLevel, maxStrengthLevel, callback)
             } catch (e: Exception) {
                 callback?.invoke(e)
             }
+        }
+    }
+
+    /**
+     * Returns the maximum torch-strength level supported by [controller]'s bound camera
+     * ([CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL]), or `null` if strength
+     * control isn't available - either below API 33, where the characteristic doesn't exist
+     * yet, or on flash units supporting only a single binary on/off level.
+     */
+    private fun getMaxTorchStrengthLevel(controller: LifecycleCameraController): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+
+        return try {
+            val cameraInfo = controller.cameraInfo ?: return null
+            val cameraId = Camera2CameraInfo.from(cameraInfo).cameraId
+            val cameraManager =
+                context.getSystemService(CAMERA_SERVICE) as? CameraManager ?: return null
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
+                ?.takeIf { it > 1 }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read torch strength characteristics", e)
+            null
+        }
+    }
+
+    /**
+     * Applies [requestedLevel] (normalized 0.0-1.0) as a `FLASH_STRENGTH_LEVEL` Camera2 interop
+     * capture-request option, mapped onto `1..maxStrengthLevel` (levels are 1-indexed; "off" is
+     * handled separately by the caller via `enableTorch(false)`, so 0.0 here still maps to the
+     * dimmest available level rather than off).
+     *
+     * If applying the option fails the torch remains on at the device's default strength and
+     * [callback] is still invoked with `null` rather than failing the whole call.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun applyTorchStrengthLevel(
+        controller: LifecycleCameraController,
+        requestedLevel: Float,
+        maxStrengthLevel: Int,
+        callback: ((Exception?) -> Unit)?
+    ) {
+        val cameraControl = controller.cameraControl
+        if (cameraControl == null) {
+            callback?.invoke(CameraError.CameraNotInitialized())
+            return
+        }
+
+        val strengthLevel = (requestedLevel * maxStrengthLevel).roundToInt().coerceIn(1, maxStrengthLevel)
+        val options = CaptureRequestOptions.Builder()
+            .setCaptureRequestOption(CaptureRequest.FLASH_STRENGTH_LEVEL, strengthLevel)
+            .build()
+
+        val camera2CameraControl = Camera2CameraControl.from(cameraControl)
+        val future = camera2CameraControl.addCaptureRequestOptions(options)
+
+        future.addListener({
+            try {
+                future.get()
+                torchStrengthCaptureRequestOptions = options
+                currentTorchLevel = strengthLevel.toFloat() / maxStrengthLevel
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "Failed to apply torch strength level; torch remains on at default strength",
+                    e
+                )
+                torchStrengthCaptureRequestOptions = null
+                currentTorchLevel = 1.0f
+            }
+            callback?.invoke(null)
+        }, ContextCompat.getMainExecutor(context))
+    }
+
+    /**
+     * Clears any torch-strength Camera2 interop option previously set by
+     * [applyTorchStrengthLevel], and forgets it so [clearJpegQualityCaptureOption] no longer
+     * re-applies it after a capture.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun clearTorchStrengthCaptureOption(controller: LifecycleCameraController) {
+        if (torchStrengthCaptureRequestOptions == null) return
+        torchStrengthCaptureRequestOptions = null
+
+        try {
+            controller.cameraControl?.let { Camera2CameraControl.from(it).clearCaptureRequestOptions() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear torch strength Camera2 interop option", e)
         }
     }
 
@@ -822,12 +1399,65 @@ class CameraView(plugin: Plugin) {
                         else -> "external"
                     }
 
-                CameraDevice(id = cameraId, name = cameraId, position = position)
+                val deviceType = classifyLensDeviceType(characteristics)
+
+                CameraDevice(
+                    id = cameraId,
+                    name = buildDeviceName(position, deviceType),
+                    position = position,
+                    deviceType = deviceType
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting camera devices", e)
             return emptyList()
         }
+    }
+
+    /**
+     * Classifies a camera's lens as `"wideAngle"`, `"ultraWide"`, or `"telephoto"` based on
+     * its horizontal field of view, derived from [CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS]
+     * and [CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE].
+     *
+     * Unlike iOS, Camera2 has no direct lens-type API per physical camera ID, and it doesn't
+     * expose multi-camera composition either, so the `dual`/`triple`/`trueDepth` types are
+     * never produced here. Returns `null` when focal length or sensor size isn't reported.
+     */
+    private fun classifyLensDeviceType(characteristics: CameraCharacteristics): String? {
+        val focalLength =
+            characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                ?.firstOrNull()
+        val sensorWidth =
+            characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)?.width
+
+        if (focalLength == null || focalLength <= 0f || sensorWidth == null || sensorWidth <= 0f) {
+            return null
+        }
+
+        val horizontalFovDegrees =
+            Math.toDegrees(2.0 * atan(sensorWidth / (2.0 * focalLength)))
+
+        return when {
+            horizontalFovDegrees >= ULTRA_WIDE_FOV_THRESHOLD_DEGREES -> "ultraWide"
+            horizontalFovDegrees <= TELEPHOTO_FOV_THRESHOLD_DEGREES -> "telephoto"
+            else -> "wideAngle"
+        }
+    }
+
+    /** Builds a human-readable device name from its position and (optional) lens type. */
+    private fun buildDeviceName(position: String, deviceType: String?): String {
+        val positionLabel = when (position) {
+            "front" -> "Front"
+            "back" -> "Back"
+            else -> "External"
+        }
+        val typeLabel = when (deviceType) {
+            "ultraWide" -> "Ultra Wide Camera"
+            "telephoto" -> "Telephoto Camera"
+            "wideAngle" -> "Wide Camera"
+            else -> "Camera"
+        }
+        return "$positionLabel $typeLabel"
     }
 
     /** Clean up resources when the plugin is being destroyed */
@@ -837,11 +1467,15 @@ class CameraView(plugin: Plugin) {
 
         mainHandler.post {
             try {
-                // Stop any active recording before cleanup
+                // Stop any active recording before cleanup. Resumes (rather than drops)
+                // any pending stopRecording() caller and deletes the partially-written
+                // recording file, mirroring stopSessionAsync's handling of the same case.
                 activeRecording?.stop()
                 activeRecording = null
-                pendingStopCallback = null
-                currentRecordingFile = null
+                failPendingRecording("Recording was interrupted because camera resources were cleaned up")
+
+                // Clear the image-analysis analyzer and close the ML Kit scanner (if any)
+                closeBarcodeScanner()
 
                 // Stop camera session
                 cameraController?.unbind()
@@ -854,8 +1488,7 @@ class CameraView(plugin: Plugin) {
                 }
 
                 // Reset WebView properties
-                webView.setLayerType(WebView.LAYER_TYPE_NONE, null)
-                webView.setBackgroundColor(android.graphics.Color.WHITE)
+                restoreWebViewAppearance()
 
                 // Clear references
                 lifecycleOwner = null
@@ -872,18 +1505,43 @@ class CameraView(plugin: Plugin) {
         }
     }
 
-    /** Converts a bitmap to Base64 with memory-efficient pooled ByteArrayOutputStream. */
-    private fun bitmapToBase64(bitmap: Bitmap, quality: Int): String {
-        val outputStream = ByteArrayOutputStream(256 * 1024) // 256KB initial capacity
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-        val byteArray = outputStream.toByteArray()
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
-    }
+    private fun setupPreviewView(context: Context, previewScaleMode: String? = null) {
+        // Capture the WebView's original background/layer type exactly once,
+        // before it's ever made transparent, so restoreWebViewAppearance()
+        // can restore the app's real appearance later instead of a
+        // hard-coded value.
+        if (!hasCapturedOriginalWebViewAppearance) {
+            val background = webView.background
+            if (background is ColorDrawable) {
+                // Store the color, not the drawable: setBackgroundColor()
+                // below mutates this ColorDrawable instance in place, so a
+                // captured reference would already be transparent on restore.
+                originalWebViewBackgroundColor = background.color
+                originalWebViewBackground = null
+            } else {
+                originalWebViewBackgroundColor = null
+                originalWebViewBackground = background
+            }
+            originalWebViewLayerType = webView.layerType
+            hasCapturedOriginalWebViewAppearance = true
+        }
 
-    private fun setupPreviewView(context: Context) {
         // Make WebView transparent
         webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+
+        // "fit" letterboxes the whole frame (FIT_CENTER); any other value keeps
+        // the default cover behavior (FILL_CENTER). The PreviewView stays
+        // fullscreen (MATCH_PARENT) in both cases, so the barcode
+        // COORDINATE_SYSTEM_VIEW_REFERENCED coordinates and the metering-point
+        // factory - both scaleType-aware - remain correct; only the fitted
+        // region within the view changes.
+        val previewScaleType =
+            if (previewScaleMode == "fit") {
+                PreviewView.ScaleType.FIT_CENTER
+            } else {
+                PreviewView.ScaleType.FILL_CENTER
+            }
 
         previewView =
             PreviewView(context).apply {
@@ -892,7 +1550,7 @@ class CameraView(plugin: Plugin) {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                scaleType = PreviewView.ScaleType.FILL_CENTER
+                scaleType = previewScaleType
             }
 
         (webView.parent as? ViewGroup)?.addView(previewView, 0)
@@ -905,7 +1563,7 @@ class CameraView(plugin: Plugin) {
         config: CameraSessionConfiguration,
     ) {
         // Setup preview view
-        setupPreviewView(context)
+        setupPreviewView(context, config.previewScaleMode)
 
         currentCameraSelector = if (config.position == "front") {
             CameraSelector.DEFAULT_FRONT_CAMERA
@@ -925,17 +1583,55 @@ class CameraView(plugin: Plugin) {
                 .build()
         }
 
+        // Resolve the resolution selectors from the configured aspect ratio and
+        // capture-resolution hint. With both options omitted this is exactly the
+        // long-standing default: 16:9-with-automatic-fallback for capture and an
+        // automatically chosen preview resolution.
+        val aspectRatioStrategy = when (config.aspectRatio) {
+            "4:3" -> AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+            "16:9" -> AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+            else -> null
+        }
+
+        val imageCaptureSelectorBuilder = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(
+                aspectRatioStrategy ?: AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+            )
+
+        config.captureMaxDimension?.let { maxDimension ->
+            // The bound size is expressed in the sensor's landscape-oriented
+            // coordinate space: the longer edge is the width and the shorter
+            // edge derives from the configured aspect ratio (16:9 by default).
+            // CLOSEST_LOWER_THEN_HIGHER picks the largest supported resolution
+            // that does not exceed the bound, falling back to the closest
+            // higher one - mirroring the iOS maxPhotoDimensions selection.
+            val shorterEdge =
+                if (config.aspectRatio == "4:3") maxDimension * 3 / 4
+                else maxDimension * 9 / 16
+            imageCaptureSelectorBuilder.setResolutionStrategy(
+                ResolutionStrategy(
+                    Size(maxDimension, shorterEdge),
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                )
+            )
+        }
+
         // Initialize camera controller
         val controller =
             LifecycleCameraController(context).apply {
                 cameraSelector = currentCameraSelector
                 imageCaptureMode = ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                imageCaptureResolutionSelector =
-                    ResolutionSelector.Builder()
-                        .setAspectRatioStrategy(
-                            AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
-                        )
-                        .build()
+                imageCaptureResolutionSelector = imageCaptureSelectorBuilder.build()
+
+                // Drive the preview stream with the same aspect ratio so the
+                // on-screen framing matches the captured photo. Left untouched
+                // when no aspectRatio was configured (default behavior).
+                aspectRatioStrategy?.let { strategy ->
+                    previewResolutionSelector =
+                        ResolutionSelector.Builder()
+                            .setAspectRatioStrategy(strategy)
+                            .build()
+                }
             }
 
         cameraController = controller
@@ -949,8 +1645,33 @@ class CameraView(plugin: Plugin) {
         // Bind to lifecycle
         controller.bindToLifecycle(lifecycleOwner)
 
-        // Set initial zoom factor
-        this.setZoomFactor(config.zoomFactor, null)
+        // Apply the initial zoom factor once the camera has actually opened.
+        // Immediately after bindToLifecycle the controller's zoomState is still
+        // null, so the supported range falls back to 1.0..1.0 and would reject
+        // any non-default zoomFactor.
+        val zoomState = controller.zoomState
+        zoomState.observe(
+            lifecycleOwner,
+            object : Observer<ZoomState> {
+                override fun onChanged(value: ZoomState) {
+                    zoomState.removeObserver(this)
+
+                    // Guard against a stale observation from a controller whose
+                    // session was already replaced.
+                    if (cameraController !== controller) return
+
+                    setZoomFactor(config.zoomFactor) { error ->
+                        if (error != null) {
+                            Log.e(
+                                TAG,
+                                "Failed to apply initial zoom factor ${config.zoomFactor}",
+                                error
+                            )
+                        }
+                    }
+                }
+            }
+        )
     }
 
     /**
@@ -982,6 +1703,7 @@ class CameraView(plugin: Plugin) {
         }
 
         val barcodeScanner = BarcodeScanning.getClient(options)
+        this.barcodeScanner = barcodeScanner
         val mainExecutor = ContextCompat.getMainExecutor(previewView.context)
 
         // Calculate a possible top offset of the webView which is not applied to the previewView
@@ -990,8 +1712,13 @@ class CameraView(plugin: Plugin) {
         // views on android
         val topOffset = calculateTopOffset(webView)
 
+        // The analyzer itself (frame acquisition + ML Kit detection) runs on the camera
+        // executor so it never competes with UI work on the main thread; only the final
+        // result callback is delivered on mainExecutor, since processBarcodeResults reads
+        // previewView (a UI-thread-only object) to map the bounding box to webview
+        // coordinates.
         controller.setImageAnalysisAnalyzer(
-            mainExecutor,
+            cameraExecutor,
             MlKitAnalyzer(
                 listOf(barcodeScanner),
                 ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED,
@@ -1008,7 +1735,9 @@ class CameraView(plugin: Plugin) {
         previewView: PreviewView,
         topOffset: Int
     ) {
-        val now = System.currentTimeMillis()
+        // Monotonic clock (ms since boot): a backward wall-clock jump must not
+        // extend the throttle or suppression windows arbitrarily.
+        val now = SystemClock.elapsedRealtime()
         val lastTime = lastBarcodeDetectionTime.get()
 
         // Thread-safe throttle check using atomic compare-and-set
@@ -1026,33 +1755,42 @@ class CameraView(plugin: Plugin) {
 
         val barcode = barcodes.firstOrNull() ?: return
 
+        val value = barcode.rawValue ?: ""
+        val type = getBarcodeFormatString(barcode.format)
+
+        // Suppress re-emission of the same code within the suppression window so
+        // a static barcode in view produces a bounded event rate. Timestamps are
+        // tracked per key so multiple codes in frame can't defeat the window by
+        // alternating.
+        val barcodeKey = "$type\u0000$value"
+        val lastEmit = recentBarcodeEmitTimes[barcodeKey]
+        if (lastEmit != null && now - lastEmit < BARCODE_SUPPRESSION_WINDOW_MS) {
+            return
+        }
+
+        // Prune expired entries once the map grows, keeping it bounded during
+        // long sessions that scan many different codes.
+        if (recentBarcodeEmitTimes.size > BARCODE_DEDUPE_MAP_PRUNE_THRESHOLD) {
+            recentBarcodeEmitTimes.entries.removeAll { now - it.value >= BARCODE_SUPPRESSION_WINDOW_MS }
+        }
+        recentBarcodeEmitTimes[barcodeKey] = now
+
         // Adjust bounding box to webView coordinates
         val webBoundingRect =
             boundingBoxToWebBoundingRect(previewView, barcode.boundingBox, topOffset)
 
         val barcodeResult =
             BarcodeDetectionResult(
-                value = barcode.rawValue ?: "",
+                value = value,
                 rawBytes = barcode.rawBytes ?: ByteArray(0),
                 displayValue = barcode.displayValue ?: "",
-                type = getBarcodeFormatString(barcode.format),
+                type = type,
                 boundingRect = webBoundingRect
             )
 
-        // Emit to Flow for reactive subscribers
+        // Emit to Flow; the plugin collects this and notifies JS listeners
         scope.launch {
             _barcodeEvents.emit(barcodeResult)
-        }
-
-        // Also notify via callback for backward compatibility
-        notifyBarcodeDetected(barcodeResult)
-    }
-
-    private fun notifyBarcodeDetected(result: BarcodeDetectionResult) {
-        pluginDelegate.let { plugin ->
-            if (plugin is CameraViewPlugin) {
-                plugin.notifyBarcodeDetected(result)
-            }
         }
     }
 
