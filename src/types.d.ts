@@ -87,8 +87,10 @@ declare global {
     public detect(source: ImageBitmapSource): Promise<DetectedBarcode[]>;
   }
 
-  // Also add the class to the window so we can do feature detection
+  // Also add the class to the window so we can do feature detection. Typed as the
+  // constructor (`typeof BarcodeDetector`), not an instance, since `window.BarcodeDetector`
+  // is the class itself (checked via `'BarcodeDetector' in window` and instantiated with `new`).
   interface Window {
-    BarcodeDetector: BarcodeDetector;
+    BarcodeDetector: typeof BarcodeDetector;
   }
 }
