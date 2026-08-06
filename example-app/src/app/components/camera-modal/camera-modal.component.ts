@@ -230,7 +230,6 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       this.#initializeTorchAvailability(),
     ]);
 
-    this.currentZoomFactor.set(this.initialZoomFactor());
     await this.#debugCurrentTorchState();
   }
 
@@ -434,6 +433,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       if (zoomRange) {
         this.minZoom.set(zoomRange.min);
         this.maxZoom.set(zoomRange.max);
+        this.currentZoomFactor.set(zoomRange.current);
       }
     } catch (error) {
       console.warn('Failed to get zoom range, using default values.', error);
