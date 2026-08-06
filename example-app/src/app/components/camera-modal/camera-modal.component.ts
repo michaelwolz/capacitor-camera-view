@@ -548,14 +548,14 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     }, 700);
   }
 
-  #handleTouchStart(event: TouchEvent): void {
+  #handleTouchStart = (event: TouchEvent): void => {
     if (event.touches.length < 2) return;
 
     this.#touchStartDistance = getDistance(event.touches[0], event.touches[1]);
     this.#initialZoomFactorOnPinch = this.currentZoomFactor();
-  }
+  };
 
-  #handleTouchMove(event: TouchEvent): void {
+  #handleTouchMove = (event: TouchEvent): void => {
     if (event.touches.length < 2 || this.#touchStartDistance <= 0) return;
 
     const currentDistance = getDistance(event.touches[0], event.touches[1]);
@@ -567,9 +567,13 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       Math.min(this.maxZoom(), this.#initialZoomFactorOnPinch * scale),
     );
 
-    this.#setZoom(newZoomFactor);
+    // Fire-and-forget: a rejected setZoom must not become an unhandled
+    // rejection on every single touchmove.
+    this.#setZoom(newZoomFactor).catch((error) => {
+      console.warn('Failed to set zoom', getCameraErrorCode(error) ?? error);
+    });
     event.preventDefault(); // Prevent scrolling
-  }
+  };
 
   async toggleTorch(): Promise<void> {
     if (!this.torchAvailable()) {
