@@ -27,8 +27,10 @@ import {
 import {
   BarcodeDetectionData,
   BarcodeType,
+  CameraAspectRatio,
   CameraDevice,
   FlashMode,
+  PreviewScaleMode,
   VideoRecordingQuality,
 } from 'capacitor-camera-view';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
@@ -40,6 +42,7 @@ import { GalleryService } from '../../services/gallery.service';
  */
 const barcodeTypeLabels = {
   aztec: 'Aztec',
+  codabar: 'Codabar',
   code128: 'Code 128',
   code39: 'Code 39',
   code39Mod43: 'Code 39 Mod 43',
@@ -51,6 +54,7 @@ const barcodeTypeLabels = {
   itf14: 'ITF-14',
   pdf417: 'PDF417',
   qr: 'QR Code',
+  upcA: 'UPC-A',
   upce: 'UPC-E',
 } satisfies Record<BarcodeType, string>;
 
@@ -100,6 +104,9 @@ export class CameraSettingsPage implements OnInit {
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
+  protected aspectRatio = model<CameraAspectRatio | 'default'>('default');
+  protected captureMaxDimension = model<number>(0);
+  protected previewScaleMode = model<PreviewScaleMode>('cover');
   protected saveToFile = model<boolean>(false);
   protected enableAudio = model<boolean>(true);
   protected videoRecordingQuality = model<VideoRecordingQuality>('hd');
@@ -154,6 +161,13 @@ export class CameraSettingsPage implements OnInit {
         quality: this.quality(),
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
         initialZoomFactor: this.initialZoomFactor(),
+        aspectRatio:
+          this.aspectRatio() === 'default' ? undefined : this.aspectRatio(),
+        captureMaxDimension:
+          this.captureMaxDimension() > 0
+            ? this.captureMaxDimension()
+            : undefined,
+        previewScaleMode: this.previewScaleMode(),
         saveToFile: this.saveToFile(),
         enableAudio: this.enableAudio(),
         videoRecordingQuality: this.videoRecordingQuality(),

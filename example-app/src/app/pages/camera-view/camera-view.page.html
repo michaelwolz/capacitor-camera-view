@@ -67,6 +67,46 @@
       </ion-range>
     </ion-item>
 
+    <ion-item>
+      <ion-select
+        [(ngModel)]="aspectRatio"
+        label="Aspect Ratio"
+        label-placement="floating"
+      >
+        <ion-select-option value="default">
+          Platform default
+        </ion-select-option>
+        <ion-select-option value="4:3"> 4:3 </ion-select-option>
+        <ion-select-option value="16:9"> 16:9 </ion-select-option>
+      </ion-select>
+    </ion-item>
+
+    <ion-item>
+      <ion-select
+        [(ngModel)]="captureMaxDimension"
+        label="Capture Max Dimension (longer edge)"
+        label-placement="floating"
+      >
+        <ion-select-option [value]="0"> Platform default </ion-select-option>
+        <ion-select-option [value]="640"> 640 px </ion-select-option>
+        <ion-select-option [value]="1280"> 1280 px </ion-select-option>
+        <ion-select-option [value]="1920"> 1920 px </ion-select-option>
+        <ion-select-option [value]="2560"> 2560 px </ion-select-option>
+        <ion-select-option [value]="4032"> 4032 px </ion-select-option>
+      </ion-select>
+    </ion-item>
+
+    <ion-item>
+      <ion-select
+        [(ngModel)]="previewScaleMode"
+        label="Preview Scale Mode"
+        label-placement="floating"
+      >
+        <ion-select-option value="cover"> Cover </ion-select-option>
+        <ion-select-option value="fit"> Fit (letterbox) </ion-select-option>
+      </ion-select>
+    </ion-item>
+
     @if (isIos) {
       <ion-item>
         <ion-checkbox
