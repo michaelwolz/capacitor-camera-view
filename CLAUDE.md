@@ -8,26 +8,36 @@ Capacitor Camera View is a Capacitor plugin that embeds a live camera feed into 
 
 ## Common Commands
 
+This repo uses **pnpm**, not npm. The version is pinned via `packageManager` in
+`package.json`. Never run `npm install` here — it would bypass the dependency
+age policy described below and produce a stray `package-lock.json`.
+
 ```bash
+# Install dependencies
+pnpm install
+
 # Build the plugin (generates docs + compiles TypeScript + bundles with Rollup)
-npm run build
+pnpm run build
 
 # Lint TypeScript
-npm run lint
+pnpm run lint
 
 # Lint Swift code
-npm run lint:ios
+pnpm run lint:ios
 
 # Format all code (TypeScript, Java, Swift)
-npm run fmt
+pnpm run fmt
+
+# Run unit tests
+pnpm run test
 
 # Verify all platforms build correctly
-npm run verify
+pnpm run verify
 
 # Verify individual platforms
-npm run verify:ios      # Builds iOS with xcodebuild
-npm run verify:android  # Builds Android with Gradle
-npm run verify:web      # Same as npm run build
+pnpm run verify:ios      # Builds iOS with xcodebuild
+pnpm run verify:android  # Builds Android with Gradle
+pnpm run verify:web      # Same as pnpm run build
 ```
 
 ## Architecture
@@ -62,7 +72,7 @@ This is a standard Capacitor plugin with platform-specific implementations:
 
 ## Example App
 
-The `example-app/` directory contains an Ionic Angular app demonstrating plugin usage. It has its own `package.json` and must be built separately.
+The `example-app/` directory contains an Ionic Angular app demonstrating plugin usage. It is a separate pnpm project with its own `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`, and must be installed and built separately.
 
 ## Release Process
 

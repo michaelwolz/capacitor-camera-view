@@ -7,10 +7,17 @@ This guide provides instructions for contributing to this Capacitor plugin.
 ### Local Setup
 
 1. Fork and clone the repo.
+1. Enable [pnpm](https://pnpm.io). The required version is pinned in the
+   `packageManager` field of `package.json`, so Corepack will select it for you.
+
+    ```shell
+    corepack enable
+    ```
+
 1. Install the dependencies.
 
     ```shell
-    npm install
+    pnpm install
     ```
 
 1. Install SwiftLint if you're on macOS.
@@ -21,7 +28,7 @@ This guide provides instructions for contributing to this Capacitor plugin.
 
 ### Scripts
 
-#### `npm run build`
+#### `pnpm run build`
 
 Build the plugin web assets and generate plugin API documentation using [`@capacitor/docgen`](https://github.com/ionic-team/capacitor-docgen).
 
@@ -29,13 +36,13 @@ It will compile the TypeScript code from `src/` into ESM JavaScript in `dist/esm
 
 Then, Rollup will bundle the code into a single file at `dist/plugin.js`. This file is used in apps without bundlers by including it as a script in `index.html`.
 
-#### `npm run verify`
+#### `pnpm run verify`
 
 Build and validate the web and native projects.
 
 This is useful to run in CI to verify that the plugin builds for all platforms.
 
-#### `npm run lint` / `npm run fmt`
+#### `pnpm run lint` / `pnpm run fmt`
 
 Check formatting and code quality, autoformat/autofix if possible.
 
@@ -43,10 +50,13 @@ This template is integrated with ESLint, Prettier, and SwiftLint. Using these to
 
 ## Publishing
 
-There is a `prepublishOnly` hook in `package.json` which prepares the plugin before publishing, so all you need to do is run:
+Releases are automated with semantic-release, so publishing by hand should rarely
+be necessary. There is a `prepublishOnly` hook in `package.json` which prepares the
+plugin before publishing, so if you do need to publish manually, all you need to do
+is run:
 
 ```shell
-npm publish
+pnpm publish
 ```
 
 > **Note**: The [`files`](https://docs.npmjs.com/cli/v7/configuring-npm/package-json#files) array in `package.json` specifies which files get published. If you rename files/directories or add files elsewhere, you may need to update it.

@@ -1,0 +1,15 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude: []
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+# @capacitor/docgen pins typescript@~4.2.4, which resolves this plugin's types
+# incorrectly under pnpm's isolated layout and corrupts the generated README.
+nodeLinker: hoisted
+
+# Dependency install scripts are blocked by default. Every entry here is an
+# explicit, reviewed exception — keep the list as short as possible.
+allowBuilds:
+  # Its postinstall only prints an advisory notice; node-swiftlint shells out
+  # to the SwiftLint binary from PATH (see CONTRIBUTING.md), so nothing breaks.
+  swiftlint: false

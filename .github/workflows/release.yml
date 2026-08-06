@@ -32,14 +32,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Semantic Release
         env:
@@ -53,7 +56,7 @@ jobs:
           fi
 
           if [ "$DRY_RUN" = "true" ]; then
-            npx semantic-release --dry-run
+            pnpm exec semantic-release --dry-run
           else
-            npx semantic-release
+            pnpm exec semantic-release
           fi
