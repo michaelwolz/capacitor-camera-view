@@ -635,7 +635,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
    * Helper method for checking current torch state
    */
   async #debugCurrentTorchState(): Promise<void> {
-    const currentState = await this.#cameraViewService.getTorchMode();
-    console.debug('Current torch state:', currentState);
+    try {
+      const currentState = await this.#cameraViewService.getTorchMode();
+      console.debug('Current torch state:', currentState);
+    } catch (error) {
+      console.warn('Failed to read torch state', error);
+    }
   }
 }
