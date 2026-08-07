@@ -1,3 +1,52 @@
+# [3.0.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.4.0...3.0.0) (2026-08-07)
+
+
+* feat(*)!: expand the plugin API surface ([6daa584](https://github.com/michaelwolz/capacitor-camera-view/commit/6daa5841b7895e7223e3d233889239b96c8ae401))
+* feat(android)!: remove RECORD_AUDIO from the plugin manifest ([2f1a528](https://github.com/michaelwolz/capacitor-camera-view/commit/2f1a52889ef04f98021f395fd1bfa29a0101b5c5))
+* feat(ios)!: raise minimum deployment target to iOS 16 ([3ad6c17](https://github.com/michaelwolz/capacitor-camera-view/commit/3ad6c1762f7215de187b62e56ed6892be168e9d1))
+
+
+### Bug Fixes
+
+* **camera-modal:** guard torch state debug logging ([af22559](https://github.com/michaelwolz/capacitor-camera-view/commit/af22559bd6ae4c57141b3f3a838401670e0403ea))
+* **camera-modal:** set current zoom factor from zoom range ([dedb25c](https://github.com/michaelwolz/capacitor-camera-view/commit/dedb25cf2e9f7e86ba536d7a870e451a5d0f1ae7))
+* **example-app:** repair pinch-to-zoom gesture ([4b919cb](https://github.com/michaelwolz/capacitor-camera-view/commit/4b919cbb6da73ca045c2e78ee20f6b7eb94129e1))
+
+
+### Features
+
+* **android:** rework the CameraX pipeline ([a091ef6](https://github.com/michaelwolz/capacitor-camera-view/commit/a091ef601315b06cd4af9b8d155f5646de644d08))
+* **example:** demonstrate the new options ([dd879aa](https://github.com/michaelwolz/capacitor-camera-view/commit/dd879aa06a55376ca2ae4492805e12cf2d39f69f))
+* **ios:** rework the capture session ([ff2afd8](https://github.com/michaelwolz/capacitor-camera-view/commit/ff2afd80e9a082867b2b69a06d2ee45e89bbafc0))
+* **web:** rework the web implementation ([40aabdf](https://github.com/michaelwolz/capacitor-camera-view/commit/40aabdf33615861a5b876cdcb859146eda9f2f86))
+
+
+### BREAKING CHANGES
+
+* `start()` now rejects with 'Camera session is already
+running' on iOS and web when a session is active; previously iOS reconfigured
+the running session in place and web silently resolved. Call `stop()` before
+starting a new session with different options.
+* `CaptureResponse` resolves to the union of
+`CaptureFileResult` and `CaptureBase64Result` when `saveToFile` is a
+non-literal `boolean`. It previously resolved to the base64 result alone,
+which was unsound because the runtime value can be either. Split the call
+into literal `true`/`false` branches, or narrow the result before use.
+* `removeAllListeners()` no longer accepts an `eventName`
+argument. No implementation ever honored it; drop the argument at the call
+site.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+* Apps that record video with audio on Android must declare
+`android.permission.RECORD_AUDIO` in their own manifest. Apps that never
+record audio no longer inherit the permission.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+* The plugin no longer supports iOS 15. Host apps must raise
+their deployment target to iOS 16.0 or later.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 # [2.4.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.3.1...2.4.0) (2026-07-01)
 
 
