@@ -10,8 +10,12 @@ import { FormsModule } from '@angular/forms';
 import { Capacitor } from '@capacitor/core';
 import {
   IonButton,
+  IonCard,
+  IonCardHeader,
+  IonCardSubtitle,
   IonCheckbox,
   IonContent,
+  IonFooter,
   IonHeader,
   IonIcon,
   IonItem,
@@ -76,8 +80,12 @@ const videoRecordingQualityLabels = {
   imports: [
     FormsModule,
     IonButton,
+    IonCard,
+    IonCardHeader,
+    IonCardSubtitle,
     IonCheckbox,
     IonContent,
+    IonFooter,
     IonHeader,
     IonIcon,
     IonItem,

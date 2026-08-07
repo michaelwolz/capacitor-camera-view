@@ -4,224 +4,265 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" class="ion-padding">
-  <ion-list lines="full" class="ion-margin-bottom">
-    <ion-item>
-      <ion-select
-        [(ngModel)]="deviceId"
-        label="Device"
-        placeholder="Default camera device"
-        label-placement="floating"
-      >
-        <ion-select-option [value]="null">
-          Default camera device
-        </ion-select-option>
+<ion-content [fullscreen]="true">
+  <ion-card>
+    <ion-card-header>
+      <ion-card-subtitle>Camera</ion-card-subtitle>
+    </ion-card-header>
 
-        @for (device of cameraDevices(); track device.id) {
-          <ion-select-option value="{{ device.id }}">
-            ({{ device.position }}) - {{ device.name }}
+    <ion-list lines="full" class="ion-no-padding">
+      <ion-item>
+        <ion-select
+          [(ngModel)]="deviceId"
+          label="Device"
+          placeholder="Default camera device"
+          label-placement="floating"
+        >
+          <ion-select-option [value]="null">
+            Default camera device
           </ion-select-option>
-        }
-      </ion-select>
-    </ion-item>
 
-    @if (!deviceId()) {
-      <ion-item>
-        <ion-select
-          [(ngModel)]="position"
-          label="Camera Position"
-          label-placement="floating"
-        >
-          <ion-select-option value="back"> Back </ion-select-option>
-          <ion-select-option value="front"> Front </ion-select-option>
-        </ion-select>
-      </ion-item>
-    }
-
-    <ion-item>
-      <ion-range
-        [(ngModel)]="quality"
-        min="0"
-        max="100"
-        step="1"
-        [label]="'Photo Quality (' + quality() + ')'"
-        labelPlacement="stacked"
-      >
-        <ion-icon size="small" slot="start" name="sunny-outline"></ion-icon>
-        <ion-icon slot="end" name="sunny"></ion-icon>
-      </ion-range>
-    </ion-item>
-
-    <ion-item>
-      <ion-range
-        [(ngModel)]="initialZoomFactor"
-        min="1.0"
-        max="3.0"
-        step="0.25"
-        snaps="true"
-        [label]="'Initial Zoom Level (' + initialZoomFactor() + 'x)'"
-        labelPlacement="stacked"
-      >
-        <ion-icon size="small" slot="start" name="search-outline"></ion-icon>
-        <ion-icon slot="end" name="search"></ion-icon>
-      </ion-range>
-    </ion-item>
-
-    <ion-item>
-      <ion-select
-        [(ngModel)]="aspectRatio"
-        label="Aspect Ratio"
-        label-placement="floating"
-      >
-        <ion-select-option value="default">
-          Platform default
-        </ion-select-option>
-        <ion-select-option value="4:3"> 4:3 </ion-select-option>
-        <ion-select-option value="16:9"> 16:9 </ion-select-option>
-      </ion-select>
-    </ion-item>
-
-    <ion-item>
-      <ion-select
-        [(ngModel)]="captureMaxDimension"
-        label="Capture Max Dimension (longer edge)"
-        label-placement="floating"
-      >
-        <ion-select-option [value]="0"> Platform default </ion-select-option>
-        <ion-select-option [value]="640"> 640 px </ion-select-option>
-        <ion-select-option [value]="1280"> 1280 px </ion-select-option>
-        <ion-select-option [value]="1920"> 1920 px </ion-select-option>
-        <ion-select-option [value]="2560"> 2560 px </ion-select-option>
-        <ion-select-option [value]="4032"> 4032 px </ion-select-option>
-      </ion-select>
-    </ion-item>
-
-    <ion-item>
-      <ion-select
-        [(ngModel)]="previewScaleMode"
-        label="Preview Scale Mode"
-        label-placement="floating"
-      >
-        <ion-select-option value="cover"> Cover </ion-select-option>
-        <ion-select-option value="fit"> Fit (letterbox) </ion-select-option>
-      </ion-select>
-    </ion-item>
-
-    @if (isIos) {
-      <ion-item>
-        <ion-checkbox
-          [(ngModel)]="useTripleCameraIfAvailable"
-          color="primary"
-          justify="space-between"
-        >
-          Use Triple Camera (iPhone Pro only)
-        </ion-checkbox>
-      </ion-item>
-    }
-
-    <ion-item>
-      <ion-checkbox
-        [(ngModel)]="enableBarcodeDetection"
-        color="primary"
-        justify="space-between"
-      >
-        Enable Barcode Detection
-      </ion-checkbox>
-    </ion-item>
-
-    @if (enableBarcodeDetection()) {
-      <ion-item>
-        <ion-select
-          [(ngModel)]="barcodeTypes"
-          label="Barcode Types"
-          placeholder="Select barcode types to detect"
-          label-placement="floating"
-          multiple
-        >
-          @for (type of barcodeTypeOptions; track type.value) {
-            <ion-select-option value="{{ type.value }}">
-              {{ type.label }}
+          @for (device of cameraDevices(); track device.id) {
+            <ion-select-option value="{{ device.id }}">
+              ({{ device.position }}) - {{ device.name }}
             </ion-select-option>
           }
         </ion-select>
       </ion-item>
-    }
 
-    <ion-item>
-      <ion-checkbox
-        [(ngModel)]="saveToFile"
-        color="primary"
-        justify="space-between"
-      >
-        Save to File
-      </ion-checkbox>
-    </ion-item>
+      @if (!deviceId()) {
+        <ion-item>
+          <ion-select
+            [(ngModel)]="position"
+            label="Camera Position"
+            label-placement="floating"
+          >
+            <ion-select-option value="back"> Back </ion-select-option>
+            <ion-select-option value="front"> Front </ion-select-option>
+          </ion-select>
+        </ion-item>
+      }
 
-    <ion-item>
-      <ion-checkbox
-        [(ngModel)]="enableAudio"
-        color="primary"
-        justify="space-between"
-      >
-        Enable Audio for Video Recording
-      </ion-checkbox>
-    </ion-item>
+      <ion-item>
+        <ion-range
+          [(ngModel)]="initialZoomFactor"
+          min="1.0"
+          max="3.0"
+          step="0.25"
+          snaps="true"
+          [label]="'Initial Zoom Level (' + initialZoomFactor() + 'x)'"
+          labelPlacement="stacked"
+        >
+          <ion-icon size="small" slot="start" name="search-outline"></ion-icon>
+          <ion-icon slot="end" name="search"></ion-icon>
+        </ion-range>
+      </ion-item>
 
-    <ion-item>
-      <ion-select
-        [(ngModel)]="videoRecordingQuality"
-        label="Video Recording Quality"
-        placeholder="Select video recording quality"
-        label-placement="floating"
-      >
-        @for (option of videoRecordingQualityOptions; track option.value) {
-          <ion-select-option value="{{ option.value }}">
-            {{ option.label }}
+      <ion-item lines="none">
+        <ion-select
+          [(ngModel)]="previewScaleMode"
+          label="Preview Scale Mode"
+          label-placement="floating"
+        >
+          <ion-select-option value="cover"> Cover </ion-select-option>
+          <ion-select-option value="fit"> Fit (letterbox) </ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      @if (isIos) {
+        <ion-item lines="none">
+          <ion-checkbox
+            [(ngModel)]="useTripleCameraIfAvailable"
+            color="primary"
+            justify="space-between"
+          >
+            Use Triple Camera (iPhone Pro only)
+          </ion-checkbox>
+        </ion-item>
+      }
+    </ion-list>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-subtitle>Photo Capture</ion-card-subtitle>
+    </ion-card-header>
+
+    <ion-list lines="full" class="ion-no-padding">
+      <ion-item>
+        <ion-range
+          [(ngModel)]="quality"
+          min="0"
+          max="100"
+          step="1"
+          [label]="'Photo Quality (' + quality() + ')'"
+          labelPlacement="stacked"
+        >
+          <ion-icon size="small" slot="start" name="sunny-outline"></ion-icon>
+          <ion-icon slot="end" name="sunny"></ion-icon>
+        </ion-range>
+      </ion-item>
+
+      <ion-item>
+        <ion-select
+          [(ngModel)]="aspectRatio"
+          label="Aspect Ratio"
+          label-placement="floating"
+        >
+          <ion-select-option value="default">
+            Platform default
           </ion-select-option>
-        }
-      </ion-select>
-    </ion-item>
-  </ion-list>
-
-  <ion-button (click)="startCamera()" expand="block">
-    <ion-icon name="camera-outline" slot="start" />
-    Start Camera
-  </ion-button>
-
-  @if (barcodeValue() || barcodeDisplayValue() || barcodeRawBytes()) {
-    <ion-list>
-      <ion-item class="ion-margin-bottom ion-margin-top">
-        <ion-textarea
-          [value]="barcodeValue() ?? ''"
-          [readonly]="true"
-          [autoGrow]="true"
-          fill="solid"
-          label="Value"
-          labelPlacement="floating"
-        />
+          <ion-select-option value="4:3"> 4:3 </ion-select-option>
+          <ion-select-option value="16:9"> 16:9 </ion-select-option>
+        </ion-select>
       </ion-item>
 
-      <ion-item class="ion-margin-bottom">
-        <ion-textarea
-          [value]="barcodeDisplayValue() ?? ''"
-          [readonly]="true"
-          [autoGrow]="true"
-          fill="solid"
-          label="Display Value"
-          labelPlacement="floating"
-        />
+      <ion-item>
+        <ion-select
+          [(ngModel)]="captureMaxDimension"
+          label="Capture Max Dimension (longer edge)"
+          label-placement="floating"
+        >
+          <ion-select-option [value]="0"> Platform default </ion-select-option>
+          <ion-select-option [value]="640"> 640 px </ion-select-option>
+          <ion-select-option [value]="1280"> 1280 px </ion-select-option>
+          <ion-select-option [value]="1920"> 1920 px </ion-select-option>
+          <ion-select-option [value]="2560"> 2560 px </ion-select-option>
+          <ion-select-option [value]="4032"> 4032 px </ion-select-option>
+        </ion-select>
       </ion-item>
 
-      <ion-item class="ion-margin-bottom">
-        <ion-textarea
-          [value]="barcodeRawBytes() ?? ''"
-          [readonly]="true"
-          [autoGrow]="true"
-          fill="solid"
-          label="Raw Bytes"
-          labelPlacement="floating"
-        />
+      <ion-item lines="none">
+        <ion-checkbox
+          [(ngModel)]="saveToFile"
+          color="primary"
+          justify="space-between"
+        >
+          Save to File
+        </ion-checkbox>
       </ion-item>
     </ion-list>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-subtitle>Video Recording</ion-card-subtitle>
+    </ion-card-header>
+
+    <ion-list lines="full" class="ion-no-padding">
+      <ion-item>
+        <ion-select
+          [(ngModel)]="videoRecordingQuality"
+          label="Quality"
+          placeholder="Select video recording quality"
+          label-placement="floating"
+        >
+          @for (option of videoRecordingQualityOptions; track option.value) {
+            <ion-select-option value="{{ option.value }}">
+              {{ option.label }}
+            </ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+
+      <ion-item lines="none">
+        <ion-checkbox
+          [(ngModel)]="enableAudio"
+          color="primary"
+          justify="space-between"
+        >
+          Enable Audio
+        </ion-checkbox>
+      </ion-item>
+    </ion-list>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-subtitle>Barcode Detection</ion-card-subtitle>
+    </ion-card-header>
+
+    <ion-list lines="full" class="ion-no-padding">
+      <ion-item [lines]="enableBarcodeDetection() ? 'full' : 'none'">
+        <ion-checkbox
+          [(ngModel)]="enableBarcodeDetection"
+          color="primary"
+          justify="space-between"
+        >
+          Enable Barcode Detection
+        </ion-checkbox>
+      </ion-item>
+
+      @if (enableBarcodeDetection()) {
+        <ion-item lines="none">
+          <ion-select
+            [(ngModel)]="barcodeTypes"
+            label="Barcode Types"
+            placeholder="Select barcode types to detect"
+            label-placement="floating"
+            multiple
+          >
+            @for (type of barcodeTypeOptions; track type.value) {
+              <ion-select-option value="{{ type.value }}">
+                {{ type.label }}
+              </ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+      }
+    </ion-list>
+  </ion-card>
+
+  @if (barcodeValue() || barcodeDisplayValue() || barcodeRawBytes()) {
+    <ion-card>
+      <ion-card-header>
+        <ion-card-subtitle>Last Detected Barcode</ion-card-subtitle>
+      </ion-card-header>
+
+      <ion-list lines="full" class="ion-no-padding">
+        <ion-item>
+          <ion-textarea
+            [value]="barcodeValue() ?? ''"
+            [readonly]="true"
+            [autoGrow]="true"
+            label="Value"
+            labelPlacement="stacked"
+          />
+        </ion-item>
+
+        <ion-item>
+          <ion-textarea
+            [value]="barcodeDisplayValue() ?? ''"
+            [readonly]="true"
+            [autoGrow]="true"
+            label="Display Value"
+            labelPlacement="stacked"
+          />
+        </ion-item>
+
+        <ion-item lines="none">
+          <ion-textarea
+            [value]="barcodeRawBytes() ?? ''"
+            [readonly]="true"
+            [autoGrow]="true"
+            label="Raw Bytes"
+            labelPlacement="stacked"
+          />
+        </ion-item>
+      </ion-list>
+    </ion-card>
   }
 </ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-button
+      (click)="startCamera()"
+      expand="block"
+      class="ion-margin-horizontal"
+    >
+      <ion-icon name="camera-outline" slot="start" />
+      Start Camera
+    </ion-button>
+  </ion-toolbar>
+</ion-footer>
