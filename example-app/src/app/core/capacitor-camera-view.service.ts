@@ -120,6 +120,15 @@ export class CapacitorCameraViewService {
   }
 
   /**
+   * Focus and meter the camera at a point (tap-to-focus).
+   * @param x The horizontal coordinate in CSS/viewport pixels
+   * @param y The vertical coordinate in CSS/viewport pixels
+   */
+  async setFocusPoint(x: number, y: number): Promise<void> {
+    return this.#cameraView.setFocusPoint({ x, y });
+  }
+
+  /**
    * Get the current flash mode
    * @returns The current flash mode
    */

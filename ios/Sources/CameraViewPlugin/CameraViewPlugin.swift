@@ -35,6 +35,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         CAPPluginMethod(name: "flipCamera", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getZoom", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setZoom", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setFocusPoint", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getFlashMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
@@ -54,25 +55,41 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     public func cameraDidDetectBarcode(_ event: BarcodeDetectedEvent) {
         notifyListeners("barcodeDetected", data: event.toDictionary())
     }
+
+    public func cameraWasInterrupted(reason: String) {
+        notifyListeners("cameraInterrupted", data: ["reason": reason])
+    }
+
+    public func cameraInterruptionEnded() {
+        notifyListeners("cameraResumed", data: [:])
+    }
+
+    public func cameraRuntimeError(message: String, code: Int?) {
+        var data: [String: Any] = ["message": message]
+        if let code = code {
+            data["code"] = code
+        }
+        notifyListeners("cameraRuntimeError", data: data)
+    }
     
     @objc func start(_ call: CAPPluginCall) {
         guard let webView = self.webView else {
-            call.reject("Cannot find web view")
+            call.reject("Cannot find web view", CameraError.missingWebView.code)
             return
         }
-        
+
         maybeRequestCameraAccess { [weak self] granted in
             guard granted else {
-                call.reject("Camera access denied")
+                call.reject("Camera access denied", CameraError.permissionDenied.code)
                 return
             }
-            
+
             self?.implementation.startSession(
                 configuration: sessionConfigFromPluginCall(call),
                 webView: webView,
                 completion: { (error) in
                     if let error = error {
-                        call.reject("Failed to start camera preview", nil, error)
+                        call.reject("Failed to start camera preview", error.cameraErrorCode, error)
                         return
                     }
                     call.resolve()
@@ -97,22 +114,22 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         let saveToFile = call.getBool("saveToFile", false)
         
         guard quality >= 0.0 && quality <= 100.0 else {
-            call.reject("Quality must be between 0 and 100")
+            call.reject("Quality must be between 0 and 100", CameraError.invalidArgument.code)
             return
         }
-        
+
         // Use optimized Data-based capture to avoid double JPEG encoding
         implementation.capturePhotoData(completion: { [weak self] (data, error) in
             if let error = error {
-                call.reject("Failed to capture image", nil, error)
+                call.reject("Failed to capture image", error.cameraErrorCode, error)
                 return
             }
-            
+
             guard let originalData = data else {
-                call.reject("No image data")
+                call.reject("No image data", CameraError.captureOutputMissing.code)
                 return
             }
-            
+
             // Determine final image data based on quality setting
             // For quality >= 90%, use original camera JPEG data to avoid re-encoding
             // For lower quality, re-encode to reduce file size
@@ -121,33 +138,34 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
                 // Use original JPEG data from camera (avoids quality loss and CPU overhead)
                 imageData = originalData
             } else {
-                // Re-encode at lower quality for smaller file size
-                guard let image = UIImage(data: originalData),
-                      let compressedData = image.jpegData(compressionQuality: quality / 100.0) else {
-                    call.reject("Failed to compress image")
+                // Re-encode at lower quality for smaller file size. Uses ImageIO
+                // directly (rather than UIImage.jpegData) so EXIF/GPS metadata
+                // from the original camera JPEG survives the re-encode.
+                guard let compressedData = reencodeJPEG(data: originalData, compressionQuality: quality / 100.0) else {
+                    call.reject("Failed to compress image", CameraError.imageCompressionFailed.code)
                     return
                 }
                 imageData = compressedData
             }
-            
+
             if saveToFile {
                 // Use TempFileManager for tracked temp files with automatic cleanup
                 let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
                     try imageData.write(to: tempFileURL)
-                    
+
                     // Convert file URL to webView-accessible path using Capacitor bridge
                     guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
-                        call.reject("Failed to create web-accessible path")
+                        call.reject("Failed to create web-accessible path", CameraError.pathConversionFailed.code)
                         return
                     }
-                    
+
                     call.resolve([
                         "path": tempFileURL.absoluteString,
                         "webPath": webPath,
                     ])
                 } catch {
-                    call.reject("Failed to save image to file", nil, error)
+                    call.reject("Failed to save image to file", CameraError.fileWriteFailed.code, error)
                 }
             } else {
                 // Return as base64
@@ -163,44 +181,44 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         let saveToFile = call.getBool("saveToFile", false)
         
         guard quality >= 0.0 && quality <= 100.0 else {
-            call.reject("Quality must be between 0 and 100")
+            call.reject("Quality must be between 0 and 100", CameraError.invalidArgument.code)
             return
         }
-        
+
         implementation.captureSnapshot { [weak self] (image, error) in
             if let error = error {
-                call.reject("Failed to capture frame", nil, error)
+                call.reject("Failed to capture frame", error.cameraErrorCode, error)
                 return
             }
-            
+
             guard let image = image else {
-                call.reject("No frame data")
+                call.reject("No frame data", CameraError.captureOutputMissing.code)
                 return
             }
-            
+
             guard let imageData = image.jpegData(compressionQuality: quality / 100.0) else {
-                call.reject("Failed to compress image")
+                call.reject("Failed to compress image", CameraError.imageCompressionFailed.code)
                 return
             }
-            
+
             if saveToFile {
                 // Use TempFileManager for tracked temp files with automatic cleanup
                 let tempFileURL = TempFileManager.shared.createTempImageFile()
                 do {
                     try imageData.write(to: tempFileURL)
-                    
+
                     // Convert file URL to webView-accessible path using Capacitor bridge
                     guard let webPath = self?.bridge?.portablePath(fromLocalURL: tempFileURL)?.absoluteString else {
-                        call.reject("Failed to create web-accessible path")
+                        call.reject("Failed to create web-accessible path", CameraError.pathConversionFailed.code)
                         return
                     }
-                    
+
                     call.resolve([
                         "path": tempFileURL.absoluteString,
                         "webPath": webPath,
                     ])
                 } catch {
-                    call.reject("Failed to save sample to file", nil, error)
+                    call.reject("Failed to save sample to file", CameraError.fileWriteFailed.code, error)
                 }
             } else {
                 // Return as base64
@@ -216,14 +234,14 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
         let videoQuality = call.getString("videoQuality") ?? "highest"
 
         guard let parsedVideoQuality = VideoRecordingQuality(rawValue: videoQuality) else {
-            call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest")
+            call.reject("Invalid videoQuality. Use one of: lowest, sd, hd, fhd, uhd, highest", CameraError.invalidArgument.code)
             return
         }
-        
+
         if enableAudio {
             maybeRequestMicrophoneAccess { [weak self] granted in
                 guard granted else {
-                    call.reject("Microphone access denied")
+                    call.reject("Microphone access denied", CameraError.permissionDenied.code)
                     return
                 }
                 self?.doStartRecording(call: call, enableAudio: true, videoQuality: parsedVideoQuality)
@@ -232,7 +250,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
             doStartRecording(call: call, enableAudio: false, videoQuality: parsedVideoQuality)
         }
     }
-    
+
     private func doStartRecording(
         call: CAPPluginCall,
         enableAudio: Bool,
@@ -240,30 +258,30 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     ) {
         implementation.startRecording(enableAudio: enableAudio, videoQuality: videoQuality) { error in
             if let error = error {
-                call.reject("Failed to start recording", nil, error)
+                call.reject("Failed to start recording", error.cameraErrorCode, error)
                 return
             }
             call.resolve()
         }
     }
-    
+
     @objc func stopRecording(_ call: CAPPluginCall) {
         implementation.stopRecording { [weak self] (outputURL, error) in
             if let error = error {
-                call.reject("Failed to stop recording", nil, error)
+                call.reject("Failed to stop recording", error.cameraErrorCode, error)
                 return
             }
-            
+
             guard let outputURL = outputURL else {
-                call.reject("No output file URL")
+                call.reject("No output file URL", CameraError.captureOutputMissing.code)
                 return
             }
-            
+
             guard let webPath = self?.bridge?.portablePath(fromLocalURL: outputURL)?.absoluteString else {
-                call.reject("Failed to create web-accessible path")
+                call.reject("Failed to create web-accessible path", CameraError.pathConversionFailed.code)
                 return
             }
-            
+
             call.resolve([
                 "path": outputURL.absoluteString,
                 "webPath": webPath,
@@ -290,12 +308,12 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     }
     
     @objc func flipCamera(_ call: CAPPluginCall) {
-        do {
-            try implementation.flipCamera()
+        implementation.flipCamera { error in
+            if let error = error {
+                call.reject("Failed to switch camera", error.cameraErrorCode, error)
+                return
+            }
             call.resolve()
-        } catch {
-            call.reject("Failed to switch camera", nil, error)
-            return
         }
     }
     
@@ -311,21 +329,36 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc func setZoom(_ call: CAPPluginCall) {
         guard let level = call.getDouble("level") else {
-            call.reject("Zoom level must be provided")
+            call.reject("Zoom level must be provided", CameraError.invalidArgument.code)
             return
         }
-        
+
         let ramp = call.getBool("ramp") ?? false
-        
+
         do {
             try implementation.setZoomFactor(level, ramp: ramp)
             call.resolve()
         } catch {
-            call.reject("Failed to set zoom level", nil, error)
+            call.reject("Failed to set zoom level", error.cameraErrorCode, error)
             return
         }
     }
     
+    @objc func setFocusPoint(_ call: CAPPluginCall) {
+        guard let pointX = call.getDouble("x"), let pointY = call.getDouble("y") else {
+            call.reject("Focus point x and y must be provided", CameraError.invalidArgument.code)
+            return
+        }
+
+        implementation.setFocusPoint(x: CGFloat(pointX), y: CGFloat(pointY)) { error in
+            if let error = error {
+                call.reject("Failed to set focus point", error.cameraErrorCode, error)
+                return
+            }
+            call.resolve()
+        }
+    }
+
     @objc func getFlashMode(_ call: CAPPluginCall) {
         let flashMode = implementation.getFlashMode()
         
@@ -336,7 +369,7 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc func getSupportedFlashModes(_ call: CAPPluginCall) {
         let supportedFlashModes = implementation.getSupportedFlashModes()
-        let supportedFlashModeStrArr = supportedFlashModes.map { flashModeToStrMap[$0] }
+        let supportedFlashModeStrArr = supportedFlashModes.compactMap { flashModeToStrMap[$0] }
         
         call.resolve([
             "flashModes": supportedFlashModeStrArr
@@ -345,20 +378,20 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc func setFlashMode(_ call: CAPPluginCall) {
         guard let mode = call.getString("mode") else {
-            call.reject("Flash mode must be provided")
+            call.reject("Flash mode must be provided", CameraError.invalidArgument.code)
             return
         }
-        
+
         guard let flashMode = strToFlashModeMap[mode] else {
-            call.reject("Invalid flash mode")
+            call.reject("Invalid flash mode", CameraError.invalidArgument.code)
             return
         }
-        
+
         do {
             try implementation.setFlashMode(flashMode)
             call.resolve()
         } catch {
-            call.reject("Failed to set flash mode", nil, error)
+            call.reject("Failed to set flash mode", error.cameraErrorCode, error)
         }
     }
     
@@ -379,22 +412,22 @@ public class CameraViewPlugin: CAPPlugin, CAPBridgedPlugin, CameraEventDelegate 
     
     @objc func setTorchMode(_ call: CAPPluginCall) {
         guard let enabled = call.getBool("enabled") else {
-            call.reject("Enabled parameter is required")
+            call.reject("Enabled parameter is required", CameraError.invalidArgument.code)
             return
         }
-        
+
         let level = call.getFloat("level") ?? 1.0
-        
+
         guard level >= 0.0 && level <= 1.0 else {
-            call.reject("Level must be between 0.0 and 1.0")
+            call.reject("Level must be between 0.0 and 1.0", CameraError.invalidArgument.code)
             return
         }
-        
+
         do {
             try implementation.setTorchMode(enabled: enabled, level: level)
             call.resolve()
         } catch {
-            call.reject("Failed to set torch mode", nil, error)
+            call.reject("Failed to set torch mode", error.cameraErrorCode, error)
         }
     }
     

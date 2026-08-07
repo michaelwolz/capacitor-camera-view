@@ -6,6 +6,15 @@
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
   "unpkg": "dist/plugin.js",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/plugin.cjs.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
   "files": [
     "android/src/main/",
     "android/build.gradle",
@@ -29,23 +38,29 @@
     "plugin",
     "native"
   ],
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11"
+  },
   "scripts": {
-    "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
+    "verify": "pnpm run verify:ios && pnpm run verify:android && pnpm run verify:web",
     "verify:ios": "xcodebuild -scheme CapacitorCameraView -destination generic/platform=iOS",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
-    "verify:web": "npm run build",
-    "lint": "npm run eslint",
-    "lint:ios": "npm run swiftlint -- lint",
-    "fmt": "npm run eslint -- --fix && npm run prettier -- --write && npm run swiftlint -- --fix --format",
+    "verify:web": "pnpm run build",
+    "lint": "pnpm run eslint",
+    "lint:ios": "pnpm run swiftlint lint",
+    "fmt": "pnpm run eslint --fix && pnpm run prettier --write && pnpm run swiftlint --fix --format",
     "eslint": "eslint . --ext ts",
     "prettier": "prettier \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "prettier:check": "prettier --check \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "swiftlint": "node-swiftlint",
+    "test": "vitest run",
     "docgen": "docgen --api CameraViewPlugin --output-readme README.md --output-json dist/docs.json",
-    "build": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.mjs",
+    "build": "pnpm run clean && pnpm run docgen && tsc && rollup -c rollup.config.mjs",
     "clean": "rimraf ./dist",
     "watch": "tsc --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
     "@capacitor/android": "^8.3.1",
@@ -76,7 +91,8 @@
     "rollup": "^4.60.2",
     "semantic-release": "^25.0.3",
     "swiftlint": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"

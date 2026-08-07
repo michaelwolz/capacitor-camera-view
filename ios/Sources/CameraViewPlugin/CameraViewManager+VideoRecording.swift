@@ -29,14 +29,7 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
             guard let self = self else { return }
 
             guard self.captureSession.isRunning else {
-                // Session may be temporarily stopped (e.g. iOS stops the capture session
-                // when reconfiguring audio after a microphone permission grant). Wait for
-                // it to resume and retry rather than failing immediately.
-                self.waitForSessionThenStartRecording(
-                    enableAudio: enableAudio,
-                    videoQuality: videoQuality,
-                    completion: completion
-                )
+                DispatchQueue.main.async { completion(CameraError.sessionNotRunning) }
                 return
             }
 
@@ -64,6 +57,11 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
                     return
                 }
                 self.captureSession.addOutput(self.avMovieOutput)
+
+                // Never deferred: this output is added because a recording is
+                // starting right now, and file outputs default to deferred for
+                // host apps linked against the iOS 26 SDK.
+                self.deferStart(of: self.avMovieOutput, false)
             }
 
             // Add audio input if requested
@@ -83,11 +81,8 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
             self.captureSession.commitConfiguration()
 
             // Set orientation on the movie output connection
-            if let connection = self.avMovieOutput.connection(with: .video),
-               let previewConnection = self.videoPreviewLayer.connection {
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = previewConnection.videoOrientation
-                }
+            if let connection = self.avMovieOutput.connection(with: .video) {
+                self.applyCaptureOrientation(to: connection)
                 if connection.isVideoMirroringSupported {
                     connection.isVideoMirrored = self.currentCameraDevice?.position == .front
                 }
@@ -156,6 +151,11 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
             self.restoreSessionPreset()
             self.recordingWithAudio = false
             self.captureSession.commitConfiguration()
+
+            // Restoring the pre-recording preset may change the active format,
+            // which resets the photo output's maxPhotoDimensions; re-apply the
+            // session's capture-resolution hint.
+            self.applyConfiguredMaxPhotoDimensions()
         }
 
         if let error = error {
@@ -171,65 +171,6 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
     }
 
     // MARK: - Private Helpers
-
-    /// Waits for the capture session to start running, then retries `startRecording`.
-    ///
-    /// Called when `startRecording` finds the session temporarily stopped (e.g. after
-    /// iOS reconfigures audio following a first-time microphone permission grant).
-    /// Both the notification path and the timeout path serialize through `sessionQueue`,
-    /// so `handled` is accessed on a single serial queue and needs no additional lock.
-    private func waitForSessionThenStartRecording(
-        enableAudio: Bool,
-        videoQuality: VideoRecordingQuality,
-        completion: @escaping (Error?) -> Void
-    ) {
-        let sessionQueue = self.sessionQueue
-        // Keep the token so we can remove the observer on success and timeout paths.
-        var observerToken: NSObjectProtocol?
-        var handled = false
-
-        observerToken = NotificationCenter.default.addObserver(
-            forName: .AVCaptureSessionDidStartRunning,
-            object: captureSession,
-            queue: nil
-        ) { [weak self] _ in
-            sessionQueue.async {
-                guard !handled else { return }
-                handled = true
-                if let token = observerToken {
-                    NotificationCenter.default.removeObserver(token)
-                    observerToken = nil
-                }
-                guard let self = self else { return }
-                self.startRecording(
-                    enableAudio: enableAudio,
-                    videoQuality: videoQuality,
-                    completion: completion
-                )
-            }
-        }
-
-        // Timeout: if the session hasn't restarted within 2 seconds, give up.
-        sessionQueue.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard !handled else { return }
-            handled = true
-            if let token = observerToken {
-                NotificationCenter.default.removeObserver(token)
-                observerToken = nil
-            }
-            guard let self = self else { return }
-            // One final check in case the session started just as we timed out.
-            if self.captureSession.isRunning {
-                self.startRecording(
-                    enableAudio: enableAudio,
-                    videoQuality: videoQuality,
-                    completion: completion
-                )
-            } else {
-                DispatchQueue.main.async { completion(CameraError.sessionNotRunning) }
-            }
-        }
-    }
 
     /// Resolves the appropriate AVCaptureSession.Preset for the given VideoRecordingQuality,
     private func resolveRecordingPreset(for videoQuality: VideoRecordingQuality) -> AVCaptureSession.Preset {
@@ -276,7 +217,15 @@ extension CameraViewManager: AVCaptureFileOutputRecordingDelegate {
             (input as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) == true
         }
 
-        guard !hasAudioInput else { return }
+        guard !hasAudioInput else {
+            // An audio input is already attached (e.g. a leftover from a
+            // previous recording). Recording will still include audio, so
+            // `recordingWithAudio` must reflect that or the completion
+            // delegate won't remove the input afterwards, leaving it
+            // stray-attached to the session.
+            recordingWithAudio = true
+            return
+        }
 
         guard let microphone = AVCaptureDevice.default(for: .audio) else {
             throw CameraError.audioDeviceUnavailable

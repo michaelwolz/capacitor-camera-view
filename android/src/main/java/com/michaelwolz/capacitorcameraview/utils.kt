@@ -5,9 +5,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.util.Base64
+import android.util.Base64OutputStream
 import android.view.Surface
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
 import com.getcapacitor.PluginCall
@@ -15,7 +17,9 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.michaelwolz.capacitorcameraview.model.CameraSessionConfiguration
 import com.michaelwolz.capacitorcameraview.model.VideoRecordingQuality
 import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
+import kotlinx.coroutines.CancellableContinuation
 import java.io.ByteArrayOutputStream
+import kotlin.coroutines.resume
 
 /**
  * Memory-efficient Base64 encoding utilities.
@@ -31,7 +35,12 @@ object StreamingBase64Encoder {
 
     /**
      * Encodes a bitmap to Base64 with memory optimization.
-     * Reuses ByteArrayOutputStream to reduce allocations.
+     * Reuses a pooled [ByteArrayOutputStream] and streams the compressed bytes straight
+     * through a [Base64OutputStream] into it, instead of collecting the raw (un-encoded)
+     * bytes first and then Base64-encoding them as a separate pass. This avoids ever
+     * holding a full-size raw buffer and a full-size Base64 buffer at the same time,
+     * roughly halving peak memory versus a two-step compress-then-`Base64.encodeToString`
+     * approach.
      *
      * @param bitmap The bitmap to encode
      * @param quality JPEG compression quality (0-100)
@@ -46,10 +55,16 @@ object StreamingBase64Encoder {
         val outputStream = outputStreamPool.get()!!
         outputStream.reset() // Clear previous data
 
-        bitmap.compress(format, quality, outputStream)
-        val byteArray = outputStream.toByteArray()
+        // Base64OutputStream.close() finalizes any trailing padding and then closes the
+        // wrapped stream; closing a ByteArrayOutputStream is a documented no-op, so the
+        // pooled buffer and its contents remain valid (and reusable) afterwards.
+        Base64OutputStream(outputStream, Base64.NO_WRAP).use { base64Stream ->
+            bitmap.compress(format, quality, base64Stream)
+        }
 
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        // The Base64 alphabet is pure ASCII, so this is a lossless decode of the bytes
+        // already sitting in the pooled buffer.
+        return String(outputStream.toByteArray(), Charsets.US_ASCII)
     }
 
     /**
@@ -72,10 +87,10 @@ fun getBarcodeFormatString(format: Int): String {
         Barcode.FORMAT_DATA_MATRIX -> "dataMatrix"
         Barcode.FORMAT_EAN_8 -> "ean8"
         Barcode.FORMAT_EAN_13 -> "ean13"
-        Barcode.FORMAT_ITF -> "itf"
+        Barcode.FORMAT_ITF -> "itf14"
         Barcode.FORMAT_PDF417 -> "pdf417"
         Barcode.FORMAT_UPC_A -> "upcA"
-        Barcode.FORMAT_UPC_E -> "upcE"
+        Barcode.FORMAT_UPC_E -> "upce"
         else -> "unknown"
     }
 }
@@ -180,25 +195,43 @@ fun sessionConfigFromPluginCall(call: PluginCall): CameraSessionConfiguration {
         enableBarcodeDetection = call.getBoolean("enableBarcodeDetection") ?: false,
         barcodeTypes = barcodeTypes,
         position = call.getString("position") ?: "back",
-        zoomFactor = call.getFloat("zoomFactor") ?: 1.0f
+        zoomFactor = call.getFloat("zoomFactor") ?: 1.0f,
+        aspectRatio = call.getString("aspectRatio"),
+        captureMaxDimension = call.getInt("captureMaxDimension"),
+        previewScaleMode = call.getString("previewScaleMode")
     )
 }
 
 /**
- * Calculates the image orientation based on the display rotation and sensor rotation degrees.
+ * Whether the given CameraX lens-facing value denotes a front-facing camera.
  *
- * This is because CameraController will set the image orientation based on the device's
- * motion sensor, which may not match the display rotation and in this case not what we actually
- * want.
+ * Deriving facing from the bound camera's lens facing is the only reliable signal:
+ * comparing the current [CameraSelector] against [CameraSelector.DEFAULT_FRONT_CAMERA] is
+ * wrong for any custom selector built from a `deviceId`.
  *
- * @param displayRotation The current display rotation (0, 1, 2, or 3).
- * @param sensorRotationDegrees The rotation of the camera sensor in degrees (0, 90, 180, or 270).
- * @param isFrontFacing Whether the camera is front-facing or back-facing.
- * @return The calculated image orientation in degrees.
+ * @param lensFacing A `CameraSelector.LENS_FACING_*` value, or `null` if not yet known.
+ * @return `true` only when [lensFacing] is [CameraSelector.LENS_FACING_FRONT].
  */
-fun calculateImageRotationBasedOnDisplayRotation(
+fun isLensFacingFront(lensFacing: Int?): Boolean {
+    return lensFacing == CameraSelector.LENS_FACING_FRONT
+}
+
+/**
+ * Calculates the clockwise rotation (in degrees) to apply to a still capture so it is
+ * upright for the given display orientation.
+ *
+ * The base value is the frame's own [imageRotationDegrees] rather than a fixed
+ * sensor-derived value, so devices whose HAL returns pre-rotated buffers report `0` here
+ * and are not rotated a second time.
+ *
+ * @param imageRotationDegrees The captured frame's `ImageInfo.rotationDegrees` (0/90/180/270).
+ * @param displayRotation The current display rotation (`Surface.ROTATION_*`: 0, 1, 2, or 3).
+ * @param isFrontFacing Whether the active camera is front-facing.
+ * @return The calculated image orientation in degrees (0, 90, 180, or 270).
+ */
+fun calculateImageRotation(
+    imageRotationDegrees: Int,
     displayRotation: Int,
-    sensorRotationDegrees: Int,
     isFrontFacing: Boolean
 ): Int {
     val surfaceRotationDegrees = when (displayRotation) {
@@ -210,9 +243,9 @@ fun calculateImageRotationBasedOnDisplayRotation(
     }
 
     return if (isFrontFacing) {
-        (sensorRotationDegrees + surfaceRotationDegrees) % 360
+        (imageRotationDegrees + surfaceRotationDegrees) % 360
     } else {
-        (sensorRotationDegrees - surfaceRotationDegrees + 360) % 360
+        (imageRotationDegrees - surfaceRotationDegrees + 360) % 360
     }
 }
 
@@ -250,6 +283,27 @@ fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): S
     } finally {
         // Ensure bitmap is always recycled
         bitmap.recycle()
+    }
+}
+
+/**
+ * Resumes this continuation with [value], but only if it hasn't already been resumed or
+ * cancelled. The camera/capture callbacks that resume continuations in this plugin run on
+ * the CameraX/ML Kit executor or a main-thread [android.os.Handler.post] callback - never on
+ * the coroutine's own dispatcher - so a resume can race with the caller cancelling the
+ * coroutine (e.g. because the plugin is being torn down mid-capture).
+ *
+ * The atomic `tryResume`/`completeResume` pair is `@InternalCoroutinesApi`, so this checks
+ * [CancellableContinuation.isActive] first and swallows the `IllegalStateException` a plain
+ * `resume()` throws if cancellation still wins the race.
+ */
+fun <T> CancellableContinuation<T>.resumeIfActive(value: T) {
+    if (!isActive) return
+    try {
+        resume(value)
+    } catch (e: IllegalStateException) {
+        // Lost the race with cancellation between the isActive check and resume() -
+        // nobody is awaiting the result anymore, so there's nothing to recover.
     }
 }
 

@@ -29,8 +29,11 @@ import {
 import {
   BarcodeType,
   VideoRecordingQuality,
+  type CameraAspectRatio,
+  type CameraErrorCode,
   type CameraPosition,
   type FlashMode,
+  type PreviewScaleMode,
 } from 'capacitor-camera-view';
 import { concat, map, of, switchMap, tap, timer } from 'rxjs';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-view.service';
@@ -39,6 +42,23 @@ function getDistance(touch1: Touch, touch2: Touch): number {
   const dx = touch1.clientX - touch2.clientX;
   const dy = touch1.clientY - touch2.clientY;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Plugin call rejections carry a stable `code` property (see the
+ * `CameraErrorCode` type) that isn't reflected in `PluginResultError`'s
+ * TypeScript type, so it has to be read off the caught value defensively.
+ */
+function getCameraErrorCode(error: unknown): CameraErrorCode | undefined {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code as CameraErrorCode;
+  }
+  return undefined;
 }
 
 const IOS_TORCH_LEVELS = [0.2, 0.5, 0.8, 1.0];
@@ -72,6 +92,9 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected barcodeRect =
     viewChild.required<ElementRef<HTMLDivElement>>('barcodeRect');
 
+  protected focusIndicator =
+    viewChild.required<ElementRef<HTMLDivElement>>('focusIndicator');
+
   public readonly deviceId = input<string>();
   public readonly enableBarcodeDetection = input<boolean>(false);
   public readonly barcodeTypes = input<BarcodeType[]>(['qr']);
@@ -79,6 +102,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly quality = input<number>(85);
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
   public readonly initialZoomFactor = input<number>(1.0);
+  public readonly aspectRatio = input<CameraAspectRatio | undefined>(undefined);
+  public readonly captureMaxDimension = input<number | undefined>(undefined);
+  public readonly previewScaleMode = input<PreviewScaleMode | undefined>(
+    undefined,
+  );
   public readonly saveToFile = input<boolean>(false);
   public readonly enableAudio = input<boolean>(true);
   public readonly videoRecordingQuality = input<VideoRecordingQuality>('hd');
@@ -125,6 +153,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   #touchStartDistance = 0;
   #initialZoomFactorOnPinch = 1.0;
+  #focusIndicatorTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     effect(() => {
@@ -158,7 +187,19 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   public ngOnInit() {
     this.startCamera().catch((error) => {
-      console.error('Failed to start camera', error);
+      // Demonstrates switching on the stable `error.code` from a rejected
+      // plugin call instead of matching on the (potentially localized or
+      // rephrased) human-readable message.
+      switch (getCameraErrorCode(error)) {
+        case 'PERMISSION_DENIED':
+          console.error('Camera permission was denied by the user.');
+          break;
+        case 'SESSION_NOT_RUNNING':
+          console.error('The capture session failed to come up in time.');
+          break;
+        default:
+          console.error('Failed to start camera', error);
+      }
       this.#modalController.dismiss();
     });
 
@@ -177,6 +218,9 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       position: this.position(),
       useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
       zoomFactor: this.initialZoomFactor(),
+      aspectRatio: this.aspectRatio(),
+      captureMaxDimension: this.captureMaxDimension(),
+      previewScaleMode: this.previewScaleMode(),
       containerElementId: 'cameraView',
     });
 
@@ -186,7 +230,6 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       this.#initializeTorchAvailability(),
     ]);
 
-    this.currentZoomFactor.set(this.initialZoomFactor());
     await this.#debugCurrentTorchState();
   }
 
@@ -390,6 +433,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       if (zoomRange) {
         this.minZoom.set(zoomRange.min);
         this.maxZoom.set(zoomRange.max);
+        this.currentZoomFactor.set(zoomRange.current);
       }
     } catch (error) {
       console.warn('Failed to get zoom range, using default values.', error);
@@ -424,6 +468,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       'touchmove',
       this.#handleTouchMove,
     );
+    // Tap-to-focus: the WebView (not the native preview) receives touches, so
+    // the app catches a single tap here and forwards its viewport coordinates
+    // to the plugin, which maps them onto the fullscreen native preview.
+    this.#elementRef.nativeElement.addEventListener('click', this.#handleTap);
   }
 
   #destroyEventListeners(): void {
@@ -435,16 +483,79 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       'touchmove',
       this.#handleTouchMove,
     );
+    this.#elementRef.nativeElement.removeEventListener(
+      'click',
+      this.#handleTap,
+    );
+
+    if (this.#focusIndicatorTimeout !== null) {
+      clearTimeout(this.#focusIndicatorTimeout);
+      this.#focusIndicatorTimeout = null;
+    }
   }
 
-  #handleTouchStart(event: TouchEvent): void {
+  /**
+   * Tap-to-focus handler. Ignores taps on the overlay controls so only taps on
+   * the preview area refocus the camera. Bound as an arrow function so `this`
+   * stays the component when invoked as a DOM event listener.
+   */
+  #handleTap = (event: MouseEvent): void => {
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'ion-fab, ion-fab-button, ion-button, ion-chip, ion-header, ion-toolbar',
+      )
+    ) {
+      return;
+    }
+
+    if (!this.cameraStarted()) {
+      return;
+    }
+
+    const x = event.clientX;
+    const y = event.clientY;
+
+    this.#showFocusIndicator(x, y);
+
+    // Coordinates are CSS/viewport pixels, exactly what setFocusPoint expects.
+    this.#cameraViewService.setFocusPoint(x, y).catch((error) => {
+      // Fixed-focus cameras reject with FOCUS_NOT_SUPPORTED and web rejects as
+      // unimplemented; both are non-fatal for this demo.
+      console.warn(
+        'Failed to set focus point',
+        getCameraErrorCode(error) ?? error,
+      );
+    });
+  };
+
+  #showFocusIndicator(x: number, y: number): void {
+    const element = this.focusIndicator().nativeElement;
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+
+    // Restart the pulse animation on rapid taps by forcing a reflow.
+    element.classList.remove('active');
+    void element.offsetWidth;
+    element.classList.add('active');
+
+    if (this.#focusIndicatorTimeout !== null) {
+      clearTimeout(this.#focusIndicatorTimeout);
+    }
+    this.#focusIndicatorTimeout = setTimeout(() => {
+      element.classList.remove('active');
+      this.#focusIndicatorTimeout = null;
+    }, 700);
+  }
+
+  #handleTouchStart = (event: TouchEvent): void => {
     if (event.touches.length < 2) return;
 
     this.#touchStartDistance = getDistance(event.touches[0], event.touches[1]);
     this.#initialZoomFactorOnPinch = this.currentZoomFactor();
-  }
+  };
 
-  #handleTouchMove(event: TouchEvent): void {
+  #handleTouchMove = (event: TouchEvent): void => {
     if (event.touches.length < 2 || this.#touchStartDistance <= 0) return;
 
     const currentDistance = getDistance(event.touches[0], event.touches[1]);
@@ -456,9 +567,13 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       Math.min(this.maxZoom(), this.#initialZoomFactorOnPinch * scale),
     );
 
-    this.#setZoom(newZoomFactor);
+    // Fire-and-forget: a rejected setZoom must not become an unhandled
+    // rejection on every single touchmove.
+    this.#setZoom(newZoomFactor).catch((error) => {
+      console.warn('Failed to set zoom', getCameraErrorCode(error) ?? error);
+    });
     event.preventDefault(); // Prevent scrolling
-  }
+  };
 
   async toggleTorch(): Promise<void> {
     if (!this.torchAvailable()) {
@@ -520,7 +635,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
    * Helper method for checking current torch state
    */
   async #debugCurrentTorchState(): Promise<void> {
-    const currentState = await this.#cameraViewService.getTorchMode();
-    console.debug('Current torch state:', currentState);
+    try {
+      const currentState = await this.#cameraViewService.getTorchMode();
+      console.debug('Current torch state:', currentState);
+    } catch (error) {
+      console.warn('Failed to read torch state', error);
+    }
   }
 }

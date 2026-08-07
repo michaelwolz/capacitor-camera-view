@@ -1,0 +1,22 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude: []
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+# Capacitor's CLI resolves symlinks when it rewrites ios/App/Podfile, baking
+# version-pinned .pnpm/ paths into a tracked file on every sync.
+nodeLinker: hoisted
+
+# Dependency install scripts are blocked by default. Every entry here is an
+# explicit, reviewed exception — keep the list as short as possible.
+allowBuilds:
+  # Angular's bundler. Its postinstall selects the platform binary; the build
+  # cannot run without it.
+  esbuild: true
+  # All three ship prebuilt binaries via optionalDependencies and degrade to a
+  # pure-JS path when their node-gyp postinstall is skipped. Angular only uses
+  # them for watch mode and on-disk build caching, so denying them costs a
+  # little cold-build time and nothing else.
+  '@parcel/watcher': false
+  lmdb: false
+  msgpackr-extract: false
