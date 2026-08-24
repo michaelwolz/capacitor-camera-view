@@ -97,13 +97,18 @@ extension CameraViewManager {
     // MARK: - Capture Orientation
 
     /// Applies the correct rotation to a capture output connection (photo,
-    /// sample, or movie) so captured media matches the device orientation.
+    /// sample, or movie) so captured media matches what the preview shows.
     internal func applyCaptureOrientation(to connection: AVCaptureConnection) {
         if #available(iOS 17.0, *) {
             // A nil coordinator only happens for a capture racing session
             // teardown; leaving the connection at its default angle is harmless.
             guard let coordinator = rotationCoordinator else { return }
-            let angle = coordinator.videoRotationAngleForHorizonLevelCapture
+
+            // A detached preview layer makes the coordinator report a preview angle of 0.
+            let angle = videoPreviewLayer.superlayer == nil
+                ? coordinator.videoRotationAngleForHorizonLevelCapture
+                : coordinator.videoRotationAngleForHorizonLevelPreview
+
             if connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
