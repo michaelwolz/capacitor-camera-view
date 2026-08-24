@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.0...3.0.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* **ios:** keep capture orientation in sync with the preview ([bd4464c](https://github.com/michaelwolz/capacitor-camera-view/commit/bd4464c3cbcb20ac7edfa4ba84ee7381f429b49a))
+
 # [3.0.0](https://github.com/michaelwolz/capacitor-camera-view/compare/2.4.0...3.0.0) (2026-08-07)
 
 
