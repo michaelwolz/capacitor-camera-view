@@ -1,3 +1,10 @@
+## [3.0.2](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.1...3.0.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* **dependencies:** bump capacitor to 8.5.1 ([66d3c6f](https://github.com/michaelwolz/capacitor-camera-view/commit/66d3c6fd1c1404ea6acf0511cdafbb800526fdf1))
+
 ## [3.0.1](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.0...3.0.1) (2026-08-24)
 
 
