@@ -63,10 +63,10 @@
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
     "@capacitor/docgen": "^0.3.1",
-    "@capacitor/ios": "^8.3.1",
+    "@capacitor/ios": "^8.5.1",
     "@commitlint/config-conventional": "^20.5.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^2.0.0",

@@ -18,6 +18,12 @@
       "sourceType": "github",
       "skillPath": "skills/capacitor-plugin-upgrades/SKILL.md",
       "computedHash": "4967087ebfdb4475162f4299713f7127ba1841b4b38711e0f61148434161f9a0"
+    },
+    "capacitor-uiscene-migrator": {
+      "source": "ionic-team/capacitor-skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-uiscene-migrator/SKILL.md",
+      "computedHash": "229b5b23456546c5e0cb1683d844f1f1d4fbc39ef5e40368d7ca44f941b660ec"
     }
   }
 }
