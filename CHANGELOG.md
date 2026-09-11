@@ -1,3 +1,10 @@
+## [3.0.3](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.2...3.0.3) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ios:** restore the WebView's presentation state after a session ([7f88a3e](https://github.com/michaelwolz/capacitor-camera-view/commit/7f88a3e267e286a2b8574ece0ec7028d75cb0b45))
+
 ## [3.0.2](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.1...3.0.2) (2026-09-10)
 
 
