@@ -73,6 +73,21 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// session-queue callers that drive session setup/teardown.
     internal var webView: UIView?
 
+    /// The presentation properties `revealPreview` overwrites to make the host
+    /// WebView see-through.
+    private struct WebViewPresentationState {
+        let isOpaque: Bool
+        let backgroundColor: UIColor?
+        let scrollViewBackgroundColor: UIColor?
+    }
+
+    /// The host WebView's presentation state as it was before `revealPreview`
+    /// made it transparent, restored on teardown so the app is not left with a
+    /// see-through WebView (and the window showing through) for the rest of its
+    /// lifetime. `nil` while no session has revealed the preview. Confined to
+    /// the main queue like `webView` itself.
+    private var webViewPresentationState: WebViewPresentationState?
+
     /// Whether the session was explicitly stopped via `stopSession`, as opposed
     /// to being paused by backgrounding or an interruption. Confined to
     /// `sessionQueue` (set at the top of `startSession`'s and `stopSession`'s
@@ -342,8 +357,7 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
                     return
                 }
                 self.videoPreviewLayer.removeFromSuperlayer()
-                self.webView?.isOpaque = true
-                self.webView?.backgroundColor = nil
+                self.restoreWebViewPresentationState()
                 self.webView = nil
 
                 // Release rotation state so a stopped session doesn't keep the
@@ -890,14 +904,41 @@ internal let SUPPORTED_CAMERA_DEVICE_TYPES: [AVCaptureDevice.DeviceType] = [
     /// Makes the WebView transparent so the attached preview layer becomes
     /// visible. Called once the session is running, so the app's own UI stays
     /// visible while the camera powers up.
+    ///
+    /// The overwritten presentation properties are snapshotted first — only
+    /// once, so a reveal on an already-transparent WebView cannot capture the
+    /// transparent state as the one to restore.
     private func revealPreview() {
         DispatchQueue.main.async { [weak self] in
-            guard let view = self?.webView else { return }
+            guard let self = self, let view = self.webView else { return }
+
+            if self.webViewPresentationState == nil {
+                self.webViewPresentationState = WebViewPresentationState(
+                    isOpaque: view.isOpaque,
+                    backgroundColor: view.backgroundColor,
+                    scrollViewBackgroundColor: (view as? WKWebView)?.scrollView.backgroundColor
+                )
+            }
 
             view.isOpaque = false
             view.backgroundColor = UIColor.clear
             (view as? WKWebView)?.scrollView.backgroundColor = UIColor.clear
         }
+    }
+
+    /// Restores the presentation state `revealPreview` snapshotted, undoing the
+    /// transparency on teardown. Capacitor's own background color is whatever
+    /// the snapshot holds, so it is restored rather than guessed. A no-op
+    /// without a snapshot, so tearing down a session that never revealed the
+    /// preview leaves the WebView alone. Must be called on the main queue.
+    private func restoreWebViewPresentationState() {
+        guard let state = webViewPresentationState else { return }
+
+        webView?.isOpaque = state.isOpaque
+        webView?.backgroundColor = state.backgroundColor
+        (webView as? WKWebView)?.scrollView.backgroundColor = state.scrollViewBackgroundColor
+
+        webViewPresentationState = nil
     }
 
 }
