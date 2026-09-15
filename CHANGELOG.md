@@ -1,3 +1,10 @@
+## [3.0.4](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.3...3.0.4) (2026-09-15)
+
+
+### Bug Fixes
+
+* **android:** derive capture rotation from the display instead of the device sensor ([c9e80b4](https://github.com/michaelwolz/capacitor-camera-view/commit/c9e80b46328c1c6674f1f2111edb540b3dff73ff))
+
 ## [3.0.4-rc.1](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.3...3.0.4-rc.1) (2026-09-15)
 
 
