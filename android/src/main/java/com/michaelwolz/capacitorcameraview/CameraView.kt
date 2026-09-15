@@ -412,8 +412,15 @@ class CameraView(plugin: Plugin) {
             // Derive facing from the bound camera's lens facing rather than comparing the
             // selector against DEFAULT_FRONT_CAMERA, which is always false for a selector
             // built from a deviceId even when it resolves to the front camera.
-            val isFrontFacing = isLensFacingFront(controller.cameraInfo?.lensFacing)
-            val displayRotationDegrees = preview.display?.rotation ?: Surface.ROTATION_0
+            val cameraInfo = controller.cameraInfo
+            val isFrontFacing = isLensFacingFront(cameraInfo?.lensFacing)
+            val sensorRotationDegrees = cameraInfo?.sensorRotationDegrees ?: 0
+            val displayRotation = preview.display?.rotation ?: Surface.ROTATION_0
+            val imageRotationDegrees = calculateImageRotation(
+                sensorRotationDegrees,
+                displayRotation,
+                isFrontFacing
+            )
 
             try {
                 if (saveToFile) {
@@ -475,13 +482,6 @@ class CameraView(plugin: Plugin) {
                                     "Image captured successfully in ${System.currentTimeMillis() - startTime}ms"
                                 )
                                 try {
-                                    // Base the rotation on the frame's own rotationDegrees so
-                                    // pre-rotated buffers are not rotated a second time.
-                                    val imageRotationDegrees = calculateImageRotation(
-                                        image.imageInfo.rotationDegrees,
-                                        displayRotationDegrees,
-                                        isFrontFacing
-                                    )
                                     val base64String =
                                         imageProxyToBase64(image, quality, imageRotationDegrees)
                                     val result = JSObject().apply {

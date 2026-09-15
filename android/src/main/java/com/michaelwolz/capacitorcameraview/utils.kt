@@ -218,19 +218,21 @@ fun isLensFacingFront(lensFacing: Int?): Boolean {
 
 /**
  * Calculates the clockwise rotation (in degrees) to apply to a still capture so it is
- * upright for the given display orientation.
+ * upright relative to the display, i.e. oriented the way the preview showed it.
  *
- * The base value is the frame's own [imageRotationDegrees] rather than a fixed
- * sensor-derived value, so devices whose HAL returns pre-rotated buffers report `0` here
- * and are not rotated a second time.
+ * The base value is the camera's fixed [sensorRotationDegrees], not the frame's
+ * `ImageInfo.rotationDegrees`. `CameraController` sets the capture target rotation from
+ * the device's motion sensor, so the frame value follows the physical tilt of the device
+ * and disagrees with the display whenever the host locks its orientation or the user
+ * tilts the device past 45 degrees.
  *
- * @param imageRotationDegrees The captured frame's `ImageInfo.rotationDegrees` (0/90/180/270).
+ * @param sensorRotationDegrees The camera's `CameraInfo.sensorRotationDegrees` (0/90/180/270).
  * @param displayRotation The current display rotation (`Surface.ROTATION_*`: 0, 1, 2, or 3).
  * @param isFrontFacing Whether the active camera is front-facing.
  * @return The calculated image orientation in degrees (0, 90, 180, or 270).
  */
 fun calculateImageRotation(
-    imageRotationDegrees: Int,
+    sensorRotationDegrees: Int,
     displayRotation: Int,
     isFrontFacing: Boolean
 ): Int {
@@ -243,9 +245,9 @@ fun calculateImageRotation(
     }
 
     return if (isFrontFacing) {
-        (imageRotationDegrees + surfaceRotationDegrees) % 360
+        (sensorRotationDegrees + surfaceRotationDegrees) % 360
     } else {
-        (imageRotationDegrees - surfaceRotationDegrees + 360) % 360
+        (sensorRotationDegrees - surfaceRotationDegrees + 360) % 360
     }
 }
 
