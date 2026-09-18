@@ -70,6 +70,11 @@ This is a standard Capacitor plugin with platform-specific implementations:
 - Virtual camera support (iOS) enables automatic lens switching based on zoom level
 - The `capture()` method uses full camera pipeline; `captureSample()` samples from video stream for faster, lower-quality results
 
+### Android barcode transform pitfalls
+
+- `pushViewTransformToAnalyzer()` must run on every path through `applyPostBindState()` and from all four triggers (post-bind, layout change, display change, preview stream state). Dropping one silently kills barcode detection: `ViewReferencedAnalyzer` warns about "attached but no matrix", never about "analyzer never attached"
+- The display- and layout-listener pushes read `previewView.sensorToViewTransform` without refreshing it, and are only fresh because `PreviewView` registers its own listeners in `onAttachedToWindow` before ours. `PreviewView` re-adds both its layout and display listeners on re-attach while ours are never removed, so a detach/re-attach mid-session inverts that order and every later push reads a stale rotation
+
 ## Example App
 
 The `example-app/` directory contains an Ionic Angular app demonstrating plugin usage. It is a separate pnpm project with its own `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`, and must be installed and built separately.

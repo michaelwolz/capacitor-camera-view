@@ -121,7 +121,7 @@ class CameraViewPlugin : Plugin() {
     @PluginMethod
     fun capture(call: PluginCall) {
         val timeStart = System.currentTimeMillis()
-        val quality = call.getInt("quality") ?: 90
+        val quality = call.getInt("quality") ?: DEFAULT_JPEG_QUALITY
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
@@ -146,7 +146,7 @@ class CameraViewPlugin : Plugin() {
     @PluginMethod
     fun captureSample(call: PluginCall) {
         val timeStart = System.currentTimeMillis()
-        val quality = call.getInt("quality") ?: 90
+        val quality = call.getInt("quality") ?: DEFAULT_JPEG_QUALITY
         val saveToFile = call.getBoolean("saveToFile") ?: false
 
         if (quality !in 0..100) {
@@ -282,19 +282,26 @@ class CameraViewPlugin : Plugin() {
 
     @PluginMethod
     fun getAvailableDevices(call: PluginCall) {
-        val devices = implementation.getAvailableDevices()
-        val devicesArray = JSArray().apply {
-            devices.forEach { device ->
-                put(JSObject().apply {
-                    put("id", device.id)
-                    put("name", device.name)
-                    put("position", device.position)
-                    device.deviceType?.let { put("deviceType", it) }
-                })
-            }
+        pluginScope.launch {
+            implementation.getAvailableDevicesAsync().fold(
+                onSuccess = { devices ->
+                    val devicesArray = JSArray().apply {
+                        devices.forEach { device ->
+                            put(JSObject().apply {
+                                put("id", device.id)
+                                put("name", device.name)
+                                put("position", device.position)
+                                device.deviceType?.let { put("deviceType", it) }
+                            })
+                        }
+                    }
+                    call.resolve(JSObject().apply { put("devices", devicesArray) })
+                },
+                onError = { error ->
+                    call.reject("Failed to get available devices: ${error.localizedMessage}", error.cameraErrorCode, error)
+                }
+            )
         }
-
-        call.resolve(JSObject().apply { put("devices", devicesArray) })
     }
 
     @PluginMethod
