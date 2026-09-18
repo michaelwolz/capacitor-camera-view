@@ -1,0 +1,36 @@
+ion-toolbar {
+  --background: black;
+  --color: white;
+}
+
+ion-content {
+  --background: black;
+}
+
+ion-icon {
+  color: white;
+}
+
+ion-fab-button {
+  --background: rgba(255, 255, 255, 0.5);
+  --background-activated: rgba(255, 255, 255, 0.8);
+  --background-hover: rgba(255, 255, 255, 0.8);
+  color: black;
+
+  ion-icon {
+    color: black;
+  }
+}
+
+.photo-stage {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+  }
+}

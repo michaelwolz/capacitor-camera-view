@@ -1,3 +1,11 @@
+## [3.0.5-rc.1](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.4...3.0.5-rc.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **android:** build every use case in the group for one aspect ratio ([9e0994a](https://github.com/michaelwolz/capacitor-camera-view/commit/9e0994a9dadb80b02b394f61f321b68b333b6fb1))
+* **android:** derive capture rotation and crop from CameraX ([2768482](https://github.com/michaelwolz/capacitor-camera-view/commit/2768482d5454a90cd4bdaba30f9734822f45437a))
+
 ## [3.0.4](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.3...3.0.4) (2026-09-15)
 
 

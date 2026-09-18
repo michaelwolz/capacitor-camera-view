@@ -22,15 +22,17 @@
       <ion-row>
         @for (item of items; track $index) {
           <ion-col size="6">
-            <ion-card>
-              @if (item.type === "photo") {
+            @if (item.type === "photo") {
+              <ion-card button (click)="openPhoto(item)">
                 <ion-img [src]="item.data" alt="Captured photo"></ion-img>
-              } @else if (item.type === "video") {
+              </ion-card>
+            } @else if (item.type === "video") {
+              <ion-card>
                 <video controls playsinline width="100%">
                   <source [src]="item.data" type="video/mp4" />
                 </video>
-              }
-            </ion-card>
+              </ion-card>
+            }
           </ion-col>
         }
       </ion-row>

@@ -7,9 +7,10 @@ package com.michaelwolz.capacitorcameraview.model
  * @property name Human-readable name of the camera
  * @property position Position of the camera ("front" or "back")
  * @property deviceType Lens type ("wideAngle", "ultraWide", or "telephoto") derived from
- *                       camera characteristics where derivable, matching the
- *                       iOS-populated field of the same name. `null` when it can't be
- *                       determined (e.g. focal length/sensor size not reported).
+ *                       CameraX's intrinsic zoom ratio where derivable, matching the
+ *                       iOS-populated field of the same name. `null` for a physical
+ *                       sub-camera of a logical multi-camera, whose lens type CameraX
+ *                       can't resolve.
  */
 data class CameraDevice(
     val id: String,
