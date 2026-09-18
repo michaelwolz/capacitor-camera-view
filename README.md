@@ -254,7 +254,7 @@ This plugin supports recording video directly from the live camera feed.
 
 **How it works:**
 *   **iOS:** Uses `AVCaptureMovieFileOutput` on top of the existing `AVCaptureSession`. Output is saved as `.mp4`.
-*   **Android:** Uses the CameraX `VideoCapture` use case via `LifecycleCameraController`. Output is saved as `.mp4`.
+*   **Android:** Uses the CameraX `VideoCapture` use case bound through `ProcessCameraProvider`. Output is saved as `.mp4`.
 *   **Web:** Uses the browser `MediaRecorder` API on the existing `MediaStream`. Output is a `.webm` blob URL (MP4 is not broadly supported by browsers).
 
 **Basic usage:**
@@ -953,10 +953,10 @@ The base64 shaped result returned when `saveToFile` is `false` or `undefined`.
 
 Configuration options for capturing photos and samples.
 
-| Prop             | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                       | Default            | Since |
-| ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----- |
-| **`quality`**    | <code>number</code>  | The JPEG quality of the captured photo/sample on a scale of 0-100. Cross-platform note: for `quality &gt;= 90`, iOS returns the original, unmodified JPEG produced by the camera hardware instead of re-encoding it, to avoid unnecessary quality loss and CPU overhead. Android and Web always encode at the exact requested quality. As a result, the same `quality` value (90-100) can produce different file sizes on iOS versus Android/Web. | <code>90</code>    | 1.1.0 |
-| **`saveToFile`** | <code>boolean</code> | If true, saves to a temporary file and returns the web path instead of base64. The web path can be used to set the src attribute of an image for efficient loading and rendering. This reduces the data that needs to be transferred over the bridge, which can improve performance especially for high-resolution images.                                                                                                                        | <code>false</code> | 1.1.0 |
+| Prop             | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Default            | Since |
+| ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----- |
+| **`quality`**    | <code>number</code>  | The JPEG quality of the captured photo/sample on a scale of 0-100. Cross-platform note: for `quality &gt;= 90`, iOS returns the original, unmodified JPEG produced by the camera hardware instead of re-encoding it, to avoid unnecessary quality loss and CPU overhead. Web always encodes at the exact requested quality. On Android, `quality` is honored exactly by `captureSample()` and by `capture({ saveToFile: false })`, both of which re-encode in software; `capture({ saveToFile: true })` ignores it and always saves at a fixed internal quality, since CameraX re-encodes any cropped output at the `ImageCapture` use case's build-time quality rather than a value supplied per call. | <code>90</code>    | 1.1.0 |
+| **`saveToFile`** | <code>boolean</code> | If true, saves to a temporary file and returns the web path instead of base64. The web path can be used to set the src attribute of an image for efficient loading and rendering. This reduces the data that needs to be transferred over the bridge, which can improve performance especially for high-resolution images.                                                                                                                                                                                                                                                                                                                                                                              | <code>false</code> | 1.1.0 |
 
 
 #### VideoRecordingOptions
@@ -992,12 +992,12 @@ Response for getting available camera devices.
 
 Represents a physical camera device on the device.
 
-| Prop             | Type                                                          | Description                                                                  |
-| ---------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **`id`**         | <code>string</code>                                           | The unique identifier of the camera device                                   |
-| **`name`**       | <code>string</code>                                           | The human-readable name of the camera device                                 |
-| **`position`**   | <code><a href="#cameraposition">CameraPosition</a></code>     | The position of the camera device (front or back)                            |
-| **`deviceType`** | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only |
+| Prop             | Type                                                          | Description                                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`id`**         | <code>string</code>                                           | The unique identifier of the camera device                                                                                                                                                                                                                                    |
+| **`name`**       | <code>string</code>                                           | The human-readable name of the camera device                                                                                                                                                                                                                                  |
+| **`position`**   | <code><a href="#cameraposition">CameraPosition</a></code>     | The position of the camera device (front or back)                                                                                                                                                                                                                             |
+| **`deviceType`** | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera device (e.g., wide, ultra-wide, telephoto). Populated on iOS and Android; Android only ever reports 'wideAngle', 'ultraWide', or 'telephoto', and omits it for a physical sub-camera of a logical multi-camera, whose lens type CameraX can't resolve. |
 
 
 #### GetZoomResponse
@@ -1042,10 +1042,10 @@ Response for checking torch availability.
 
 Response for getting the current torch mode.
 
-| Prop          | Type                 | Description                                                                                                                                                                                                                                                                       |
-| ------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`enabled`** | <code>boolean</code> | Indicates if the torch is currently enabled                                                                                                                                                                                                                                       |
-| **`level`**   | <code>number</code>  | The current torch intensity level (0.0 to 1.0). On Android this reflects the real hardware strength only on API 33+ devices with multi-level torch hardware; below API 33, or on single-level hardware, the torch is binary, so this is always 1.0 when enabled and 0.0 when off. |
+| Prop          | Type                 | Description                                                                                                                                                                                                                                                                                     |
+| ------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`enabled`** | <code>boolean</code> | Indicates if the torch is currently enabled                                                                                                                                                                                                                                                     |
+| **`level`**   | <code>number</code>  | The current torch intensity level (0.0 to 1.0). On Android this reflects the real hardware strength only on API 35+ (Android 15+) devices with multi-level torch hardware; below API 35, or on single-level hardware, the torch is binary, so this is always 1.0 when enabled and 0.0 when off. |
 
 
 #### PermissionStatus
@@ -1135,8 +1135,8 @@ Position options for the camera.
 
 #### CameraDeviceType
 
-Available camera device types for iOS.
-Maps to AVCaptureDevice DeviceTypes in iOS.
+Available camera device types. The full set of values maps to AVCaptureDevice DeviceTypes on
+iOS; Android only ever reports 'wideAngle', 'ultraWide', or 'telephoto'.
 
 <code>'wideAngle' | 'ultraWide' | 'telephoto' | 'dual' | 'dualWide' | 'triple' | 'trueDepth'</code>
 
