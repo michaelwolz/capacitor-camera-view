@@ -1616,22 +1616,16 @@ class CameraView(plugin: Plugin) {
      * analyzer are only read at build time, so neither can be changed by rebinding.
      */
     private fun rebuildImagingUseCases(config: CameraSessionConfiguration, aspectRatio: Int) {
-        val viewportSelector = aspectRatio
-            .takeIf { it != AspectRatio.RATIO_DEFAULT }
-            ?.let {
-                ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(
-                        AspectRatioStrategy(it, AspectRatioStrategy.FALLBACK_RULE_AUTO)
-                    )
-                    .build()
-            }
+        val groupAspectRatio = groupAspectRatio(aspectRatio, config.aspectRatio)
+        val groupSelector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(
+                AspectRatioStrategy(groupAspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO)
+            )
+            .build()
 
         boundSurfaceProvider = null
         preview = Preview.Builder()
-            .apply {
-                (previewResolutionSelector(config) ?: viewportSelector)
-                    ?.let { setResolutionSelector(it) }
-            }
+            .setResolutionSelector(previewResolutionSelector(config) ?: groupSelector)
             .build()
 
         imageCapture = ImageCapture.Builder()
@@ -1642,7 +1636,7 @@ class CameraView(plugin: Plugin) {
             .build()
 
         imageAnalysis = ImageAnalysis.Builder()
-            .apply { viewportSelector?.let { setResolutionSelector(it) } }
+            .setResolutionSelector(imageAnalysisResolutionSelector(groupAspectRatio))
             .setTargetRotation(targetRotation)
             .build()
             .also { analysis ->
@@ -1754,6 +1748,29 @@ class CameraView(plugin: Plugin) {
         }
 
         return builder.build()
+    }
+
+    /**
+     * Resolves the barcode-analysis resolution selector. The aspect ratio has to match the rest
+     * of the group; the bound size only caps the per-frame cost, expressed - like every other
+     * bound size here - in the sensor's landscape-oriented coordinate space.
+     */
+    private fun imageAnalysisResolutionSelector(aspectRatio: Int): ResolutionSelector {
+        val shorterEdge =
+            if (aspectRatio == AspectRatio.RATIO_4_3) ANALYSIS_BOUND_WIDTH * 3 / 4
+            else ANALYSIS_BOUND_WIDTH * 9 / 16
+
+        return ResolutionSelector.Builder()
+            .setAspectRatioStrategy(
+                AspectRatioStrategy(aspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO)
+            )
+            .setResolutionStrategy(
+                ResolutionStrategy(
+                    Size(ANALYSIS_BOUND_WIDTH, shorterEdge),
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                )
+            )
+            .build()
     }
 
     /**
@@ -1924,5 +1941,6 @@ class CameraView(plugin: Plugin) {
 
     companion object {
         private const val TAG = "CameraView"
+        private const val ANALYSIS_BOUND_WIDTH = 1280
     }
 }

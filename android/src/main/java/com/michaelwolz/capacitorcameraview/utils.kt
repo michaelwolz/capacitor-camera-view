@@ -278,6 +278,24 @@ fun viewportAspectRatio(
     }
 }
 
+/**
+ * The aspect ratio every use case in the bound group is built for.
+ *
+ * A [androidx.camera.core.ViewPort] crops to the intersection of every bound use case's field
+ * of view, so a use case left on a differing ratio narrows the preview for all of them. The
+ * viewport's own ratio is used when it maps exactly; otherwise the group follows the
+ * still-capture ratio, which bounds the intersection anyway.
+ *
+ * @param viewportAspectRatio The viewport's ratio, or [AspectRatio.RATIO_DEFAULT] when it maps
+ *                            to neither 4:3 nor 16:9.
+ * @param configuredAspectRatio The session's configured aspect ratio, if any.
+ */
+fun groupAspectRatio(viewportAspectRatio: Int, configuredAspectRatio: String?): Int = when {
+    viewportAspectRatio != AspectRatio.RATIO_DEFAULT -> viewportAspectRatio
+    configuredAspectRatio == "4:3" -> AspectRatio.RATIO_4_3
+    else -> AspectRatio.RATIO_16_9
+}
+
 /** A rectangular region of a captured image buffer, in buffer pixels. */
 data class CaptureCropRegion(val x: Int, val y: Int, val width: Int, val height: Int)
 
