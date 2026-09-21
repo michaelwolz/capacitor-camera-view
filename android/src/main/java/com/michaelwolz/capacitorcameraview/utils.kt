@@ -9,6 +9,7 @@ import android.util.Base64OutputStream
 import android.view.Surface
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
@@ -20,6 +21,7 @@ import com.michaelwolz.capacitorcameraview.model.WebBoundingRect
 import kotlinx.coroutines.CancellableContinuation
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
+import kotlin.math.roundToInt
 
 /**
  * Memory-efficient Base64 encoding utilities.
@@ -217,49 +219,160 @@ fun isLensFacingFront(lensFacing: Int?): Boolean {
 }
 
 /**
- * Calculates the clockwise rotation (in degrees) to apply to a still capture so it is
- * upright relative to the display, i.e. oriented the way the preview showed it.
- *
- * The base value is the camera's fixed [sensorRotationDegrees], not the frame's
- * `ImageInfo.rotationDegrees`. `CameraController` sets the capture target rotation from
- * the device's motion sensor, so the frame value follows the physical tilt of the device
- * and disagrees with the display whenever the host locks its orientation or the user
- * tilts the device past 45 degrees.
- *
- * @param sensorRotationDegrees The camera's `CameraInfo.sensorRotationDegrees` (0/90/180/270).
- * @param displayRotation The current display rotation (`Surface.ROTATION_*`: 0, 1, 2, or 3).
- * @param isFrontFacing Whether the active camera is front-facing.
- * @return The calculated image orientation in degrees (0, 90, 180, or 270).
+ * Converts a `Surface.ROTATION_*` constant to degrees, treating anything unrecognized as the
+ * device's natural orientation.
  */
-fun calculateImageRotation(
-    sensorRotationDegrees: Int,
-    displayRotation: Int,
-    isFrontFacing: Boolean
-): Int {
-    val surfaceRotationDegrees = when (displayRotation) {
-        Surface.ROTATION_0 -> 0
+fun surfaceRotationToDegrees(rotation: Int): Int {
+    return when (rotation) {
         Surface.ROTATION_90 -> 90
         Surface.ROTATION_180 -> 180
         Surface.ROTATION_270 -> 270
         else -> 0
     }
+}
 
-    return if (isFrontFacing) {
-        (sensorRotationDegrees + surfaceRotationDegrees) % 360
+/**
+ * The angular difference between a destination plane (the display) and a source plane (the
+ * camera sensor), both expressed relative to the device's natural orientation.
+ *
+ * @param destRotationDegrees Rotation of the destination plane, in degrees.
+ * @param sourceRotationDegrees Rotation of the source plane, in degrees.
+ * @param isOppositeFacing Whether the two planes face opposite directions, i.e. whether the
+ *                         camera is back-facing.
+ */
+fun relativeImageRotation(
+    destRotationDegrees: Int,
+    sourceRotationDegrees: Int,
+    isOppositeFacing: Boolean
+): Int {
+    return if (isOppositeFacing) {
+        (sourceRotationDegrees - destRotationDegrees + 360) % 360
     } else {
-        (sensorRotationDegrees - surfaceRotationDegrees + 360) % 360
+        (sourceRotationDegrees + destRotationDegrees) % 360
     }
 }
 
 /**
- * Converts an ImageProxy to a Base64 encoded string and applies rotation if necessary.
- * Uses StreamingBase64Encoder for memory-efficient encoding.
+ * Maps a viewport's aspect ratio, rotated into the sensor's coordinate space, onto an
+ * [AspectRatio] constant, or [AspectRatio.RATIO_DEFAULT] when it is neither 4:3 nor 16:9.
+ */
+fun viewportAspectRatio(
+    viewportWidth: Int,
+    viewportHeight: Int,
+    viewportRotationDegrees: Int,
+    sensorRotationDegrees: Int,
+    isOppositeFacing: Boolean
+): Int {
+    if (viewportWidth <= 0 || viewportHeight <= 0) return AspectRatio.RATIO_DEFAULT
+
+    val relativeRotation =
+        relativeImageRotation(viewportRotationDegrees, sensorRotationDegrees, isOppositeFacing)
+    val swapped = relativeRotation == 90 || relativeRotation == 270
+    val numerator = if (swapped) viewportHeight else viewportWidth
+    val denominator = if (swapped) viewportWidth else viewportHeight
+
+    return when {
+        numerator * 3 == denominator * 4 -> AspectRatio.RATIO_4_3
+        numerator * 9 == denominator * 16 -> AspectRatio.RATIO_16_9
+        else -> AspectRatio.RATIO_DEFAULT
+    }
+}
+
+/**
+ * The aspect ratio every use case in the bound group is built for.
+ *
+ * A [androidx.camera.core.ViewPort] crops to the intersection of every bound use case's field
+ * of view, so a use case left on a differing ratio narrows the preview for all of them. The
+ * viewport's own ratio is used when it maps exactly; otherwise the group follows the
+ * still-capture ratio, which bounds the intersection anyway.
+ *
+ * @param viewportAspectRatio The viewport's ratio, or [AspectRatio.RATIO_DEFAULT] when it maps
+ *                            to neither 4:3 nor 16:9.
+ * @param configuredAspectRatio The session's configured aspect ratio, if any.
+ */
+fun groupAspectRatio(viewportAspectRatio: Int, configuredAspectRatio: String?): Int = when {
+    viewportAspectRatio != AspectRatio.RATIO_DEFAULT -> viewportAspectRatio
+    configuredAspectRatio == "4:3" -> AspectRatio.RATIO_4_3
+    else -> AspectRatio.RATIO_16_9
+}
+
+/** A rectangular region of a captured image buffer, in buffer pixels. */
+data class CaptureCropRegion(val x: Int, val y: Int, val width: Int, val height: Int)
+
+/**
+ * The work required to turn a decoded still-capture buffer into the final image: an optional
+ * crop, followed by a clockwise rotation. A `null` [crop] means the buffer is already the
+ * final framing, and a [rotationDegrees] of 0 means it is already upright.
+ */
+data class CaptureTransform(val crop: CaptureCropRegion?, val rotationDegrees: Int)
+
+/**
+ * Resolves the crop and rotation CameraX reports for a still capture into the operations that
+ * actually need to be applied to the decoded buffer.
+ *
+ * @param bufferWidth Width of the decoded buffer.
+ * @param bufferHeight Height of the decoded buffer.
+ * @param cropRect The capture's crop rect (`ImageProxy.cropRect`), in buffer pixels.
+ * @param rotationDegrees The capture's rotation (`ImageInfo.rotationDegrees`).
+ */
+fun planCaptureTransform(
+    bufferWidth: Int,
+    bufferHeight: Int,
+    cropRect: CaptureCropRegion,
+    rotationDegrees: Int
+): CaptureTransform {
+    val left = cropRect.x.coerceIn(0, bufferWidth)
+    val top = cropRect.y.coerceIn(0, bufferHeight)
+    val width = (cropRect.x + cropRect.width).coerceIn(left, bufferWidth) - left
+    val height = (cropRect.y + cropRect.height).coerceIn(top, bufferHeight) - top
+
+    val isFullBuffer = width == bufferWidth && height == bufferHeight
+    val crop = if (width <= 0 || height <= 0 || isFullBuffer) {
+        null
+    } else {
+        CaptureCropRegion(left, top, width, height)
+    }
+
+    return CaptureTransform(crop, ((rotationDegrees % 360) + 360) % 360)
+}
+
+/**
+ * Maps a normalized (0.0-1.0) torch intensity onto the device's 1-indexed
+ * `CameraInfo.getMaxTorchStrengthLevel()` range for `CameraControl.setTorchStrengthLevel()`.
+ */
+fun resolveTorchStrengthLevel(requestedLevel: Float, maxStrengthLevel: Int): Int =
+    (requestedLevel.coerceIn(0.0f, 1.0f) * maxStrengthLevel).roundToInt().coerceIn(1, maxStrengthLevel)
+
+/**
+ * Normalizes the torch strength level CameraX reports (`0` or `1..maxStrengthLevel`) into the
+ * plugin's 0.0-1.0 range. A [maxStrengthLevel] of 0 means the device doesn't support
+ * configurable strength, so an enabled torch is reported as fully on.
+ */
+fun normalizedTorchLevel(enabled: Boolean, maxStrengthLevel: Int, currentStrengthLevel: Int): Float {
+    if (!enabled) return 0.0f
+    if (maxStrengthLevel <= 0) return 1.0f
+    return (currentStrengthLevel.toFloat() / maxStrengthLevel).coerceIn(0.0f, 1.0f)
+}
+
+/**
+ * Classifies a camera's lens as `"wideAngle"`, `"ultraWide"`, or `"telephoto"` from
+ * `CameraInfo.getIntrinsicZoomRatio()`, which CameraX normalizes against the device's default
+ * camera for the same facing (intrinsic zoom ratio `1.0`).
+ */
+fun classifyLensDeviceType(intrinsicZoomRatio: Float): String = when {
+    intrinsicZoomRatio < 1f -> "ultraWide"
+    intrinsicZoomRatio > 1f -> "telephoto"
+    else -> "wideAngle"
+}
+
+/**
+ * Converts an ImageProxy to a Base64 encoded string, applying the crop and rotation CameraX
+ * reports for the capture. Uses StreamingBase64Encoder for memory-efficient encoding.
  *
  * @param image The ImageProxy to convert.
  * @param quality The JPEG compression quality (0-100).
- * @param rotationDegrees The degrees to rotate the image (0, 90, 180, 270).
  */
-fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): String {
+fun imageProxyToBase64(image: ImageProxy, quality: Int): String {
     val buffer = image.planes[0].buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)
@@ -268,22 +381,37 @@ fun imageProxyToBase64(image: ImageProxy, quality: Int, rotationDegrees: Int): S
         ?: throw IllegalArgumentException("Failed to decode image")
 
     try {
-        // Apply rotation if needed
-        if (rotationDegrees != 0) {
-            val matrix = Matrix().apply {
-                postRotate(rotationDegrees.toFloat())
-            }
-            val rotatedBitmap =
-                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            // Recycle the original bitmap to prevent memory leaks
+        val cropRect = image.cropRect
+        val transform = planCaptureTransform(
+            bitmap.width,
+            bitmap.height,
+            CaptureCropRegion(
+                cropRect.left,
+                cropRect.top,
+                cropRect.width(),
+                cropRect.height()
+            ),
+            image.imageInfo.rotationDegrees
+        )
+
+        val crop = transform.crop
+        if (crop != null || transform.rotationDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(transform.rotationDegrees.toFloat()) }
+            val transformed = Bitmap.createBitmap(
+                bitmap,
+                crop?.x ?: 0,
+                crop?.y ?: 0,
+                crop?.width ?: bitmap.width,
+                crop?.height ?: bitmap.height,
+                matrix,
+                true
+            )
             bitmap.recycle()
-            bitmap = rotatedBitmap
+            bitmap = transformed
         }
 
-        // Use streaming encoder for memory efficiency
         return StreamingBase64Encoder.encodeToBase64(bitmap, quality)
     } finally {
-        // Ensure bitmap is always recycled
         bitmap.recycle()
     }
 }

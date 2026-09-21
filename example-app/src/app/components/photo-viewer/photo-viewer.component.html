@@ -1,0 +1,39 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>{{ currentIndex() + 1 }} / {{ photos().length }}</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="close()">
+        <ion-icon slot="icon-only" name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  @let photo = currentPhoto();
+
+  @if (photo) {
+    <div class="photo-stage">
+      <img [src]="photo.data" alt="Captured photo" />
+    </div>
+  }
+
+  @if (photos().length > 1) {
+    <ion-fab slot="fixed" horizontal="start" vertical="center">
+      <ion-fab-button
+        size="small"
+        [disabled]="!canShowPrevious()"
+        (click)="previous()"
+      >
+        <ion-icon name="chevron-back"></ion-icon>
+      </ion-fab-button>
+    </ion-fab>
+
+    <ion-fab slot="fixed" horizontal="end" vertical="center">
+      <ion-fab-button size="small" [disabled]="!canShowNext()" (click)="next()">
+        <ion-icon name="chevron-forward"></ion-icon>
+      </ion-fab-button>
+    </ion-fab>
+  }
+</ion-content>

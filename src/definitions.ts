@@ -260,8 +260,8 @@ export interface CameraViewPlugin {
    * functionality. This method will throw an exception if torch is not supported.
    *
    * The torch provides continuous illumination, unlike flash which only activates during photo capture.
-   * You can control the torch intensity level on both iOS and, on API 33+ devices with
-   * multi-level torch hardware, Android. On older Android versions or single-level torch
+   * You can control the torch intensity level on both iOS and, on API 35+ (Android 15+) devices
+   * with multi-level torch hardware, Android. On older Android versions or single-level torch
    * hardware, `level` is best-effort and ignored - the torch is simply switched on or off.
    *
    * @param options - Torch configuration options
@@ -469,13 +469,17 @@ export interface CameraDevice {
   /** The position of the camera device (front or back) */
   position: CameraPosition;
 
-  /** The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only */
+  /**
+   * The type of the camera device (e.g., wide, ultra-wide, telephoto). Populated on iOS and
+   * Android; Android only ever reports 'wideAngle', 'ultraWide', or 'telephoto', and omits it
+   * for a physical sub-camera of a logical multi-camera, whose lens type CameraX can't resolve.
+   */
   deviceType?: CameraDeviceType;
 }
 
 /**
- * Available camera device types for iOS.
- * Maps to AVCaptureDevice DeviceTypes in iOS.
+ * Available camera device types. The full set of values maps to AVCaptureDevice DeviceTypes on
+ * iOS; Android only ever reports 'wideAngle', 'ultraWide', or 'telephoto'.
  *
  * @see https://developer.apple.com/documentation/avfoundation/avcapturedevice/devicetype-swift.struct
  *
@@ -736,8 +740,11 @@ export interface CaptureOptions {
    * The JPEG quality of the captured photo/sample on a scale of 0-100. Cross-platform note:
    * for `quality >= 90`, iOS returns the original, unmodified JPEG produced by the camera
    * hardware instead of re-encoding it, to avoid unnecessary quality loss and CPU overhead.
-   * Android and Web always encode at the exact requested quality. As a result, the same
-   * `quality` value (90-100) can produce different file sizes on iOS versus Android/Web.
+   * Web always encodes at the exact requested quality. On Android, `quality` is honored
+   * exactly by `captureSample()` and by `capture({ saveToFile: false })`, both of which
+   * re-encode in software; `capture({ saveToFile: true })` ignores it and always saves at a
+   * fixed internal quality, since CameraX re-encodes any cropped output at the `ImageCapture`
+   * use case's build-time quality rather than a value supplied per call.
    * @default 90
    * @since 1.1.0
    */
@@ -952,9 +959,9 @@ export interface GetTorchModeResponse {
   /**
    * The current torch intensity level (0.0 to 1.0).
    *
-   * On Android this reflects the real hardware strength only on API 33+ devices with
-   * multi-level torch hardware; below API 33, or on single-level hardware, the torch is
-   * binary, so this is always 1.0 when enabled and 0.0 when off.
+   * On Android this reflects the real hardware strength only on API 35+ (Android 15+)
+   * devices with multi-level torch hardware; below API 35, or on single-level hardware,
+   * the torch is binary, so this is always 1.0 when enabled and 0.0 when off.
    */
   level: number;
 }
