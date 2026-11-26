@@ -1,3 +1,10 @@
+# [3.1.0](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.7...3.1.0) (2026-11-26)
+
+
+### Features
+
+* **web:** reopen the last used camera per position and expose the active device ([815fe2b](https://github.com/michaelwolz/capacitor-camera-view/commit/815fe2b394d7ea396307b78d4598e445e0c21c12))
+
 ## [3.0.7](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.6...3.0.7) (2026-11-26)
 
 
