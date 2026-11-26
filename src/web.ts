@@ -30,6 +30,7 @@ import {
   calculateVisibleArea,
   canvasToBase64,
   drawVisibleAreaToCanvas,
+  nextVideoInputDeviceId,
   transformBarcodeBoundingBox,
 } from './utils';
 
@@ -183,7 +184,6 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   #isRunning = false;
 
   // Configuration state
-  private currentCamera = 'environment'; // Default to back camera
   private currentZoom = 1.0;
   // Whether the current zoom is applied through the native track `zoom`
   // capability (`applyConstraints`) rather than the CSS `transform: scale()`
@@ -274,13 +274,9 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
     // Prefer deviceId if specified
     if (options?.deviceId) {
       videoConstraints.deviceId = { exact: options.deviceId };
-      // Remember the current camera mode (though we're using a specific device)
-      this.currentCamera = options?.position === 'front' ? 'user' : 'environment';
     } else {
       // Fall back to facing mode
-      const facingMode = options?.position === 'front' ? 'user' : 'environment';
-      this.currentCamera = facingMode;
-      videoConstraints.facingMode = facingMode;
+      videoConstraints.facingMode = options?.position === 'front' ? 'user' : 'environment';
     }
 
     const constraints: MediaStreamConstraints = {
@@ -703,43 +699,31 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       throw new CameraViewError('Cannot flip camera while a recording is in progress', 'RECORDING_ALREADY_IN_PROGRESS');
     }
 
-    // The candidate facing mode, kept local until the new stream is actually
-    // live: `currentCamera` (and the previous stream) must not be touched
-    // before that point, or a failed re-acquisition below would leave the
-    // session state pointing at a camera that isn't running while the
-    // previous camera's tracks have already been stopped.
-    const nextCamera = this.currentCamera === 'user' ? 'environment' : 'user';
-
-    // Acquire the new-facing stream with the new facing mode, keeping the
-    // session's resolution/aspect-ratio constraints so the flipped stream
-    // honors the same contract as the one it replaces.
-    const constraints: MediaStreamConstraints = {
-      video: {
-        ...this.sessionResolutionConstraints,
-        facingMode: nextCamera,
-      },
-      audio: false,
-    };
-
-    let newStream: MediaStream;
+    let newStream: MediaStream | null;
     try {
-      newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      newStream = await this.acquireFlippedStream();
     } catch (err) {
-      // Acquisition failed: `stream`/`currentCamera` haven't been touched, so
-      // the previous camera is still attached and running. Just surface the
-      // error. The only `getUserMedia` call in this method re-acquires the
-      // camera (never the microphone), so classify with kind: 'camera'.
+      // Acquisition failed: `stream` hasn't been touched, so the previous
+      // camera is still attached and running.
       throw new CameraViewError(
         `Failed to flip camera: ${this.formatError(err)}`,
         classifyGetUserMediaErrorCode(err, 'camera'),
       );
     }
 
+    if (!newStream) {
+      return;
+    }
+
+    if (!this.#isRunning) {
+      newStream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
     // The new stream is live: safe to stop the previous stream's tracks and
     // commit the flipped state.
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = newStream;
-    this.currentCamera = nextCamera;
 
     if (this.videoElement) {
       this.videoElement.srcObject = newStream;
@@ -865,6 +849,36 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       this.videoElement.style.transform = `scale(${this.getCssZoomScale()})`;
       this.videoElement.style.transformOrigin = 'center';
     }
+  }
+
+  /**
+   * Acquires the camera facing away from the active one, or the next video
+   * input by id when the cameras don't report a facing mode. Resolves `null`
+   * when there is no other camera to switch to.
+   */
+  private async acquireFlippedStream(): Promise<MediaStream | null> {
+    const previous = this.getVideoTrack()?.getSettings();
+    const nextCamera = previous?.facingMode === 'user' ? 'environment' : 'user';
+    const acquire = (camera: Pick<MediaTrackConstraints, 'facingMode' | 'deviceId'>) =>
+      navigator.mediaDevices.getUserMedia({
+        video: { ...this.sessionResolutionConstraints, ...camera },
+        audio: false,
+      });
+
+    if (!previous?.deviceId) {
+      return acquire({ facingMode: nextCamera });
+    }
+
+    if (previous.facingMode) {
+      const stream = await acquire({ facingMode: nextCamera });
+      if (stream.getVideoTracks()[0]?.getSettings().deviceId !== previous.deviceId) {
+        return stream;
+      }
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    const deviceId = nextVideoInputDeviceId(await navigator.mediaDevices.enumerateDevices(), previous.deviceId);
+    return deviceId ? acquire({ deviceId: { exact: deviceId } }) : null;
   }
 
   /**

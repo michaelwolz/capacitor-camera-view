@@ -220,3 +220,19 @@ export function transformBarcodeBoundingBox(
     height: barcodeBoundingBox.height * scale,
   };
 }
+
+/**
+ * The id of the video input after `currentDeviceId` in `devices`, wrapping
+ * around, or `null` when there is no other video input to switch to.
+ */
+export function nextVideoInputDeviceId(
+  devices: readonly Pick<MediaDeviceInfo, 'deviceId' | 'kind'>[],
+  currentDeviceId: string,
+): string | null {
+  const ids = devices.filter((device) => device.kind === 'videoinput').map((device) => device.deviceId);
+  if (ids.length < 2) {
+    return null;
+  }
+
+  return ids[(ids.indexOf(currentDeviceId) + 1) % ids.length];
+}
