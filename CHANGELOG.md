@@ -1,3 +1,10 @@
+## [3.0.6](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.5...3.0.6) (2026-11-26)
+
+
+### Bug Fixes
+
+* **web:** switch cameras by device id when facing mode is not reported ([8870e51](https://github.com/michaelwolz/capacitor-camera-view/commit/8870e51178b41775b9468823a5c8e6e55fc9807a))
+
 ## [3.0.5](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.4...3.0.5) (2026-09-21)
 
 
