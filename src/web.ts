@@ -23,7 +23,7 @@ import type {
   VideoRecordingResponse,
   BarcodeType,
   PreviewScaleMode,
-} from './definitions';
+} from './definitions.js';
 import {
   applyCssZoomCrop,
   calculateFullFrameArea,
@@ -32,7 +32,7 @@ import {
   drawVisibleAreaToCanvas,
   nextVideoInputDeviceId,
   transformBarcodeBoundingBox,
-} from './utils';
+} from './utils.js';
 
 /**
  * Suppression window in milliseconds during which a repeat of the same barcode
