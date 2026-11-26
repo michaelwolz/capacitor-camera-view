@@ -475,6 +475,14 @@ export interface CameraDevice {
    * for a physical sub-camera of a logical multi-camera, whose lens type CameraX can't resolve.
    */
   deviceType?: CameraDeviceType;
+
+  /**
+   * Whether this is the camera the running session is using. Pass its `id` as
+   * `deviceId` to `start()` to reopen the same camera later. Web only.
+   *
+   * @since 3.1.0
+   */
+  active?: boolean;
 }
 
 /**

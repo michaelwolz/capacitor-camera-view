@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CameraViewError, CameraViewWeb, classifyGetUserMediaErrorCode } from './web';
 
@@ -79,5 +79,85 @@ describe('CameraViewWeb.flipCamera', () => {
     }
 
     expect(visited).toEqual(['a', 'b', 'c', 'a']);
+  });
+});
+
+describe('CameraViewWeb camera memory', () => {
+  let ids: string[];
+  let facingMode: string | undefined;
+  let requests: (string | undefined)[];
+
+  beforeEach(() => {
+    ids = ['a', 'b'];
+    facingMode = undefined;
+    requests = [];
+    const getUserMedia = async ({ video }: { video: MediaTrackConstraints }) => {
+      const requested = (video.deviceId as ConstrainDOMStringParameters | undefined)?.exact as string | undefined;
+      requests.push(requested);
+      if (requested && !ids.includes(requested)) {
+        throw new DOMException('gone', 'OverconstrainedError');
+      }
+      const deviceId = requested ?? ids[0];
+      const track = { stop: () => undefined, getSettings: () => ({ deviceId, facingMode }) };
+      return { getTracks: () => [track], getVideoTracks: () => [track] };
+    };
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('document', {
+      createElement: () => ({ style: {}, play: async () => undefined, pause: () => undefined }),
+      body: { appendChild: () => undefined },
+    });
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia,
+        enumerateDevices: async () => ids.map((deviceId) => ({ deviceId, kind: 'videoinput', label: '' })),
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const activeId = async (plugin: CameraViewWeb) =>
+    (await plugin.getAvailableDevices()).devices.find((device) => device.active)?.id;
+
+  it('reopens the camera last used for the requested position', async () => {
+    const plugin = new CameraViewWeb();
+    await plugin.start({ position: 'back' });
+    await plugin.flipCamera();
+    expect(await activeId(plugin)).toBe('b');
+    await plugin.stop();
+
+    await plugin.start({ position: 'front' });
+    expect(await activeId(plugin)).toBe('b');
+    await plugin.flipCamera();
+    await plugin.stop();
+
+    await plugin.start({ position: 'back' });
+    expect(await activeId(plugin)).toBe('a');
+  });
+
+  it('reopens the last used camera when every camera reports the same facing mode', async () => {
+    facingMode = 'user';
+    const plugin = new CameraViewWeb();
+    await plugin.start({ position: 'back' });
+    await plugin.flipCamera();
+    await plugin.stop();
+
+    await plugin.start({ position: 'front' });
+    expect(await activeId(plugin)).toBe('b');
+  });
+
+  it('falls back to the default camera when the remembered one is gone', async () => {
+    const plugin = new CameraViewWeb();
+    await plugin.start({ position: 'back' });
+    await plugin.flipCamera();
+    await plugin.stop();
+
+    ids = ['a'];
+    requests = [];
+    await plugin.start({ position: 'front' });
+    expect(requests).toEqual(['b', undefined]);
+    expect(await activeId(plugin)).toBe('a');
   });
 });
