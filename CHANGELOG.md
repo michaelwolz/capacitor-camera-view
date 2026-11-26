@@ -1,3 +1,10 @@
+## [3.0.7](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.6...3.0.7) (2026-11-26)
+
+
+### Bug Fixes
+
+* add file extensions to ESM relative imports ([d08734e](https://github.com/michaelwolz/capacitor-camera-view/commit/d08734e209f58f42c40270c39579712934d02822)), closes [#33](https://github.com/michaelwolz/capacitor-camera-view/issues/33)
+
 ## [3.0.6](https://github.com/michaelwolz/capacitor-camera-view/compare/3.0.5...3.0.6) (2026-11-26)
 
 
