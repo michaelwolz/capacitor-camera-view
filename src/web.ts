@@ -206,6 +206,9 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
   // flipCamera() re-acquires the stream with the same resolution contract
   // instead of falling back to the browser default.
   private sessionResolutionConstraints: MediaTrackConstraints = {};
+  // `null` when the session was started by device id.
+  private sessionPosition: CameraPosition | null = null;
+  private devicesByPosition: Partial<Record<CameraPosition, string>> = {};
 
   // Barcode detection support
   private barcodeDetectionSupported = false;
@@ -271,6 +274,9 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       ...this.sessionResolutionConstraints,
     };
 
+    this.sessionPosition = options?.deviceId ? null : (options?.position ?? 'back');
+    const rememberedDeviceId = this.sessionPosition ? this.devicesByPosition[this.sessionPosition] : undefined;
+
     // Prefer deviceId if specified
     if (options?.deviceId) {
       videoConstraints.deviceId = { exact: options.deviceId };
@@ -279,21 +285,19 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
       videoConstraints.facingMode = options?.position === 'front' ? 'user' : 'environment';
     }
 
-    const constraints: MediaStreamConstraints = {
-      video: videoConstraints,
-      audio: false,
-    };
-
     // Acquire the camera exactly once, using the real constraints, and derive
     // the permission outcome from this single call. Probing permission with a
     // throwaway acquisition first would double startup latency, flash the
     // camera indicator twice, and risk a spurious NotReadableError on devices
     // where the camera is exclusive.
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.stream = rememberedDeviceId
+        ? await this.acquireRememberedDevice(rememberedDeviceId, videoConstraints)
+        : await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
     } catch (err) {
       throw this.mapStartAcquisitionError(err);
     }
+    this.rememberSessionDevice();
 
     try {
       if (this.videoElement) {
@@ -724,6 +728,10 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
     // commit the flipped state.
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = newStream;
+    if (this.sessionPosition) {
+      this.sessionPosition = this.sessionPosition === 'front' ? 'back' : 'front';
+      this.rememberSessionDevice();
+    }
 
     if (this.videoElement) {
       this.videoElement.srcObject = newStream;
@@ -777,6 +785,7 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
             id: device.deviceId,
             name: device.label || `Camera ${device.deviceId.substring(0, 5)}`,
             position,
+            active: device.deviceId === activeDeviceId,
           };
         }),
       };
@@ -879,6 +888,37 @@ export class CameraViewWeb extends WebPlugin implements CameraViewPlugin {
 
     const deviceId = nextVideoInputDeviceId(await navigator.mediaDevices.enumerateDevices(), previous.deviceId);
     return deviceId ? acquire({ deviceId: { exact: deviceId } }) : null;
+  }
+
+  /**
+   * Acquires the device last used for the session's position, falling back to
+   * the facing-mode constraints when that device is gone.
+   */
+  private async acquireRememberedDevice(
+    deviceId: string,
+    fallbackConstraints: MediaTrackConstraints,
+  ): Promise<MediaStream> {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { ...this.sessionResolutionConstraints, deviceId: { exact: deviceId } },
+        audio: false,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        throw err;
+      }
+      if (this.sessionPosition) {
+        delete this.devicesByPosition[this.sessionPosition];
+      }
+      return navigator.mediaDevices.getUserMedia({ video: fallbackConstraints, audio: false });
+    }
+  }
+
+  private rememberSessionDevice(): void {
+    const deviceId = this.getVideoTrack()?.getSettings().deviceId;
+    if (this.sessionPosition && deviceId) {
+      this.devicesByPosition[this.sessionPosition] = deviceId;
+    }
   }
 
   /**
