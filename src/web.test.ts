@@ -1,13 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CameraViewError, classifyGetUserMediaErrorCode } from './web';
-
-/**
- * `CameraViewWeb` needs a DOM harness to instantiate (its constructor probes
- * `window` for `BarcodeDetector`), and vitest runs in the default Node
- * environment here, so these tests cover the two DOM-free building blocks every
- * web.ts error path is built from.
- */
+import { CameraViewError, CameraViewWeb, classifyGetUserMediaErrorCode } from './web';
 
 describe('CameraViewError', () => {
   it('carries a stable code alongside the message', () => {
@@ -47,5 +40,44 @@ describe('classifyGetUserMediaErrorCode', () => {
   it('falls back to UNKNOWN_ERROR for a non-DOMException failure', () => {
     expect(classifyGetUserMediaErrorCode(new Error('boom'), 'camera')).toBe('UNKNOWN_ERROR');
     expect(classifyGetUserMediaErrorCode('not even an error', 'microphone')).toBe('UNKNOWN_ERROR');
+  });
+});
+
+describe('CameraViewWeb.flipCamera', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('cycles cameras by device id when none reports a facing mode', async () => {
+    const ids = ['a', 'b', 'c'];
+    const getUserMedia = async ({ video }: { video: MediaTrackConstraints }) => {
+      const deviceId = (video.deviceId as ConstrainDOMStringParameters | undefined)?.exact ?? ids[0];
+      const track = { stop: () => undefined, getSettings: () => ({ deviceId }) };
+      return { getTracks: () => [track], getVideoTracks: () => [track] };
+    };
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('document', {
+      createElement: () => ({ style: {}, play: async () => undefined }),
+      body: { appendChild: () => undefined },
+    });
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia,
+        enumerateDevices: async () => ids.map((deviceId) => ({ deviceId, kind: 'videoinput' })),
+      },
+    });
+
+    const plugin = new CameraViewWeb();
+    const activeDeviceId = () =>
+      (plugin as unknown as { stream: MediaStream }).stream.getVideoTracks()[0].getSettings().deviceId;
+    await plugin.start();
+
+    const visited = [activeDeviceId()];
+    for (let i = 0; i < 3; i++) {
+      await plugin.flipCamera();
+      visited.push(activeDeviceId());
+    }
+
+    expect(visited).toEqual(['a', 'b', 'c', 'a']);
   });
 });
